@@ -1,6 +1,6 @@
 # 质量门禁（Quality Gates）
 
-需求与方案类 11 个 Skill 共用。撰写类 Skill 在交付前过 G1–G7 与 G11，发布类 Skill 在写入前过 G8–G11。
+撰写类 Skill 在交付前过 G1–G7 与 G11，发布类 Skill 在写入前过 G8–G11。
 
 ## G1 结构完整性
 
@@ -18,7 +18,7 @@
 | `……` 出现在 AC 中 | AC 未写完 |
 | 章节标题下直接是下一章节标题 | 空章节 |
 
-例外：模板本身就要求留空的「术语表」「附录链接」允许 `—`，但需在待确认清单中登记。
+例外：模板本身就要求留空的「术语表」「附录链接」允许 `—`，但需在交付对话的待确认清单中登记。
 
 ## G3 合成数据与 PII
 
@@ -78,7 +78,6 @@ Confluence 发布前必须按标题 CQL 查重；Jira 建单前必须按「Paren
 | Confluence 写入 | Eval / Tech Solution Agent | R+W |
 | Jira 建单与字段写入 | UserStory Agent | R+W |
 | Jira 状态流转与评论 | 受限 | 不含字段重构与删除 |
-| GitHub | 需求与方案环节不涉及 | — |
 
 ## G9 图表可渲染性
 
@@ -92,7 +91,5 @@ Confluence 发布前必须按标题 CQL 查重；Jira 建单前必须按「Paren
 | 节点 ID 用 ASCII | `甲["会员"]` | `A["会员"]` |
 | 语法可渲染 | 未经校验直接交付 | 经 mermaid 预览器/live 确认无 Lexical error |
 
-**发布侧**：Confluence 不保证装有 Mermaid 渲染插件，直接写 mermaid 代码宏可能只显示源码。
+**发布侧**：若Confluence中无Mermaid 渲染插件，直接写 mermaid 代码宏可能只显示源码。
 `prd-publish` 必须按其 SKILL「步骤 6：写入 → 图表处理（图表发布）」把图渲染成 PNG 附件后嵌入，不依赖站点插件。
-
-判定：本地 mermaid 语法错误 → 阻断交付；发布后图表无法显示（只剩源码/纯文字）→ 阻断发布，改用图片附件方案。

@@ -30,7 +30,7 @@ mcp:
 
 # ---------------------------------------------------------------- 产物模板
 artifacts:
-  prd_kind: brief
+  prd_kind: prd
   prd_template: references/prd-template.md
   user_story_template: references/user-story-cms.md
 

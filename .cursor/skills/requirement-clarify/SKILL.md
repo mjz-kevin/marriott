@@ -3,9 +3,8 @@ name: requirement-clarify
 description: >-
   多轮澄清业务需求：判断输入是否自洽、按固定维度清单扫描遗漏、识别冲突并批量追问，
   直至需求完整后在对话里给出澄清结论，直接交给 PRD 撰写环节。本环节不产出文档。
-  Use when the user pastes raw requirements, meeting notes, or a one-line feature
-  idea and asks to clarify, check completeness, or write a PRD;
-  triggers: 需求澄清 / 需求是否完整 / 帮我提问 / 澄清一下 / clarify requirements.
+  当用户粘贴原始需求、会议纪要或一句话想法，并要求澄清、检查完整性或撰写 PRD 时使用；
+  触发词：需求澄清 / 需求是否完整 / 帮我提问 / 澄清一下 / clarify requirements。
 metadata:
   agent: Eval Agent, Tech Solution Agent
 ---
@@ -108,11 +107,13 @@ metadata:
 
 ## 2. 冲突与裁决
 | 冲突 | 选项 | 裁决 | 裁决人 |
+|------|------|------|--------|
 
 ## 3. 待确认（P0 未闭合，无则写「无」）
 
 ## 4. 假设登记
 | # | 假设 | 依据 | 影响面 | 推翻成本 |
+|---|------|------|--------|----------|
 
 ## 5. 下一步
 → P0 全部闭合：直接进 prd-authoring，上面这段即其输入
@@ -143,6 +144,7 @@ metadata:
 
 ## 冲突与裁决
 | 冲突 | 选项 | 裁决 |
+|------|------|------|
 | 「所有用户可见」vs「仅会员可见」 | A 全量 B 会员 | 待 PO 裁决 |
 
 ## 待确认（P0）
@@ -150,6 +152,7 @@ metadata:
 
 ## 假设登记
 | # | 假设 | 依据 | 推翻成本 |
+|---|------|------|----------|
 | A1 | 首期只做 iOS | 范围表只勾了 iOS | 低：补一份 Scope |
 
 ## 下一步

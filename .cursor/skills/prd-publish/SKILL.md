@@ -1,12 +1,10 @@
 ---
 name: prd-publish
 description: >-
-  Publish or sync a PRD (or requirement brief) to Confluence via the Confluence
-  MCP server: resolve the target space and parent folder from the team's
-  configuration, create or update the page idempotently by title, and report the
-  page URL. Use when the user asks to publish, sync, or push a PRD / brief to
-  Confluence;
-  triggers: PRD 上传 / 发布 PRD / 同步到 Confluence / 发布 Brief / publish PRD.
+  通过 Confluence MCP 服务器将 PRD 发布或同步到 Confluence：
+  从团队配置解析目标空间与父目录，按标题幂等地新建或更新页面，并回报页面 URL。
+  当用户要求发布、同步或推送 PRD 到 Confluence 时使用；
+  触发词：PRD 上传 / 发布 PRD / 同步到 Confluence / publish PRD。
 metadata:
   agent: Eval Agent
 ---
@@ -72,7 +70,7 @@ metadata:
 
 - 优先按 `content_format`（默认 `markdown`）传 PRD 正文，避免 HTML 转换负担。
 - 若需富格式（宏、面板）用 HTML，则先调 `getContentFormatGuide` 获取 HTML 规范再拼装。
-- 图表处理：Confluence 不保证装有 Mermaid 渲染插件，直接写 mermaid 代码宏可能只显示源码、不出图。按以下「图表发布」步骤处理，做到必显示：
+- 图表处理：Confluence 无Mermaid 渲染插件，直接写 mermaid 代码宏可能只显示源码、不出图。按以下「图表发布」步骤处理，做到必显示：
   
   1. 把每张 mermaid 图**渲染成 PNG**（有 `mmdc`/mermaid-cli 用之；否则用本机可用手段生成位图，如 PowerShell `System.Drawing` 绘制、或其他绘图库），命名如 `{feature_name}-arch.png` / `{feature_name}-flow.png`。
   2. 用附件接口把 PNG 上传为**目标页面附件**（`.../content/{pageId}/child/attachment`，带请求头 `X-Atlassian-Token: no-check`）。
@@ -84,7 +82,7 @@ metadata:
   - `tech_solution`：附录「技术方案链接」放 Confluence 技术方案页地址。
   - `jira`：附录「Jira link」放对应 Epic/Story 地址。
   - `prd`：本环节即产出 PRD 本体，无需自链。
-  链接集合以 profile 为准（某团队不含某类即跳过，不硬编码）。
+  链接集合以 profile 为准（不含某类即跳过，不硬编码）。
 
 ### 步骤 7：校验与回报
 
