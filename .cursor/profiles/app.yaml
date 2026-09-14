@@ -17,8 +17,14 @@ mcp:
     space: DBU4
     parent_pages:
       prd: "TBD"
+      # TODO(PO): 填技术方案父目录 folder ID，取自目录地址
+      #   {base_url}/spaces/{space}/folder/<这一段数字>/...
+      tech_solution: "TBD"
     naming:
       prd: "APP-PRD-{feature_name}-{date}-{version}"
+      tech_solution_epic: "APP-TS-Epic-{feature_name}-{date}-{version}"
+      tech_solution_spike: "APP-TS-Spike-{spike_key}-{topic}-{date}"
+      tech_solution_detail: "APP-TS-Detail-{story_key}-{title}-{date}"
     content_format: markdown
 
   figma:

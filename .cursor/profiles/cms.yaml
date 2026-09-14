@@ -16,8 +16,12 @@ mcp:
     space: CMI
     parent_pages:
       prd: "4184605008"
+      tech_solution: "4175954245"
     naming:
       prd: CMS-PRD-{feature_name}-{date}-{version}
+      tech_solution_epic: CMS-TS-Epic-{feature_name}-{date}-{version}
+      tech_solution_spike: CMS-TS-Spike-{spike_key}-{topic}-{date}
+      tech_solution_detail: CMS-TS-Detail-{story_key}-{title}-{date}
     content_format: markdown
 
   figma:
