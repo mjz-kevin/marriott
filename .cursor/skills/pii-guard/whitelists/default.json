@@ -1,0 +1,22 @@
+{
+  "name": "default",
+  "description": "基础安全值:常见占位符、测试/示例数据,绝不代表真实的机密或个人信息。",
+  "literals": [
+    "password",
+    "your-password-here",
+    "changeme",
+    "example.com",
+    "user@example.com",
+    "test@example.com",
+    "AKIAIOSFODNN7EXAMPLE",
+    "00000000000",
+    "13800138000",
+    "123 Example Street"
+  ],
+  "patterns": [
+    "(?i)<[^>]*(?:password|token|secret|key)[^>]*>",
+    "(?i)\\$\\{[^}]*(?:PASSWORD|TOKEN|SECRET|KEY)[^}]*\\}",
+    "(?i)(?:xxx+|\\*{3,}|__redacted__|placeholder|dummy|sample)",
+    "(?i)@example\\.(?:com|org|net)"
+  ]
+}
