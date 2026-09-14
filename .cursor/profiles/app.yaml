@@ -1,0 +1,46 @@
+
+team: APP
+display_name: APP 团队
+
+mcp:
+  jira:
+    server: atlassian
+    host: https://marriottcloud.atlassian.net
+    project_key: CNAPP
+    issue_type: "故事"
+    initial_status: backlog
+    links: [prd, figma, tech_solution]
+
+  confluence:
+    server: atlassian
+    base_url: https://marriottcloud.atlassian.net/wiki
+    space: DBU4
+    parent_pages:
+      prd: "TBD"
+    naming:
+      prd: "APP-PRD-{feature_name}-{date}-{version}"
+    content_format: markdown
+
+  figma:
+    server: figma
+    required_states: [default, loading, empty, error]
+
+  github:
+    server: github
+    default_branch: develop
+
+# ---------------------------------------------------------------- 产物模板
+artifacts:
+  prd_kind: prd
+  prd_template: references/prd-template.md
+  user_story_template: references/user-story-app.md
+
+# ---------------------------------------------------------------- 内容模型
+content_model:
+  required: false
+
+# ---------------------------------------------------------------- 产物语言
+doc:
+  body_language: zh-CN
+  ac_language: zh-CN
+  ac_format: GIVEN/WHEN/AND/THEN

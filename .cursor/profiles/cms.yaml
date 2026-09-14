@@ -1,0 +1,45 @@
+
+team: CMS
+display_name: CMS 团队
+
+mcp:
+  jira:
+    server: atlassian
+    host: https://marriottcloud.atlassian.net
+    issue_type: "故事"
+    initial_status: Backlog
+    links: [prd, figma, tech_solution]
+
+  confluence:
+    server: atlassian
+    base_url: https://marriottcloud.atlassian.net/wiki
+    space: CMI
+    parent_pages:
+      prd: "4184605008"
+    naming:
+      prd: CMS-PRD-{feature_name}-{date}-{version}
+    content_format: markdown
+
+  figma:
+    server: figma
+    required_states: [default, loading, empty, error]
+
+  github:
+    server: github
+    default_branch: main
+
+# ---------------------------------------------------------------- 产物模板
+artifacts:
+  prd_kind: brief
+  prd_template: references/prd-template.md
+  user_story_template: references/user-story-cms.md
+
+# ---------------------------------------------------------------- 内容模型
+content_model:
+  required: true
+
+# ---------------------------------------------------------------- 产物语言
+doc:
+  body_language: zh-CN
+  ac_language: zh-CN
+  ac_format: GIVEN/WHEN/AND/THEN
