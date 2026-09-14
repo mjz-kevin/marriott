@@ -1,6 +1,6 @@
 ---
 name: requirement-clarify
-description: 
+description: >-
   多轮澄清业务需求：判断输入是否自洽、按固定维度清单扫描遗漏、识别冲突并批量追问，
   直至需求完整后在对话里给出澄清结论，直接交给 PRD 撰写环节。本环节不产出文档。
   Use when the user pastes raw requirements, meeting notes, or a one-line feature
