@@ -1,4 +1,4 @@
-# pii-guard 参考文档
+# sensitive-data-guard 参考文档
 
 详细的检测规则与配置格式。`SKILL.md` 讲工作流;当你需要理解某条命中、调整检测规则,
 或编辑白名单时,再看本文档。
@@ -6,7 +6,7 @@
 ## 文件结构
 
 ```
-skills/pii-guard/
+skills/sensitive-data-guard/
 ├── SKILL.md                 # 工作流(从这里开始)
 ├── reference.md             # 本文件
 ├── scripts/
@@ -18,12 +18,12 @@ skills/pii-guard/
     └── example-team.json    # 团队白名单模板
 ```
 
-本机选择保存在 skill 之外(可用 `PII_GUARD_HOME` 覆盖):
+本机选择保存在 skill 之外(可用 `SENSITIVE_DATA_GUARD_HOME` 覆盖):
 
 | 平台 | 默认路径 |
 |------|----------|
-| Windows | `%APPDATA%\pii-guard\selection.json` |
-| macOS / Linux | `~/.config/pii-guard/selection.json` |
+| Windows | `%APPDATA%\sensitive-data-guard\selection.json` |
+| macOS / Linux | `~/.config/sensitive-data-guard/selection.json` |
 
 查看本机实际路径:`python scripts/config.py path`
 
@@ -115,7 +115,7 @@ Windows 上若 `python` 不可用,可改用 `py -3` 或 `python3`。
 
 - 优先 `--file` / `--text`,不要依赖 `printf`/`cat` 等 shell 管道。
 - 路径分隔符在 Python 中用 `/` 即可,Windows 同样有效。
-- 自定义配置目录(任意平台):设置环境变量 `PII_GUARD_HOME` 后运行 `config.py use ...`。
+- 自定义配置目录(任意平台):设置环境变量 `SENSITIVE_DATA_GUARD_HOME` 后运行 `config.py use ...`。
 
 ## 调整
 

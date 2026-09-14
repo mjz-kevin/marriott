@@ -1,5 +1,5 @@
 ---
-name: pii-guard
+name: sensitive-data-guard
 description: >-
   在把内容写入任何持久化或外部目的地之前,先扫描其中是否包含机密信息(用户名、密码、
   token、API key、AK/SK、私钥、JWT)和个人敏感信息(会员名/客户姓名、手机号、地址、
@@ -8,7 +8,7 @@ description: >-
   兼容 macOS 与 Windows。
 ---
 
-# pii-guard
+# sensitive-data-guard
 
 防止敏感数据泄露。在内容被写入**持久化或外部目的地**之前先做扫描;若套用白名单后仍有
 机密或个人敏感信息,则**不要写入**——先报告,再脱敏/删除,或(仅当确实安全时)将该值
@@ -21,11 +21,11 @@ description: >-
 - **优先使用 `--file` 或 `--text` 扫描**,避免依赖 shell 管道(Windows cmd/PowerShell
   对管道支持不一致)。
 - 路径在 Python 中可用正斜杠 `/`,Windows 上也有效。
-- 本机白名单选择保存位置(可用 `PII_GUARD_HOME` 覆盖):
-  - **Windows:** `%APPDATA%\pii-guard\selection.json`
-  - **macOS / Linux:** `~/.config/pii-guard/selection.json`
+- 本机白名单选择保存位置(可用 `SENSITIVE_DATA_GUARD_HOME` 覆盖):
+  - **Windows:** `%APPDATA%\sensitive-data-guard\selection.json`
+  - **macOS / Linux:** `~/.config/sensitive-data-guard/selection.json`
 
-以下示例以 skill 根目录 `.cursor/skills/pii-guard` 为工作目录,命令写成 `python`;
+以下示例以 skill 根目录 `.cursor/skills/sensitive-data-guard` 为工作目录,命令写成 `python`;
 Agent 执行时按当前系统选择可用的 Python 命令。
 
 ## 何时启用

@@ -1,4 +1,4 @@
-"""pii-guard 的检测规则。
+"""sensitive-data-guard 的检测规则。
 
 仅依赖标准库。每条规则包含:
   id       : 稳定的标识符

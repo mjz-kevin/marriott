@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""pii-guard 自动化测试运行器(仅标准库)。
+"""sensitive-data-guard 自动化测试运行器(仅标准库)。
 
 从 tests/cases.json 读取用例,通过子进程调用 scripts/scan.py 做集成测试,
 并可选测试 scripts/config.py 的白名单选择流程。
@@ -82,9 +82,9 @@ def check_case(case: dict, verbose: bool) -> tuple[bool, str]:
 
     env = os.environ.copy()
     # 隔离本机白名单选择,避免受用户环境干扰
-    env["PII_GUARD_HOME"] = env.get(
-        "PII_GUARD_HOME",
-        os.path.join(tempfile.gettempdir(), "pii-guard-test-home"),
+    env["SENSITIVE_DATA_GUARD_HOME"] = env.get(
+        "SENSITIVE_DATA_GUARD_HOME",
+        os.path.join(tempfile.gettempdir(), "sensitive-data-guard-test-home"),
     )
 
     exit_code, report = run_scan(
@@ -129,9 +129,9 @@ def check_case(case: dict, verbose: bool) -> tuple[bool, str]:
 def run_config_tests(verbose: bool) -> list[tuple[str, bool, str]]:
     """测试 config.py 的 list / use / show 流程。"""
     results: list[tuple[str, bool, str]] = []
-    with tempfile.TemporaryDirectory(prefix="pii-guard-config-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="sensitive-data-guard-config-") as tmp:
         env = os.environ.copy()
-        env["PII_GUARD_HOME"] = tmp
+        env["SENSITIVE_DATA_GUARD_HOME"] = tmp
 
         def cfg(*args: str) -> subprocess.CompletedProcess[str]:
             return subprocess.run(
@@ -192,21 +192,21 @@ def run_platform_tests(verbose: bool) -> list[tuple[str, bool, str]]:
     sys.path.insert(0, str(SKILL_DIR / "scripts"))
     import platform_paths  # noqa: E402
 
-    with tempfile.TemporaryDirectory(prefix="pii-guard-platform-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="sensitive-data-guard-platform-") as tmp:
         env = os.environ.copy()
-        env["PII_GUARD_HOME"] = tmp
+        env["SENSITIVE_DATA_GUARD_HOME"] = tmp
 
-        prev = os.environ.get("PII_GUARD_HOME")
-        os.environ["PII_GUARD_HOME"] = tmp
+        prev = os.environ.get("SENSITIVE_DATA_GUARD_HOME")
+        os.environ["SENSITIVE_DATA_GUARD_HOME"] = tmp
         try:
             cfg_dir = platform_paths.default_config_dir()
             ok = os.path.normpath(cfg_dir) == os.path.normpath(tmp)
-            results.append(("platform-pii-guard-home", ok, cfg_dir))
+            results.append(("platform-sensitive-data-guard-home", ok, cfg_dir))
         finally:
             if prev is None:
-                os.environ.pop("PII_GUARD_HOME", None)
+                os.environ.pop("SENSITIVE_DATA_GUARD_HOME", None)
             else:
-                os.environ["PII_GUARD_HOME"] = prev
+                os.environ["SENSITIVE_DATA_GUARD_HOME"] = prev
 
     label = platform_paths.platform_label()
     ok = label in ("Windows", "macOS", "Linux")
@@ -219,7 +219,7 @@ def run_platform_tests(verbose: bool) -> list[tuple[str, bool, str]]:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="运行 pii-guard 测试用例")
+    ap = argparse.ArgumentParser(description="运行 sensitive-data-guard 测试用例")
     ap.add_argument("--case", help="只运行指定 id 的用例")
     ap.add_argument("--verbose", "-v", action="store_true")
     ap.add_argument("--skip-config", action="store_true", help="跳过 config.py 测试")
@@ -234,7 +234,7 @@ def main() -> int:
             print(f"未找到用例 id:{args.case}", file=sys.stderr)
             return 1
 
-    print(f"pii-guard 测试 — {len(cases)} 个扫描用例\n")
+    print(f"sensitive-data-guard 测试 — {len(cases)} 个扫描用例\n")
 
     passed = failed = 0
     for case in cases:

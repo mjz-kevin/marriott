@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""pii-guard 白名单选择管理器。
+"""sensitive-data-guard 白名单选择管理器。
 
 白名单本身放在 skill 内(whitelists/*.json),便于共享和版本管理。而"使用哪些
 白名单"的选择是每台机器各自的,保存在用户本机(不在 skill 内),因此只需询问一次。
 
 本机选择文件:
-  $PII_GUARD_HOME/selection.json                    (若设置了 PII_GUARD_HOME)
-  否则  %APPDATA%\\pii-guard\\selection.json         (Windows 默认)
-  否则  ~/.config/pii-guard/selection.json           (macOS / Linux 默认)
+  $SENSITIVE_DATA_GUARD_HOME/selection.json                    (若设置了 SENSITIVE_DATA_GUARD_HOME)
+  否则  %APPDATA%\\sensitive-data-guard\\selection.json         (Windows 默认)
+  否则  ~/.config/sensitive-data-guard/selection.json           (macOS / Linux 默认)
 
 selection.json 格式:
   {"selected": ["default", "team-marriott"]}
@@ -77,7 +77,7 @@ def create_whitelist(name):
     os.makedirs(WHITELIST_DIR, exist_ok=True)
     path = os.path.join(WHITELIST_DIR, name + ".json")
     if os.path.isfile(path):
-        print(f"[pii-guard] 白名单 '{name}' 已存在(路径 {path})")
+        print(f"[sensitive-data-guard] 白名单 '{name}' 已存在(路径 {path})")
         return path
     template = {
         "name": name,
@@ -87,7 +87,7 @@ def create_whitelist(name):
     }
     with open(path, "w", encoding="utf-8") as f:
         json.dump(template, f, ensure_ascii=False, indent=2)
-    print(f"[pii-guard] 已创建白名单 '{name}'(路径 {path})")
+    print(f"[sensitive-data-guard] 已创建白名单 '{name}'(路径 {path})")
     return path
 
 
@@ -116,7 +116,7 @@ def main():
             print("用法:config.py use 名称 [名称 ...]")
             sys.exit(1)
         set_selection(args)
-        print(f"[pii-guard] 已将选择设置为:{'、'.join(args)}")
+        print(f"[sensitive-data-guard] 已将选择设置为:{'、'.join(args)}")
     elif cmd == "add":
         if len(args) != 1:
             print("用法:config.py add 名称")
@@ -124,7 +124,7 @@ def main():
         sel = get_selected_whitelists()
         sel.append(args[0])
         set_selection(sel)
-        print(f"[pii-guard] 当前选择:{'、'.join(get_selected_whitelists())}")
+        print(f"[sensitive-data-guard] 当前选择:{'、'.join(get_selected_whitelists())}")
     elif cmd == "create":
         if len(args) != 1:
             print("用法:config.py create 名称")

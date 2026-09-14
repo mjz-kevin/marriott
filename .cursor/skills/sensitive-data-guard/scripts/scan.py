@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""pii-guard 扫描器。
+"""sensitive-data-guard 扫描器。
 
 在把内容写入任何持久化/外部目的地之前,扫描其中的机密信息(用户名/密码/token/
 AK-SK……)与个人敏感信息(会员名 / 手机号 / 地址 / 身份证 / 银行卡……),
@@ -51,13 +51,13 @@ def load_whitelist(names):
     for name in names:
         path = os.path.join(WHITELIST_DIR, name + ".json")
         if not os.path.isfile(path):
-            print(f"[pii-guard] 警告:未找到白名单 '{name}'(路径 {path})", file=sys.stderr)
+            print(f"[sensitive-data-guard] 警告:未找到白名单 '{name}'(路径 {path})", file=sys.stderr)
             continue
         try:
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
         except Exception as e:
-            print(f"[pii-guard] 警告:无法解析白名单 '{name}':{e}", file=sys.stderr)
+            print(f"[sensitive-data-guard] 警告:无法解析白名单 '{name}':{e}", file=sys.stderr)
             continue
         for lit in data.get("literals", []):
             if isinstance(lit, str) and lit:
@@ -66,7 +66,7 @@ def load_whitelist(names):
             try:
                 regexes.append(re.compile(pat))
             except re.error as e:
-                print(f"[pii-guard] 警告:'{name}' 中的正则有误:{pat}({e})", file=sys.stderr)
+                print(f"[sensitive-data-guard] 警告:'{name}' 中的正则有误:{pat}({e})", file=sys.stderr)
     return literals, regexes
 
 
@@ -123,7 +123,7 @@ def scan(text, literals, regexes):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="pii-guard 内容扫描器")
+    ap = argparse.ArgumentParser(description="sensitive-data-guard 内容扫描器")
     src = ap.add_mutually_exclusive_group(required=True)
     src.add_argument("--file", help="扫描文件")
     src.add_argument("--stdin", action="store_true", help="扫描 stdin")
@@ -139,7 +139,7 @@ def main():
             with open(args.file, "r", encoding="utf-8", errors="replace") as f:
                 text = f.read()
         except Exception as e:
-            print(f"[pii-guard] 读取文件出错:{e}", file=sys.stderr)
+            print(f"[sensitive-data-guard] 读取文件出错:{e}", file=sys.stderr)
             sys.exit(3)
     elif args.stdin:
         text = sys.stdin.read()
@@ -163,10 +163,10 @@ def main():
               file=sys.stderr)
 
     if not findings:
-        print(f"[pii-guard] 干净(CLEAN)—— 未检测到敏感内容(白名单:{wl_label})。")
+        print(f"[sensitive-data-guard] 干净(CLEAN)—— 未检测到敏感内容(白名单:{wl_label})。")
         sys.exit(0)
 
-    print(f"[pii-guard] 已拦截(BLOCKED)—— 检测到 {len(findings)} 项敏感内容"
+    print(f"[sensitive-data-guard] 已拦截(BLOCKED)—— 检测到 {len(findings)} 项敏感内容"
           f"(白名单:{wl_label}):\n")
     for f in findings:
         tag = "机密" if f["category"] == "secret" else "隐私"

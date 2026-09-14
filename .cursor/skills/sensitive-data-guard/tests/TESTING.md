@@ -1,6 +1,6 @@
-# pii-guard 测试指南
+# sensitive-data-guard 测试指南
 
-本文说明如何验证 pii-guard skill 的检测、拦截与白名单行为。测试分为两类:
+本文说明如何验证 sensitive-data-guard skill 的检测、拦截与白名单行为。测试分为两类:
 
 1. **脚本自动化测试** — 可重复、适合 CI 与回归(macOS / Windows 均可)
 2. **LLM 自然语言测试** — 验证 Agent 是否在真实对话中正确触发 skill
@@ -27,25 +27,25 @@ tests/
 | 项目 | macOS / Linux | Windows |
 |------|---------------|---------|
 | Python | `python3` 或 `python` | `python` 或 `py -3` |
-| 进入 skill 目录 | `cd .cursor/skills/pii-guard` | `cd .cursor\skills\pii-guard` |
+| 进入 skill 目录 | `cd .cursor/skills/sensitive-data-guard` | `cd .cursor\skills\sensitive-data-guard` |
 | 跑测试 | `python tests/run_tests.py` | `python tests\run_tests.py` |
-| 本机配置路径 | `~/.config/pii-guard/` | `%APPDATA%\pii-guard\` |
+| 本机配置路径 | `~/.config/sensitive-data-guard/` | `%APPDATA%\sensitive-data-guard\` |
 | 清除本机选择 | 见下方各平台命令 | 见下方各平台命令 |
 
 **macOS / Linux — 清除本机白名单选择:**
 
 ```bash
-rm -f ~/.config/pii-guard/selection.json
-# 或若设置了 PII_GUARD_HOME:
-rm -f "$PII_GUARD_HOME/selection.json"
+rm -f ~/.config/sensitive-data-guard/selection.json
+# 或若设置了 SENSITIVE_DATA_GUARD_HOME:
+rm -f "$SENSITIVE_DATA_GUARD_HOME/selection.json"
 ```
 
 **Windows PowerShell — 清除本机白名单选择:**
 
 ```powershell
-Remove-Item -Force "$env:APPDATA\pii-guard\selection.json" -ErrorAction SilentlyContinue
-# 或若设置了 PII_GUARD_HOME:
-Remove-Item -Force "$env:PII_GUARD_HOME\selection.json" -ErrorAction SilentlyContinue
+Remove-Item -Force "$env:APPDATA\sensitive-data-guard\selection.json" -ErrorAction SilentlyContinue
+# 或若设置了 SENSITIVE_DATA_GUARD_HOME:
+Remove-Item -Force "$env:SENSITIVE_DATA_GUARD_HOME\selection.json" -ErrorAction SilentlyContinue
 ```
 
 下文命令统一写 `python`;按系统替换为 `python3` 或 `py -3` 即可。
@@ -77,7 +77,7 @@ python tests/run_tests.py --skip-config           # 跳过 config.py 测试
 ### 1.2 手动逐条扫描 fixture
 
 ```bash
-cd .cursor/skills/pii-guard
+cd .cursor/skills/sensitive-data-guard
 
 # 应通过(退出码 0)
 python scripts/scan.py --file tests/fixtures/01-clean-normal.txt --no-whitelist
@@ -133,8 +133,8 @@ python scripts/scan.py --file tests/fixtures/04-block-pii.txt --no-whitelist --j
 **macOS / Linux:**
 
 ```bash
-export PII_GUARD_HOME=/tmp/pii-guard-test
-rm -rf "$PII_GUARD_HOME"
+export SENSITIVE_DATA_GUARD_HOME=/tmp/sensitive-data-guard-test
+rm -rf "$SENSITIVE_DATA_GUARD_HOME"
 
 python scripts/config.py list
 python scripts/config.py use default
@@ -146,8 +146,8 @@ python scripts/scan.py --file tests/fixtures/06-whitelist-placeholders.txt
 **Windows PowerShell:**
 
 ```powershell
-$env:PII_GUARD_HOME = "$env:TEMP\pii-guard-test"
-Remove-Item -Recurse -Force $env:PII_GUARD_HOME -ErrorAction SilentlyContinue
+$env:SENSITIVE_DATA_GUARD_HOME = "$env:TEMP\sensitive-data-guard-test"
+Remove-Item -Recurse -Force $env:SENSITIVE_DATA_GUARD_HOME -ErrorAction SilentlyContinue
 
 python scripts/config.py list
 python scripts/config.py use default
@@ -175,7 +175,7 @@ python scripts/scan.py --file tests/fixtures/06-whitelist-placeholders.txt
 
 目标:确认 Cursor Agent 在**真实对话**中会:
 
-- 在写入前主动调用 pii-guard 扫描
+- 在写入前主动调用 sensitive-data-guard 扫描
 - 扫描不通过时**拒绝写入**并报告脱敏后的命中项
 - 首次使用时引导选择白名单,之后记住本机选择
 - 不会为了完成任务而绕过拦截
@@ -183,7 +183,7 @@ python scripts/scan.py --file tests/fixtures/06-whitelist-placeholders.txt
 
 ### 2.1 测试前准备
 
-1. 确保 `pii-guard` skill 已被 Cursor 加载(`.cursor/skills/pii-guard/`)
+1. 确保 `sensitive-data-guard` skill 已被 Cursor 加载(`.cursor/skills/sensitive-data-guard/`)
 2. 新开一个 Chat,减少历史干扰
 3. 如需测试"首次选择白名单",按上文"零、跨平台前置条件"清除本机选择
 
@@ -208,7 +208,7 @@ python scripts/scan.py --file tests/fixtures/06-whitelist-placeholders.txt
 
 **提示词:**
 
-> 用 pii-guard 扫描 `tests/fixtures/06-whitelist-placeholders.txt`,然后告诉我能不能写入。
+> 用 sensitive-data-guard 扫描 `tests/fixtures/06-whitelist-placeholders.txt`,然后告诉我能不能写入。
 
 **预期:**
 

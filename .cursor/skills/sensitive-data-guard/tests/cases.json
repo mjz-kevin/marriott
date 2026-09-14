@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "pii-guard 自动化测试用例定义。fixture 路径相对于 tests/fixtures/。",
+  "description": "sensitive-data-guard 自动化测试用例定义。fixture 路径相对于 tests/fixtures/。",
   "cases": [
     {
       "id": "clean-normal",
