@@ -124,7 +124,10 @@ node: E1_clarify
 status: waiting_user
 round: 1                           # 澄清轮次
 open_p0: [Q1, Q3]
-figma: []
+figma:                             # 0~n 个设计稿链接（只读引用）
+  links: []
+  asked: false                     # 是否已提示过 PO 提供 Figma
+  decision: null                   # provided | none（PO 选择不提供）| null（未表态）
 jira_epic: null                    # 只读引用
 current_version: v1.1               # 当前版本（指向 versions 中的一条）
 versions:                          # 只追加
@@ -204,12 +207,27 @@ flowchart TD
 1. 确定 `team`：PO 给出则用；否则按仓库特征推断并请 PO 确认（确认前 `waiting_user`）。
 2. `.cursor/profiles/{team}.yaml` 不存在 → `blocked`。
 3. 确定功能名与 `prd_id`（英文小写 + 连字符，创建后不改），按 §3 建目录与 state.md。
-4. 原始需求 / 纪要过 `sensitive-data-guard` 后存为 `inputs/{时间戳}_raw-requirement.md`；Figma、Jira Epic 写入状态。
-5. 没有 Jira Initiative / Epic 时提示 PO 按需创建（已有则提供 key），不阻塞澄清。
+4. 原始需求 / 纪要过 `sensitive-data-guard` 后存为 `inputs/{时间戳}_raw-requirement.md`；Jira Epic 写入状态。
+5. **Figma 链接（可选）**：
+   - PO 已提供 → 全部写入 `figma.links`，`figma.decision: provided`；
+   - 未提供 → 不阻塞，继续 E1；在本次状态卡「需要你做的」里加一条**可选**提示（见下方），并记 `figma.asked: true`。
+6. 没有 Jira Initiative / Epic 时提示 PO 按需创建（已有则提供 key），不阻塞澄清。
+
+Figma 提示话术（只提示一次，放在问题清单之后）：
+
+```markdown
+🎨（可选）本需求是否有 Figma 设计稿？
+- 有：直接贴上链接，可以提供一个或多个
+- 没有 / 暂不提供：回复「不提供 Figma」即可，PRD 会照常撰写
+- 之后有了设计稿，随时发给我，会补进下一版 PRD
+```
 
 ### E1 多轮澄清
 
-1. 调用 `requirement-clarify`，输入 `inputs/`、已有问答、Figma / Jira 上下文。
+1. 调用 `requirement-clarify`，输入 `inputs/`、已有问答、Figma（如有）/ Jira 上下文。
+   - PO 的回复中带了 Figma 链接 → 追加到 `figma.links`（去重），`decision: provided`；
+   - PO 回复「不提供 Figma」→ `decision: none`，之后不再提示；
+   - PO 没有回应 Figma 提示 → 视为暂不提供，不再追问，不阻塞。
 2. 本轮问题写入 `sessions/{时间戳}_clarify-r{n}.md`；PO 的回答追加到同一文件。
 3. 结果：
    - P0 未闭合 → `round` +1，`waiting_user`，状态卡列出问题；
@@ -220,7 +238,7 @@ flowchart TD
 ### E2 撰写 PRD
 
 1. 按 §3.1 确定新版本号与文件名：`docs/PRD_{prd_id}_v{版本}_{时间戳}.md`（首稿 v1.0；修订时次版本 +1；E6 变更时主版本 +1）。
-2. 调用 `prd-authoring`，输入澄清结论、Figma、历史 PRD / Epic，以及**输出路径与版本号**；修订时同时给出上一版本文件作为基础。
+2. 调用 `prd-authoring`，输入澄清结论、Figma 链接（有几个传几个；没有则明确告知 Skill「本需求未提供设计稿」，由 Skill 按模板处理）、历史 PRD / Epic，以及**输出路径与版本号**；修订时同时给出上一版本文件作为基础。
 3. 在 `versions` 追加一条（`status: draft`），更新 `current_version`；上一条未发布的草稿标为 `superseded`。
 4. Skill 给出的待确认清单写入 `sessions/{时间戳}_open-items-v{版本}.md`。
 5. `waiting_confirm`，node=`E3_po_confirm`。
@@ -228,6 +246,8 @@ flowchart TD
 ### E3 PO 确认（👤）
 
 请 PO 审阅当前版本文件（标准以 `prd-authoring` 的质量门禁为准）、逐条处理待确认清单，并明确回复「确认发布」或修改意见。
+
+`figma.links` 为空且 `decision` 不是 `none` 时，在状态卡里顺带提醒一句：「当前 PRD 未关联 Figma，如需补充请在确认前提供链接」——仅提醒，不阻塞确认。
 
 - 修改意见 → 写入 `sessions/{时间戳}_review-v{版本}.md`，回到 E2 生成新版本（不改当前文件）。
 - 明确确认（「差不多」不算）→ 当前版本记 `status: confirmed`，回填 `confirmed_by`、`confirmed_at`、`sha256`，进入 E4。
@@ -274,7 +294,11 @@ flowchart TD
    - 已确认版本文件的指纹变了 → 回到 E3（提示 PO：不要直接改已确认的文件，如需修改请回复修改意见，由 Agent 生成新版本）；
    - 用 Confluence MCP 只读查询 `published.page_id`，页面版本高于 `page_version` → 页面被人（或 TL 侧 Skill 的回写）改过，请 PO 选择以 Confluence 为准（先把页面内容存为新版本文件）还是以本地为准，**不得静默覆盖**。
 4. `in_progress` 节点 → 重做；若 Skill 实际已发布但地址未记录，先按 E4 第 5 步补记地址。
-5. `updated_at` 距今超过 7 天 → 提醒 PO 核实需求与优先级是否仍有效。
+5. **PO 随时补充 Figma 链接**（任何节点）→ 追加到 `figma.links`（去重），`decision: provided`；
+   - 还在 E1 / E2 → 下一版草稿直接带上；
+   - 已在 E3 等待确认 → 生成新的次版本后重新请 PO 确认；
+   - 已发布 → 按 E7 生成新的主版本并更新页面。
+6. `updated_at` 距今超过 7 天 → 提醒 PO 核实需求与优先级是否仍有效。
 
 ---
 
@@ -286,6 +310,7 @@ flowchart TD
 **节点**：{E1 多轮澄清（第 2/3 轮）}　**状态**：{waiting_user}
 **本次完成**：{一两句话}
 **PRD 当前版本**：{v1.1｜.ai-sdlc/prd/…/docs/PRD_…_v1.1_….md}
+**Figma**：{n 个链接｜未提供（可随时补充）｜PO 选择不提供}
 **PRD 地址**：{Confluence URL（页面版本 n）｜尚未发布}
 
 ### 👉 需要你做的
