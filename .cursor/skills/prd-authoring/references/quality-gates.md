@@ -73,10 +73,10 @@ Confluence 发布前必须按标题 CQL 查重；Jira 建单前必须按「Paren
 
 ## G8 权限边界
 
-| 动作 | 允许 | 说明 |
-|------|------|------|
-| Confluence 写入 | Eval / Tech Solution Agent | R+W |
-| Jira 建单与字段写入 | UserStory Agent | R+W |
+| 动作 | 允许环节 | 说明 |
+|------|----------|------|
+| Confluence 写入 | 需求撰写/发布、技术方案撰写/发布环节 | R+W |
+| Jira 建单与字段写入 | 建单环节 | R+W |
 | Jira 状态流转与评论 | 受限 | 不含字段重构与删除 |
 
 ## G9 图表可渲染性

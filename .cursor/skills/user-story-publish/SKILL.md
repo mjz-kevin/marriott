@@ -25,9 +25,11 @@ metadata:
 | 用途 | 键 |
 |------|----|
 | Jira 站点 | `profiles/{team}.yaml` → `mcp.jira.host` |
-| Jira 项目 | `profiles/{team}.yaml` → `mcp.jira.project_key` |
+| Jira 项目 | 默认从 Parent Epic key 前缀推导（如 Parent=CNAPP-5661 → 项目 CNAPP）；`profiles/{team}.yaml` → `mcp.jira.project_key` 存在时作为覆盖值 |
 | 工单类型 | `profiles/{team}.yaml` → `mcp.jira.issue_type` |
 | 建单后初始状态 | `profiles/{team}.yaml` → `mcp.jira.initial_status` |
+| Agile Team 默认值 | `profiles/{team}.yaml` → `mcp.jira.agile_team`（为空表示无默认，需人工填写） |
+| 标签枚举与自动填充策略 | `profiles/{team}.yaml` → `mcp.jira.labels`（合法枚举、大小写敏感、`auto_fill` 允许自动填的类别） |
 | 需建立的链接集合 | `profiles/{team}.yaml` → `mcp.jira.links` |
 | AC 书写格式 | `profiles/{team}.yaml` → `doc.ac_format` |
 
@@ -38,7 +40,7 @@ metadata:
 | 1 | 每条 Story 有 Parent、≥3 条 AC、字段无缺失 |
 | 2 | 全文无真实密钥、内网域名、真实会员号、真实手机号 |
 | 3 | **PO 已确认** Story 清单（批量建单前必须有明确确认） |
-| 4 | 当前团队的 Jira 项目（`mcp.jira.project_key`）非 TBD |
+| 4 | 目标 Jira 项目可确定：每条 Story 有可解析的 Parent Epic key（推导出项目），或 `mcp.jira.project_key` 已配置为覆盖值；两者皆无则停止并要求补齐 |
 | 5 | Jira 认证可用（`mcp_auth` 失败即停止） |
 
 ## 2. 工作流
@@ -56,10 +58,10 @@ metadata:
 
 ### S2 幂等查重
 
-创建前逐条查重，避免重复建单：
+创建前逐条查重，避免重复建单。`{project}` 取自 Parent Epic key 前缀（或 `mcp.jira.project_key` 覆盖值）：
 
 ```text
-project = "{mcp.jira.project_key}" AND summary ~ "{摘要}" AND parent = "{Epic key}"
+project = "{project}" AND summary ~ "{摘要}" AND parent = "{Epic key}"
 ```
 
 | 结果 | 动作 |
@@ -78,6 +80,8 @@ project = "{mcp.jira.project_key}" AND summary ~ "{摘要}" AND parent = "{Epic 
 |------|------|
 | Type | 取 `mcp.jira.issue_type`（当前为「故事」） |
 | Parent | 必须填 Epic |
+| Agile Team | 取 `mcp.jira.agile_team` 默认值填入（如 APP=Team Lóng）；配置为空（如 CMS）则留空待人工填写 |
+| 标签 | 仅从 `mcp.jira.labels` 合法枚举中选、**大小写严格照枚举**；只写 `labels.auto_fill` 列出类别（如 business_domain 单选）；`status: pending_guideline` 的预留类别（如 platform: iOS/Android）**不自动填、不作合法**，除非人工明确指定；枚举外标签不臆造。建单前校验 Story 清单标签均在已确认枚举内，命中枚举外或预留类别即停并提示按指南与 TL/SM 对齐 |
 | Acceptance Criteria | 支持 Markdown，按团队的 AC 书写格式 |
 | 描述 | 团队要求描述自成一体 时**必须自带完整背景** |
 | 估点字段 | **不填**（AI 不参与估点） |
@@ -99,13 +103,13 @@ project = "{mcp.jira.project_key}" AND summary ~ "{摘要}" AND parent = "{Epic 
 ### S6 回写
 
 1. **需求文档附录 Jira link**：把新建的 Story/Epic key 写回需求文档附录
-   （要求建独立页 → Confluence PRD 页；否则 → 并入 Story 描述 / Brief）
+   （要求建独立页 → Confluence PRD 页；否则 → 并入 Story 描述）
 2. **技术方案回链**：执行技术方案发布环节留下的「待回写内容」
    - Story → Tech Solution 链接
    - （spike 场景）把 spike 结论以评论形式写到 spike ticket
 
-> 回写 Confluence 需要写权限，UserStory Agent 对 Confluence 为 **只读（R）**。
-> **当前处理**：产出回写内容并提示，由 Eval Agent 或有权限的环节执行。
+> 回写 Confluence 需要写权限，本环节对 Confluence 为 **只读（R）**。
+> **当前处理**：产出回写内容并提示，由有 Confluence 写权限的环节执行。
 
 ### S7 状态流转
 
@@ -122,7 +126,7 @@ project = "{mcp.jira.project_key}" AND summary ~ "{摘要}" AND parent = "{Epic 
 | 失败即停 | 部分失败时报告已建清单，不重试已成功的项 |
 | 敏感信息阻断 | 命中真实密钥 / 真实会员号即停，不脱敏后继续 |
 | 不估点 | 需人工估点的字段一律留空 |
-| 常量不硬编码 | project key / 链接类型 / 初始状态一律取自团队配置 |
+| 常量不硬编码 | 目标项目从 Parent Epic key 推导（或团队配置覆盖）；链接类型 / 初始状态取自团队配置 |
 
 ## 4. 输出回报
 
@@ -135,7 +139,7 @@ project = "{mcp.jira.project_key}" AND summary ~ "{摘要}" AND parent = "{Epic 
 
 - **跳过**：{摘要} 已存在 → {key}
 - **链接**：Epic 已建 / {逐项列出链接集合的状态}
-- **待回写**：{需求文档附录 Jira link 需 Eval Agent 写入 / 无}
+- **待回写**：{需求文档附录 Jira link 需由有 Confluence 写权限的环节写入 / 无}
 - **未填字段**：{需人工估点的字段列表}
 ```
 

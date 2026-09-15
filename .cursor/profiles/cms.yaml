@@ -4,14 +4,15 @@ display_name: CMS 团队
 
 mcp:
   jira:
-    server: atlassian
     host: https://marriottcloud.atlassian.net
+    project_key: GCD
     issue_type: "故事"
     initial_status: Backlog
+    agile_team: ""       # 空 = 无默认，人工填写
+    labels: {}           # 空 = 无枚举规则，人工填写
     links: [prd, figma, tech_solution]
 
   confluence:
-    server: atlassian
     base_url: https://marriottcloud.atlassian.net/wiki
     space: CMI
     parent_pages:
@@ -24,12 +25,7 @@ mcp:
       tech_solution_detail: CMS-TS-Detail-{story_key}-{title}-{date}
     content_format: markdown
 
-  figma:
-    server: figma
-    required_states: [default, loading, empty, error]
-
   github:
-    server: github
     default_branch: main
 
 # ---------------------------------------------------------------- 产物模板

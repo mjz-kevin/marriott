@@ -87,7 +87,7 @@ ancestor = "{parent}" AND title = "{title}"
 **epic → 需求文档**
 
 - 有独立 PRD 页：用 CQL 找到 PRD 页（父目录 `mcp.confluence.parent_pages.prd`），把方案摘要 + 链接写入其「技术方案链接」章节，更新版本脚注
-- 无独立 PRD 页：把方案摘要写进 Story 描述的「技术方案」小节（由有 Jira 写权限的建单环节执行），或并入 Brief 文件
+- 无独立 PRD 页：把方案摘要写进 Story 描述的「技术方案」小节（由有 Jira 写权限的建单环节执行）
 
 **spike → Jira ticket**（按权限方案，默认产出内容不直接写）
 
@@ -111,6 +111,7 @@ ancestor = "{parent}" AND title = "{title}"
 
 ## 3. 规则
 
+- **严格按源文档正文发布，逐节对应技术方案模板，不得添加模板未定义的内容**：不加顶部同步脚注（Source/Last synced/Owner/Status）、不加「上游 PRD / Jira」等模板外的信息行。链接关系放在模板既有位置（如评审结论的回写项、或 PRD 附录回链），不在正文另起多余段落。
 - 敏感信息命中即阻断，不脱敏后继续
 - 不删除已有页面；标题冲突时改为更新或追加日期后缀
 - 部分失败即回滚（用上一版本覆盖）
@@ -134,7 +135,6 @@ ancestor = "{parent}" AND title = "{title}"
 
 ## 5. 相关
 
-- 协议：references/confluence-publish-protocol.md
 - 上游：tech-solution-epic、tech-solution-spike、tech-solution-detail
 - 回写执行方：user-story-publish
-- 权限：Tech Solution Agent 对 Jira 只读，回写一律产出「待回写内容」，交有 Jira 写权限的建单环节执行
+- 权限：本环节对 Jira 只读，回写一律产出「待回写内容」，交有 Jira 写权限的建单环节执行
