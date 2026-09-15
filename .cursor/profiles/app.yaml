@@ -14,12 +14,10 @@ mcp:
   confluence:
     server: atlassian
     base_url: https://marriottcloud.atlassian.net/wiki
-    space: DBU4
+    space: CMI
     parent_pages:
-      prd: "TBD"
-      # TODO(PO): 填技术方案父目录 folder ID，取自目录地址
-      #   {base_url}/spaces/{space}/folder/<这一段数字>/...
-      tech_solution: "TBD"
+      prd: "4191912061"
+      tech_solution: "4192731190"
     naming:
       prd: "APP-PRD-{feature_name}-{date}-{version}"
       tech_solution_epic: "APP-TS-Epic-{feature_name}-{date}-{version}"
