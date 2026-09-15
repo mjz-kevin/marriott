@@ -88,7 +88,7 @@ THEN  {总体预期结果}.
 | **N**egotiable | 是否只描述 what 而非 how（how 留给技术方案） | |
 | **V**aluable | 是否对用户或业务有独立价值 | |
 | **E**stimable | 信息是否足够让 DEV/QA 估点 | |
-| **S**mall | 是否 ≤ 1 个 Sprint（建议 ≤ 8 点） | |
+| **S**mall | 是否 ≤ 1 个 Sprint | |
 | **T**estable | 每条 AC 是否都能写出可执行的测试步骤 | |
 
 任一维度不通过 → 重新拆分。常见拆分维度：CRUD 拆、角色拆、端拆、状态拆、异常流拆、灰度拆。

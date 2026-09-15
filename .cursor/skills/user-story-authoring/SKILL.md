@@ -1,22 +1,24 @@
 ---
 name: user-story-authoring
 description: >-
-  把 PRD 或需求 Brief 拆成标准 User Story，附 GIVEN/WHEN/THEN 验收标准，
+  把 PRD 拆成标准 User Story，附 GIVEN/WHEN/THEN 验收标准，
   经 INVEST 校验，并备齐建单所需的 Jira 字段值。字段集、链接集、
-  描述是否需自成一体、AI 是否可估点均遵循团队配置。当用户要求拆 Story、
+  描述是否需自成一体、是否可自动估点均遵循团队配置。当用户要求拆 Story、
   撰写 User Story、起草 AC 或从 PRD 准备 Jira 工单时使用；
-  触发词：拆 Story / 写 User Story / 用户故事 / 拆分需求 / 写 AC / user story。
+  触发词：拆 Story / 写 User Story / 用户故事 / 拆分需求 / 写 AC / user story authoring。
 metadata:
   agent: UserStory Agent
 ---
 
 # User Story Authoring（User Story 撰写）
 
-把需求文档拆成**可交付、可验收、可估点**的 Story 清单，供建单前逐条填齐字段。| 维度 | 说明 |
+把需求文档拆成**可交付、可验收、可估点**的 Story 清单，供建单前逐条填齐字段。
+
+| 维度 | 说明 |
 |------|------|
-| 定位 | 基于 Eval 结论与技术方案，把 PRD/Brief 拆成标准化 User Story 并写全 AC 与 Jira 字段值 |
+| 定位 | 基于需求澄清结论与技术方案，把 PRD 拆成标准化 User Story 并写全 AC 与 Jira 字段值 |
 | 输入 | PRD（含 Figma 链接）、Epic 级及以上技术方案 |
-| 产出 | Story 清单（含句式、描述、AC、字段值、回链），交 PO 确认后供建单环节消费 |
+| 产出 | 会话内 Story 清单（含句式、描述、AC、字段值、回链），不落地文件；交 PO 确认后供建单环节消费 |
 | 边界 | 只写 what 不写 how；AI 不估点；不建单（建单属发布环节） |
 | 核心判断 | 拆分质量的唯一标准：DEV 无需查阅 PRD 即可开工，QA 无需查阅 PRD 即可编写用例 |
 
@@ -25,7 +27,8 @@ metadata:
 | 用途 | 键 |
 |------|----|
 | 需回链的资产集合 | `profiles/{team}.yaml` → `mcp.jira.links` |
-| 界面状态集 | `profiles/{team}.yaml` → `mcp.figma.required_states` |
+| Agile Team 默认值 | `profiles/{team}.yaml` → `mcp.jira.agile_team`（为空表示无默认，需人工填写） |
+| 标签枚举与自动填充策略 | `profiles/{team}.yaml` → `mcp.jira.labels`（含合法枚举、大小写敏感、`auto_fill` 允许自动填的类别） |
 | 是否要内容模型 | `profiles/{team}.yaml` → `content_model.required` |
 | AC 书写格式 | `profiles/{team}.yaml` → `doc.ac_format` |
 | Story 模板 | `profiles/{team}.yaml` → `artifacts.user_story_template` |
@@ -50,14 +53,18 @@ metadata:
 
 ### 垂直切片
 
-每个 Story 应穿过 UI → 逻辑 → 数据。无法做到时（纯技术改造），
-Story Type 标 `Technical`（或 `Enabler`）并在描述中说明价值。
+每个 Story 应穿过 UI → 逻辑 → 数据、具备用户可感知价值。无法做成垂直切片时（无直接用户价值的工作），Story Type 不标 `Functional`，改标 `Technical` 或 `Enabler`，并在描述中说明价值（支撑了什么、不做会怎样），以补偿 INVEST 的 V(Valuable)：
+
+| Story Type | 适用 | 例 |
+|------------|------|----|
+| `Technical` | 纯技术改造，无直接用户价值 | 重构、技术债清理、性能优化、埋点接入 |
+| `Enabler` | 为后续功能铺路的基础设施/技术准备 | 搭建 mock 数据层、引入播放内核、建 CI |
 
 ### 粒度
 
-- ≤ 1 个 Sprint，建议 ≤ 8 点
-- 超出该粒度 → 继续拆分
-- 小于 1 点且无独立价值 → 合并
+- 单个 Story 应能在 1 个 Sprint 内交付；粒度过大 → 继续拆分
+- 无独立价值的过小项 → 合并
+- 点数由 DEV/QA 评估，不在此写死数值
 
 ### 常用拆分维度
 
@@ -72,14 +79,14 @@ Story Type 标 `Technical`（或 `Enabler`）并在描述中说明价值。
 - S2 梳理用户旅程，标注切分点
 - S3 生成 Story 清单（标题 + 句式 + 描述）
 - S4 逐条写 AC
-- S5 [条件] 领域专项检查（见 3.2）
+- S5 [条件] 领域专项检查
 - S6 INVEST 自检
 - S7 填 Jira 字段值
 - S8 建立 Story 间依赖与优先级
 - S9 门禁校验 + 交 PO 确认
 ```
 
-### 3.1 S3 句式与摘要
+### S3 句式与摘要
 
 ```text
 As a {角色}, for {场景}, I want to {动作}, so that {价值}.
@@ -89,12 +96,6 @@ As a {角色}, for {场景}, I want to {动作}, so that {价值}.
 
 描述是否必须自成一体，按团队配置决定：
 要求自成一体时（可脱离 PRD 独立阅读），描述必须包含背景 + 用户故事 + 需求详细描述 + 领域影响 + 设计 + 技术方案。
-
-### 3.2 S5 领域专项检查（按团队配置开关触发）
-
-| 开关 | 为 true 时要检查 |
-|------|------------------|
-| 内容模型要求 | 站点范围（多站点是否分期）、语言范围（zh/en 是否都覆盖、回退是否定义）、内容模型变更是否与功能实现拆开 |
 
 ### S4 AC 规范
 
@@ -131,6 +132,12 @@ AND   {附加预期}（可选）
 - 涉及多语言时至少 1 条 AC 覆盖**语言回退**
 - 涉及内容模型变更时至少 1 条 AC 覆盖**历史内容的兼容表现**
 
+### S5 领域专项检查（按团队配置开关触发）
+
+| 开关 | 为 true 时要检查 |
+|------|------------------|
+| 内容模型要求 | 站点范围（多站点是否分期）、语言范围（zh/en 是否都覆盖、回退是否定义）、内容模型变更是否与功能实现拆开 |
+
 ### S7 Jira 字段
 
 按 Story 模板的字段表逐条填。
@@ -138,8 +145,10 @@ AND   {附加预期}（可选）
 | 字段 | 处理 |
 |------|------|
 | 必填字段 | 全部必填，缺一即建单失败 |
+| Agile Team | 取 `mcp.jira.agile_team` 默认值填入（如 APP=Team Lóng）；配置为空（如 CMS）则留待人工填写，不臆造 |
+| 标签 | 仅从 `mcp.jira.labels` 的合法枚举中选，**大小写严格照枚举**；只自动填 `labels.auto_fill` 列出的类别（如 `business_domain` 单选，据 Story 所属业务域判定选 Commerce/Loyalty/Trips/Platform 之一）；过程标签（SM/QA/Reporter 按时机打）不自动填；标注 `status: pending_guideline` 的**预留类别（如 platform: iOS/Android）不自动填、不视为已确认**，待指南对齐后再启用；枚举外的标签不臆造，需先按指南与 TL/SM 对齐 |
 | 按条件填写的字段 | 按条件填（字段名取自团队配置，如 Impacted Systems） |
-| 估点字段 | **AI 一律不填**（AI 不参与估点），由 需人工估点的字段 指定的人填 |
+| 估点字段 | **一律不填**（不参与估点），由 DEV/QA 估点 |
 | 发布字段 | 不填（发布流程 / CRQ 回填） |
 | `链接的工作项` | 遍历团队配置的链接集合，逐项建立 |
 
@@ -170,8 +179,7 @@ AND   {附加预期}（可选）
 
 ## 6. 输出
 
-`stories-{feature}.md`（或 `.yaml`），每条 Story 一个完整字段块，
-供后续建单环节直接消费。交付后**停下等 PO 确认**。
+**不落地中间文件**：Story 清单只在对话里给出（每条 Story 一个完整字段块，含句式、描述、AC、Jira 字段值、回链），直接作为建单环节的输入。交付后**停下等 PO 确认**，不写 `stories-*.md`/`.yaml` 等中间产物。
 
 ## 7. 相关
 

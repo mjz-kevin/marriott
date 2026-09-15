@@ -45,7 +45,7 @@ I will be able to {核心能力/动作},
 So that {业务价值}.
 ```
 
-> CMS 定制：CMS 无独立 PRD，描述需自成一体，把 Brief 的核心内容带入；涉及内容模型字段变更时在此说明。
+> CMS 定制：CMS 无独立 PRD，描述需自成一体，把需求核心内容带入；涉及内容模型字段变更时在此说明。
 
 ## 验收标准（Acceptance Criteria）
 
