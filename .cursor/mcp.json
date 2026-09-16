@@ -1,7 +1,19 @@
 {
-    "mcpServers": {
-        "Atlassian-MCP-Server": {
-            "url": "https://mcp.atlassian.com/v1/mcp/authv2"
+  "confluenceRest": {
+      "base_url": "https://marriottcloud.atlassian.net/wiki",
+      "email": "",
+      "api_token": ""
+  },
+  "mcpServers": {
+      "Atlassian-MCP-Server": {
+          "url": "https://mcp.atlassian.com/v1/mcp/authv2"
+      },
+      "figma": {
+          "command": "npx",
+          "args": ["-y", "figma-developer-mcp", "--stdio"],
+          "env": {
+              "FIGMA_API_KEY": ""
           }
-          }
-        }
+      }
+  }
+}
