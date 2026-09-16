@@ -42,3 +42,36 @@ def default_config_dir_hint() -> str:
     if sys.platform == "darwin":
         return "~/.config/sensitive-data-guard"
     return "$XDG_CONFIG_HOME/sensitive-data-guard 或 ~/.config/sensitive-data-guard"
+
+
+def repo_root() -> str:
+    """从 skill 目录向上定位仓库根(含 .git 的目录);找不到则回退到工作目录的当前盘。
+
+    skill 位于 <repo>/.cursor/skills/sensitive-data-guard/scripts/,因此从这里
+    逐级向上查找 .git 目录即可得到仓库根。
+    """
+    here = os.path.dirname(os.path.abspath(__file__))
+    cur = here
+    while True:
+        if os.path.isdir(os.path.join(cur, ".git")):
+            return cur
+        parent = os.path.dirname(cur)
+        if parent == cur:
+            break
+        cur = parent
+    # 回退:skill 目录固定为 <repo>/.cursor/skills/sensitive-data-guard/scripts
+    # 向上四级即仓库根。
+    return os.path.abspath(os.path.join(here, os.pardir, os.pardir, os.pardir, os.pardir))
+
+
+def audit_log_path() -> str:
+    """返回敏感数据扫描审计日志(scan-log.jsonl)的绝对路径。
+
+    优先级:
+      1. 环境变量 SENSITIVE_DATA_GUARD_LOG(直接指向日志文件,便于测试)
+      2. <仓库根>/.ai-sdlc/sensitive-data-guard/scan-log.jsonl
+    """
+    override = os.environ.get("SENSITIVE_DATA_GUARD_LOG")
+    if override:
+        return override
+    return os.path.join(repo_root(), ".ai-sdlc", "sensitive-data-guard", "scan-log.jsonl")

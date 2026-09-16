@@ -127,6 +127,49 @@ python scripts/scan.py --stdin < 路径/内容文件
 
 命中项都会**脱敏**显示(如 `S3c*****`),因此报告本身不会泄露该值。
 
+## 审计日志(自动记录)——每次扫描都会写
+
+每次运行 `scan.py`(除非加 `--no-log`)**只在被拦截(BLOCKED)时**把结果**追加**到仓库内的审计日志:
+
+```
+<仓库根>/.ai-sdlc/sensitive-data-guard/scan-log.jsonl
+```
+
+- 采用 **JSONL**(每行一条 JSON),便于追加与统计。
+- **命中(BLOCKED)**:为每一条触发的规则各写一行,记录 **时间、被扫描的文件、
+  触发的规则(rule/desc)、行号、脱敏后的命中值** 与所用白名单。
+- **干净(CLEAN)**:不写日志。
+- 日志里**只保留脱敏值**,不会落地真实敏感数据。
+- 需要临时不记录时加 `--no-log`;需要改路径时设环境变量 `SENSITIVE_DATA_GUARD_LOG`
+  (指向具体的日志文件,主要用于测试)。
+
+每行示例(已脱敏):
+
+```json
+{"time":"2026-09-16T20:37:10+08:00","file":"path/to/file","triggered":true,"rule":"cn_mobile_phone","category":"pii","severity":"high","desc":"中国大陆手机号","line":4,"match_redacted":"139********","whitelists":["default"]}
+```
+
+## 统计触发次数
+
+用 `stats.py` 汇总审计日志,查看总共触发了多少次,以及按规则 / 类别 / 日期 / 文件的分布:
+
+```bash
+# 打印统计摘要(默认读取仓库根 .ai-sdlc 下的 scan-log.jsonl)
+python scripts/stats.py
+
+# 额外按文件展开
+python scripts/stats.py --by-file
+
+# 以 JSON 输出(便于二次处理)
+python scripts/stats.py --json
+
+# 指定日志文件
+python scripts/stats.py --log 路径/scan-log.jsonl
+```
+
+输出包含:被拦截的扫描次数(去重)、触发规则总次数,以及按规则、按类别、
+按日期(和可选的按文件)的分布。
+
 ## 工作流(在持久化/外部写入之前)
 
 ```
@@ -143,4 +186,6 @@ python scripts/scan.py --stdin < 路径/内容文件
 - 白名单只用于**确实安全**的值(占位符、公开样例)。绝不能为了绕过拦截而把真实凭据
   加入白名单。
 - 脚本仅依赖 Python 3 标准库,无需安装。
+- 审计日志(`.ai-sdlc/sensitive-data-guard/scan-log.jsonl`)是运行时产物,只含脱敏值;
+  如不希望纳入版本管理,可在仓库 `.gitignore` 中忽略 `.ai-sdlc/sensitive-data-guard/`。
 - 测试方法见 [tests/TESTING.md](tests/TESTING.md)。

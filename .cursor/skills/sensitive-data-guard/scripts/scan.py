@@ -27,6 +27,7 @@ AK-SK……)与个人敏感信息(会员名 / 手机号 / 地址 / 身份证 / �
 输出:人类可读的报告;传入 --json 时,额外向 stderr 输出机器可读的 JSON。
 """
 import argparse
+import datetime
 import json
 import os
 import sys
@@ -34,6 +35,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import patterns  # noqa: E402
 import config  # noqa: E402
+import platform_paths  # noqa: E402
 
 SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WHITELIST_DIR = os.path.join(SKILL_DIR, "whitelists")
@@ -126,6 +128,41 @@ def scan(text, literals, regexes):
     return unique
 
 
+def write_audit_log(source_label, findings, whitelists):
+    """把**被拦截**的扫描结果追加到审计日志(JSONL,每行一条)。
+
+    只在命中(BLOCKED)时记录:为每一条触发的规则各写一行,记录时间/文件/规则/
+    行号/脱敏值。干净(CLEAN)的扫描不写日志。
+
+    写日志失败绝不影响扫描结果,只在 stderr 给出提示。
+    """
+    if not findings:
+        return
+    try:
+        log_path = platform_paths.audit_log_path()
+        os.makedirs(os.path.dirname(log_path), exist_ok=True)
+        ts = datetime.datetime.now().astimezone().isoformat(timespec="seconds")
+        rows = []
+        for f in findings:
+            rows.append({
+                "time": ts,
+                "file": source_label,
+                "triggered": True,
+                "rule": f["rule"],
+                "category": f["category"],
+                "severity": f["severity"],
+                "desc": f["desc"],
+                "line": f["line"],
+                "match_redacted": f["match_redacted"],
+                "whitelists": whitelists,
+            })
+        with open(log_path, "a", encoding="utf-8") as fh:
+            for r in rows:
+                fh.write(json.dumps(r, ensure_ascii=False) + "\n")
+    except Exception as e:  # noqa: BLE001
+        print(f"[sensitive-data-guard] 警告:写入审计日志失败:{e}", file=sys.stderr)
+
+
 def main():
     ap = argparse.ArgumentParser(description="sensitive-data-guard 内容扫描器")
     src = ap.add_mutually_exclusive_group(required=True)
@@ -135,10 +172,12 @@ def main():
     ap.add_argument("--whitelist", action="append", default=None,
                     help="要使用的白名单名称(可重复);覆盖已保存的选择")
     ap.add_argument("--no-whitelist", action="store_true", help="不套用任何白名单")
+    ap.add_argument("--no-log", action="store_true", help="本次扫描不写入审计日志")
     ap.add_argument("--json", action="store_true", help="额外向 stderr 输出 JSON 报告")
     args = ap.parse_args()
 
     if args.file:
+        source_label = args.file
         try:
             with open(args.file, "r", encoding="utf-8", errors="replace") as f:
                 text = f.read()
@@ -146,8 +185,10 @@ def main():
             print(f"[sensitive-data-guard] 读取文件出错:{e}", file=sys.stderr)
             sys.exit(3)
     elif args.stdin:
+        source_label = "<stdin>"
         text = sys.stdin.read()
     else:
+        source_label = "<text>"
         text = args.text
 
     if args.no_whitelist:
@@ -159,6 +200,9 @@ def main():
 
     literals, regexes = load_whitelist(names)
     findings = scan(text, literals, regexes)
+
+    if not args.no_log:
+        write_audit_log(source_label, findings, names)
 
     wl_label = "、".join(names) if names else "无"
 
