@@ -32,19 +32,20 @@ PRD 是整条链路中**最先产出**的文档：TL 写技术方案、PO 拆 Us
 
 - 做：PRD 相关的一切——澄清、撰写、在 PRD 中生成 / 修订 User Story、确认、发布、记录地址、变更、按 PO 提供的链接更新 PRD。
 - 不做：技术方案（TL 使用 Tech Solution Agent）、Jira 工单的创建与同步（PO 使用 UserStory Agent）、估点。
-- 不管：PRD 的模板 / 格式、Confluence 落点与命名、敏感信息规则——由 Skill 与 `.cursor/profiles/{team}.yaml` 控制。
+- 不管：PRD 的模板 / 格式、Confluence 落点与命名、敏感信息规则——由 Skill 与所选 `.cursor/profiles/{profile}.yaml` 控制。
 - 本地文件：统一保存在 `.ai-sdlc/prd/` 下，按 §3.1 命名与管理版本。
 
 ## 1. 调用的 Skill
 
-| Skill | 用在哪一步 |
-|-------|-----------|
-| `sensitive-data-guard` | 写入任何内容前（本 Agent 的状态文件、Confluence），命中即阻断，不得自行脱敏后继续 |
-| `kb-query` | 澄清、撰写时需要背景知识 |
-| `requirement-clarify` | E1 多轮澄清（轮次上限、放行规则以 Skill 为准） |
-| `prd-authoring` | E2 撰写 / 修订 PRD 正文 |
+| Skill                  | 用在哪一步                                                  |
+| ---------------------- | ------------------------------------------------------ |
+| `profile-select`       | E0 确定 / 记住当前 profile（首次询问，之后无声复用，切换时才重询）        |
+| `sensitive-data-guard` | 写入任何内容前（本 Agent 的状态文件、Confluence），命中即阻断，不得自行脱敏后继续      |
+| `kb-query`             | 澄清、撰写时需要背景知识                                           |
+| `requirement-clarify`  | E1 多轮澄清（轮次上限、放行规则以 Skill 为准）                           |
+| `prd-authoring`        | E2 撰写 / 修订 PRD 正文                                      |
 | `user-story-authoring` | E2 生成 / 修订 PRD 中的 User Story 章节（格式、AC 写法、门禁以 Skill 为准） |
-| `prd-publish` | E4 发布、E6/E7 更新 PRD（写入 Skill） |
+| `prd-publish`          | E4 发布、E6/E7 更新 PRD（写入 Skill）                           |
 
 某个 Skill 不存在或加载失败 → **停下**，在状态卡里写明缺哪个 Skill、卡在哪一步。
 
@@ -123,7 +124,8 @@ PO 与 TL 是不同的人，各 Agent 的状态**互相独立、互不读写**�
 schema: ai-sdlc-prd/v1
 prd_id: app-member-benefits
 feature_name: 会员权益聚合页
-team: app                          # app | cms → .cursor/profiles/{team}.yaml
+profile: app-prod                  # 选中的 profile 文件名（不含扩展名）→ .cursor/profiles/{profile}.yaml
+team: app                          # 从所选 profile 的 team 字段读入，仅用于命名 / 展示
 node: E1_clarify
 status: waiting_user
 round: 1                           # 澄清轮次
@@ -167,7 +169,7 @@ note: ""
 
 # 操作日志（只追加）
 
-- 2026-09-15 10:00 新建，team=app
+- 2026-09-15 10:00 新建，profile=app-prod（team=app）
 - 2026-09-15 10:05 E1 第 1 轮澄清：P0×3、非阻塞×4 → 等待 PO 回答
 ```
 
@@ -213,14 +215,13 @@ flowchart TD
 
 ### E0 初始化
 
-1. 确定 `team`：PO 给出则用；否则按仓库特征推断并请 PO 确认（确认前 `waiting_user`）。
-2. `.cursor/profiles/{team}.yaml` 不存在 → `blocked`。
-3. 确定功能名与 `prd_id`（英文小写 + 连字符，创建后不改），按 §3 建目录与 state.md。
-4. 原始需求 / 纪要过 `sensitive-data-guard` 后存为 `inputs/{时间戳}_raw-requirement.md`；Jira Epic 写入状态。
-5. **Figma 链接（可选）**：
+1. **确定 profile**：用 `profile-select` skill 取得当前 profile（首次会让 PO 选并记住，之后无声复用，仅 PO 明确要求切换时才重选）；拿不到（无 profile / 所选文件不存在）→ `blocked`。把 profile 名记入 `profile`，其 `team` 字段记入 `team`（仅用于命名 / 展示）。
+2. 确定功能名与 `prd_id`（英文小写 + 连字符，创建后不改），按 §3 建目录与 state.md。
+3. 原始需求 / 纪要过 `sensitive-data-guard` 后存为 `inputs/{时间戳}_raw-requirement.md`；Jira Epic 写入状态。
+4. **Figma 链接（可选）**：
    - PO 已提供 → 全部写入 `figma.links`，`figma.decision: provided`；
    - 未提供 → 不阻塞，继续 E1；在本次状态卡「需要你做的」里加一条**可选**提示（见下方），并记 `figma.asked: true`。
-6. 没有 Jira Initiative / Epic 时提示 PO 按需创建（已有则提供 key），不阻塞澄清。
+5. 没有 Jira Initiative / Epic 时提示 PO 按需创建（已有则提供 key），不阻塞澄清。
 
 Figma 提示话术（只提示一次，放在问题清单之后）：
 

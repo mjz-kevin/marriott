@@ -29,13 +29,14 @@ is_background: false
 
 - 做：技术方案相关的一切——选档、读取 PRD、澄清、撰写、确认、发布、记录地址、PRD 变更后复核。
 - 不做：PRD 与其中的 User Story（PO 使用 Eval Agent）、Jira 工单同步（PO 使用 UserStory Agent）、估点、代码实现。
-- 不管：方案的模板 / 格式、STB/ARB 判定口径、Confluence 落点与命名、发布后的回写方式、敏感信息规则——由 Skill 与 `.cursor/profiles/{team}.yaml` 控制。
+- 不管：方案的模板 / 格式、STB/ARB 判定口径、Confluence 落点与命名、发布后的回写方式、敏感信息规则——由 Skill 与所选 `.cursor/profiles/{profile}.yaml` 控制。
 - 本地文件：统一保存在 `.ai-sdlc/tech-solution/{epic|spike|detail}/` 下，按 §3.1 命名与管理版本。
 
 ## 1. 调用的 Skill
 
 | Skill | 用在哪一步 |
 |-------|-----------|
+| `profile-select` | T0 确定 / 记住当前 profile（首次询问，之后无声复用，切换时才重询） |
 | `sensitive-data-guard` | 写入任何内容前（本 Agent 的状态文件、Confluence），命中即阻断 |
 | `kb-query` | T1 收集上下文 |
 | `requirement-clarify` | T2 澄清方案疑问 |
@@ -134,7 +135,8 @@ TL 与 PO 是不同的人，本 Agent 的状态**独立保存**，不读写 PRD 
 schema: ai-sdlc-tech-solution/v1
 ts_id: app-member-benefits
 mode: epic                         # epic | spike | detail，决定所在目录
-team: app                          # app | cms → .cursor/profiles/{team}.yaml
+profile: app-prod                  # 选中的 profile 文件名（不含扩展名）→ .cursor/profiles/{profile}.yaml
+team: app                          # 从所选 profile 的 team 字段读入，仅用于命名 / 展示
 title_hint: 会员权益聚合页
 node: T2_clarify
 status: waiting_user
@@ -228,8 +230,9 @@ flowchart TD
 ### T0 是否需要 / 选档
 
 1. 技术方案可选。用户只是询问或不确定时，简要说明三档用途，由 TL 决定写不写、写哪档；TL 决定不写 → 不建档（已建档则记 `cancelled` 与原因），状态卡提示「PO 可直接继续 PRD / User Story 流程」，结束。
-2. 确定 mode：TL 指定则用；给了 spike ticket → `spike`；给了 Story key → `detail`；只给了 PRD → `epic`；仍不确定 → `waiting_user`。
-3. 按 mode 在 `.ai-sdlc/tech-solution/{mode}/` 下创建或定位 `{ts_id}` 目录（§3），已存在则续跑。同一个 ts_id 不会出现在两个档位目录中。
+2. **确定 profile**：用 `profile-select` skill 取得当前 profile（首次会让 TL 选并记住，之后无声复用，仅 TL 明确要求切换时才重选）；拿不到（无 profile / 所选文件不存在）→ `blocked`。把 profile 名记入 `profile`，其 `team` 字段记入 `team`（仅用于命名 / 展示）。
+3. 确定 mode：TL 指定则用；给了 spike ticket → `spike`；给了 Story key → `detail`；只给了 PRD → `epic`；仍不确定 → `waiting_user`。
+4. 按 mode 在 `.ai-sdlc/tech-solution/{mode}/` 下创建或定位 `{ts_id}` 目录（§3），已存在则续跑。同一个 ts_id 不会出现在两个档位目录中。
 
 ### T1 读取 PRD 与上下文
 

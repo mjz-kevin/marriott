@@ -29,13 +29,14 @@ User Story 本身由 Eval Agent 在 PRD 中生成和修订。你**不撰写、�
 
 - 做：读取 PRD、提取 Story、查询 Jira、生成同步计划、确认、新建 / 更新工单、建立链接、记录 Story 编号与 Jira key 的对应关系。
 - 不做：撰写或修改 User Story / AC（交给 Eval Agent）、写 PRD 或 Confluence、技术方案、估点、排期、状态流转。
-- 不管：Jira 工单的模板 / 格式、字段与链接类型、初始状态、查重规则、敏感信息规则——由 Skill 与 `.cursor/profiles/{team}.yaml` 控制。
+- 不管：Jira 工单的模板 / 格式、字段与链接类型、初始状态、查重规则、敏感信息规则——由 Skill 与所选 `.cursor/profiles/{profile}.yaml` 控制。
 - 本地文件：统一保存在 `.ai-sdlc/userstory/` 下，按 §3.1 命名与管理版本。
 
 ## 1. 调用的 Skill
 
 | Skill | 用在哪一步 |
 |-------|-----------|
+| `profile-select` | S0 确定 / 记住当前 profile（首次询问，之后无声复用，切换时才重询） |
 | `sensitive-data-guard` | 写入任何内容前（本 Agent 的本地文件、Jira），命中即阻断 |
 | `user-story-publish` | Jira 工单的增删改查：S2 查询现状、S5 新建 / 更新 / 建链接（字段、链接、初始状态、查重由 Skill 处理） |
 
@@ -118,7 +119,8 @@ subagent 可能是**新启动**的（全新上下文），也可能是被主对�
 schema: ai-sdlc-userstory/v2
 us_id: app-member-benefits
 feature_name: 会员权益聚合页
-team: app                          # app | cms → .cursor/profiles/{team}.yaml
+profile: app-prod                  # 选中的 profile 文件名（不含扩展名）→ .cursor/profiles/{profile}.yaml
+team: app                          # 从所选 profile 的 team 字段读入，仅用于命名 / 展示
 node: S4_confirm
 status: waiting_confirm
 prd:                               # 本轮同步读取的 PRD
@@ -205,7 +207,7 @@ flowchart TD
 
 ### S0 初始化
 
-1. 确定 `team`（PO 给出或按仓库推断后请 PO 确认）；profile 不存在 → `blocked`。
+1. **确定 profile**：用 `profile-select` skill 取得当前 profile（首次会让 PO 选并记住，之后无声复用，仅 PO 明确要求切换时才重选）；拿不到（无 profile / 所选文件不存在）→ `blocked`。把 profile 名记入 `profile`，其 `team` 字段记入 `team`（仅用于命名 / 展示）。
 2. **PRD 必填**：PO 没给 → `waiting_user`，提示「请提供 PRD 的 Confluence 链接，或本地 PRD 文件路径（可在 `/eval-agent` 的状态卡中找到）」。
 3. 确定 `us_id`（默认与 PRD 的 prd_id 相同，可由 PO 指定），按 §3 建目录与 state.md；已存在则进入新一轮或续跑。
 4. 记录 Jira Epic；没有时提示 PO 提供（可先生成计划，执行前必须有）。
