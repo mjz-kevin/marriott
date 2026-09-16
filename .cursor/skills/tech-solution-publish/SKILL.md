@@ -30,18 +30,20 @@ metadata:
 
 ## 0. 配置取值
 
+`{profile}` 为当前 profile 文件名（不含扩展名，如 `app-prod` / `cms-test`），由调用方通过 `profile-select` skill 解析并传入（`profile.py resolve` 给出其绝对路径）；未传入或对应文件不存在 → 阻断，不猜测。
+
 | 用途 | 键 |
 |------|----|
-| Confluence 站点根 | `profiles/{team}.yaml` → `mcp.confluence.base_url` |
-| cloudId 解析 | `profiles/{team}.yaml` → `mcp.confluence.cloud_id` |
-| 目标 space | `profiles/{team}.yaml` → `mcp.confluence.space` |
-| 技术方案父目录 ID | `profiles/{team}.yaml` → `mcp.confluence.parent_pages.tech_solution` |
-| PRD 父目录 ID（epic 回写用） | `profiles/{team}.yaml` → `mcp.confluence.parent_pages.prd` |
-| epic 标题模板 | `profiles/{team}.yaml` → `mcp.confluence.naming.tech_solution_epic` |
-| spike 标题模板 | `profiles/{team}.yaml` → `mcp.confluence.naming.tech_solution_spike` |
-| detail 标题模板 | `profiles/{team}.yaml` → `mcp.confluence.naming.tech_solution_detail` |
-| 正文格式 | `profiles/{team}.yaml` → `mcp.confluence.content_format` |
-| 需回链的资产 | `profiles/{team}.yaml` → `mcp.jira.links` |
+| Confluence 站点根 | `profiles/{profile}.yaml` → `mcp.confluence.base_url` |
+| cloudId 解析 | `profiles/{profile}.yaml` → `mcp.confluence.cloud_id` |
+| 目标 space | `profiles/{profile}.yaml` → `mcp.confluence.space` |
+| 技术方案父目录 ID | `profiles/{profile}.yaml` → `mcp.confluence.parent_pages.tech_solution` |
+| PRD 父目录 ID（epic 回写用） | `profiles/{profile}.yaml` → `mcp.confluence.parent_pages.prd` |
+| epic 标题模板 | `profiles/{profile}.yaml` → `mcp.confluence.naming.tech_solution_epic` |
+| spike 标题模板 | `profiles/{profile}.yaml` → `mcp.confluence.naming.tech_solution_spike` |
+| detail 标题模板 | `profiles/{profile}.yaml` → `mcp.confluence.naming.tech_solution_detail` |
+| 正文格式 | `profiles/{profile}.yaml` → `mcp.confluence.content_format` |
+| 需回链的资产 | `profiles/{profile}.yaml` → `mcp.jira.links` |
 
 任一必填落点键（`space` / `parent_pages.tech_solution`）为空或 `TBD` → 停止并要求补齐，不写到 space 根。
 

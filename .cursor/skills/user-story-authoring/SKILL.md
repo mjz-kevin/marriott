@@ -24,14 +24,16 @@ metadata:
 
 ## 0. 配置取值
 
+`{profile}` 为当前 profile 文件名（不含扩展名，如 `app-prod` / `cms-test`），由调用方通过 `profile-select` skill 解析并传入（`profile.py resolve` 给出其绝对路径）；未传入或对应文件不存在 → 阻断，不猜测。
+
 | 用途 | 键 |
 |------|----|
-| 需回链的资产集合 | `profiles/{team}.yaml` → `mcp.jira.links` |
-| Agile Team 默认值 | `profiles/{team}.yaml` → `mcp.jira.agile_team`（为空表示无默认，需人工填写） |
-| 标签枚举与自动填充策略 | `profiles/{team}.yaml` → `mcp.jira.labels`（含合法枚举、大小写敏感、`auto_fill` 允许自动填的类别） |
-| 是否要内容模型 | `profiles/{team}.yaml` → `content_model.required` |
-| AC 书写格式 | `profiles/{team}.yaml` → `doc.ac_format` |
-| Story 模板 | `profiles/{team}.yaml` → `artifacts.user_story_template` |
+| 需回链的资产集合 | `profiles/{profile}.yaml` → `mcp.jira.links` |
+| Agile Team 默认值 | `profiles/{profile}.yaml` → `mcp.jira.agile_team`（为空表示无默认，需人工填写） |
+| 标签枚举与自动填充策略 | `profiles/{profile}.yaml` → `mcp.jira.labels`（含合法枚举、大小写敏感、`auto_fill` 允许自动填的类别） |
+| 是否要内容模型 | `profiles/{profile}.yaml` → `content_model.required` |
+| AC 书写格式 | `profiles/{profile}.yaml` → `doc.ac_format` |
+| Story 模板 | `profiles/{profile}.yaml` → `artifacts.user_story_template` |
 
 ## 1. 前置条件
 

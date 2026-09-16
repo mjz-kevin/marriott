@@ -24,10 +24,12 @@ Spike / 调研类技术方案，在 Refinement 阶段针对无法直接定论的
 
 ## 0. 配置取值
 
+`{profile}` 为当前 profile 文件名（不含扩展名，如 `app-prod` / `cms-test`），由调用方通过 `profile-select` skill 解析并传入（`profile.py resolve` 给出其绝对路径）；未传入或对应文件不存在 → 阻断，不猜测。
+
 | 用途 | 键 |
 |------|----|
-| 代码仓库默认分支 | `profiles/{team}.yaml` → `mcp.github.default_branch` |
-| 是否要内容模型 | `profiles/{team}.yaml` → `content_model.required` |
+| 代码仓库默认分支 | `profiles/{profile}.yaml` → `mcp.github.default_branch` |
+| 是否要内容模型 | `profiles/{profile}.yaml` → `content_model.required` |
 
 ## 1. 前置条件
 

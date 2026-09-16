@@ -25,11 +25,13 @@ Story 级明细技术方案，在开发启动前基于 User Story + AC 产出，
 
 ## 0. 配置取值
 
+`{profile}` 为当前 profile 文件名（不含扩展名，如 `app-prod` / `cms-test`），由调用方通过 `profile-select` skill 解析并传入（`profile.py resolve` 给出其绝对路径）；未传入或对应文件不存在 → 阻断，不猜测。
+
 | 用途 | 键 |
 |------|----|
-| 是否要内容模型 | `profiles/{team}.yaml` → `content_model.required` |
-| 代码仓库默认分支 | `profiles/{team}.yaml` → `mcp.github.default_branch` |
-| detail 模板 | `profiles/{team}.yaml` → `artifacts.user_story_template` 同源目录下的 detail 模板（app / cms 各一份） |
+| 是否要内容模型 | `profiles/{profile}.yaml` → `content_model.required` |
+| 代码仓库默认分支 | `profiles/{profile}.yaml` → `mcp.github.default_branch` |
+| detail 模板 | `profiles/{profile}.yaml` → `artifacts.user_story_template` 同源目录下的 detail 模板（app / cms 各一份） |
 
 ## 1. 前置条件
 
