@@ -94,8 +94,12 @@ def redact(s, keep=3):
 def scan(text, literals, regexes):
     findings = []
     for rule in patterns.ALL_RULES:
+        validate = rule.get("validate")
         for m in rule["regex"].finditer(text):
             matched = m.group(0)
+            # 可选的规则级校验(如银行卡 Luhn):未通过则不算命中
+            if validate is not None and not validate(matched):
+                continue
             if is_whitelisted(matched, literals, regexes):
                 continue
             findings.append(

@@ -108,6 +108,24 @@
       "expect_exit": 2,
       "expect_rules": ["token_assignment"],
       "min_findings": 1
+    },
+    {
+      "id": "bank-card-luhn-valid",
+      "name": "通过 Luhn 校验的银行卡号应被拦截",
+      "inline_text": "test card 4111 1111 1111 1111",
+      "no_whitelist": true,
+      "expect_exit": 2,
+      "expect_rules": ["bank_card"],
+      "min_findings": 1
+    },
+    {
+      "id": "bank-card-luhn-invalid",
+      "name": "未通过 Luhn 校验的 16 位数字不应命中 bank_card",
+      "inline_text": "order id 4111 1111 1111 1112",
+      "no_whitelist": true,
+      "expect_exit": 0,
+      "forbid_rules": ["bank_card"],
+      "max_findings": 0
     }
   ]
 }

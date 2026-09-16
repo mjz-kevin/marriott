@@ -17,6 +17,7 @@
     "(?i)<[^>]*(?:password|token|secret|key)[^>]*>",
     "(?i)\\$\\{[^}]*(?:PASSWORD|TOKEN|SECRET|KEY)[^}]*\\}",
     "(?i)(?:xxx+|\\*{3,}|__redacted__|placeholder|dummy|sample)",
-    "(?i)@example\\.(?:com|org|net)"
+    "(?i)@example\\.(?:com|org|net)",
+    "^4111[ \\-]?1111[ \\-]?1111[ \\-]?1111$"
   ]
 }

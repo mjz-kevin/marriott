@@ -60,7 +60,7 @@ skills/sensitive-data-guard/
 | `intl_phone` | 国际号码 `+区号 ...` |
 | `email_address` | 邮箱地址 |
 | `cn_id_card` | 中国居民身份证号(18 位,含日期校验) |
-| `bank_card` | 13–19 位银行卡/信用卡号 |
+| `bank_card` | 13–19 位银行卡/信用卡号(通过 Luhn 模 10 校验) |
 | `member_name_field` | `member_name` / `会员名` / `姓名` = 值 |
 | `address_field` | `address` / `地址` = 值 |
 | `cn_address_text` | 中文街道地址(省/市/区 + 路/号/室/栋……) |
@@ -120,5 +120,7 @@ Windows 上若 `python` 不可用,可改用 `py -3` 或 `python3`。
 ## 调整
 
 - 减少误报:把安全的值/正则加入白名单,或在 `patterns.py` 里放宽某条规则。
+- 精化检测:为规则添加可选的 `validate(matched) -> bool` 函数,匹配文本还需通过该函数
+  才算命中(例如 `bank_card` 用 `luhn_valid` 做 Luhn 模 10 校验)。仅依赖标准库。
 - 新增检测器:在 `patterns.py` 的 `SECRET_RULES` 或 `PII_RULES` 里追加一条规则字典,
-  包含 `id`、`category`、`severity`、`desc`、`regex`。
+  包含 `id`、`category`、`severity`、`desc`、`regex`(可选 `validate`)。
