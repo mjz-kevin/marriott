@@ -1,8 +1,5 @@
 # User Story 模板 — APP 团队
 
-> 本模板忠实于官方《User Story Template》第二部分。字段、取值枚举与必填标注以官方为准。
-> 撰写约束（AC 可测、链路回链、INVEST 等）由 `user-story-authoring` 的质量门禁负责。
-
 ## Story 元信息
 
 ### Story 1：{标题}

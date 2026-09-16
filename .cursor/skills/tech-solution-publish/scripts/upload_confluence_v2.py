@@ -3,7 +3,7 @@
 """
 upload_confluence_v2.py — 将本地 Markdown 发布到 Confluence（storage 格式，纯标准库，跨平台）。
 
-用于 tech-solution-publish 的上传脚本（与 prd-publish 的同名脚本为各自目录下的独立副本）。
+用于 prd-publish / tech-solution-publish 等发布类 skill 的统一上传脚本。
 特性：
   - 凭证从 .cursor/mcp.json 的 confluenceRest 读取（base_url/email/api_token）
   - Markdown -> Confluence storage HTML（标题/表格/列表/引用/代码/mermaid 占位/行内格式）
@@ -244,7 +244,7 @@ def render_mermaid_svg(code, out_svg):
 
 
 # ============================= Confluence 附件 & 页面 =============================
-def upload_attachment(base_url, auth, page_id, file_path, filename, content_type):
+def _multipart_body(file_path, filename, content_type):
     boundary = "----up" + uuid.uuid4().hex
     with open(file_path, "rb") as f:
         fb = f.read()
@@ -252,10 +252,44 @@ def upload_attachment(base_url, auth, page_id, file_path, filename, content_type
            f'Content-Disposition: form-data; name="file"; filename="{filename}"\r\n'
            f"Content-Type: {content_type}\r\n\r\n").encode("utf-8")
     post = f"\r\n--{boundary}--\r\n".encode("utf-8")
-    return api("POST", f"{base_url}/rest/api/content/{page_id}/child/attachment", auth,
-               body=pre + fb + post,
-               headers={"X-Atlassian-Token": "no-check",
-                        "Content-Type": f"multipart/form-data; boundary={boundary}"})
+    return boundary, pre + fb + post
+
+
+def _find_attachment_id(base_url, auth, page_id, filename):
+    url = (f"{base_url}/rest/api/content/{page_id}/child/attachment"
+           f"?filename=" + urllib.parse.quote(filename) + "&limit=5")
+    st, data = api("GET", url, auth)
+    if st == 200 and isinstance(data, dict) and data.get("results"):
+        return data["results"][0]["id"]
+    return None
+
+
+def upload_attachment(base_url, auth, page_id, file_path, filename, content_type):
+    """幂等上传附件：新建成功即返回；若同名附件已存在（400），改用更新数据接口覆盖。
+
+    修复：Confluence 的 child/attachment 创建接口在同名附件已存在时返回
+    400 "Cannot add a new attachment with same file name"。页面更新（update）路径
+    会因此让 mermaid 图退化为源码兜底，甚至把首发已渲染的图片覆盖掉。此处捕获该
+    情况并走 child/attachment/{id}/data 更新接口，保证 create/update 两条路径都能稳定出图。
+    """
+    boundary, body = _multipart_body(file_path, filename, content_type)
+    st, data = api("POST", f"{base_url}/rest/api/content/{page_id}/child/attachment", auth,
+                   body=body,
+                   headers={"X-Atlassian-Token": "no-check",
+                            "Content-Type": f"multipart/form-data; boundary={boundary}"})
+    if st in (200, 201):
+        return st, data
+    # 同名附件已存在 → 更新该附件的数据（覆盖）
+    if st == 400 and "same file name" in str(data):
+        att_id = _find_attachment_id(base_url, auth, page_id, filename)
+        if att_id:
+            boundary, body = _multipart_body(file_path, filename, content_type)
+            return api("POST",
+                       f"{base_url}/rest/api/content/{page_id}/child/attachment/{att_id}/data", auth,
+                       body=body,
+                       headers={"X-Atlassian-Token": "no-check",
+                                "Content-Type": f"multipart/form-data; boundary={boundary}"})
+    return st, data
 
 
 def replace_mermaid(body, mermaid_blocks, page_id, base_url, auth, workdir, feature):

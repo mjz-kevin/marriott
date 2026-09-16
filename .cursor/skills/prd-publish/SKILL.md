@@ -94,6 +94,7 @@ python .cursor/skills/prd-publish/scripts/upload_confluence_v2.py --md "<PRD.md 
 - **正文完整（硬约束）**：脚本一次性提交整篇 storage 正文，不受 MCP 体量限制。禁止以内容过长或通道限制为由手工摘要、删减章节或 AC 原文，亦不得改用 MCP 分段写入替代脚本。允许的差异仅限两类：mermaid 源码转为渲染后的图片、格式转换（markdown 转 storage HTML）。
 - **正文格式**：脚本内置 markdown 转 Confluence storage 的转换（标题、表格、列表、引用、代码宏、行内加粗/代码/链接）。`content_format` 保持 `markdown` 即可直接使用本地 `.md`。
 - **图表**：脚本自动将 mermaid flowchart 渲染为 SVG 附件并内联（`<ac:image>`）；渲染失败时退化为 code 宏加文字兜底，并在结果 JSON 的 `mermaid_pending` 中列出待渲染图号。图表不会被静默丢弃。本地 `.md` 保留 mermaid 源码，二者语义一致。
+  - **附件幂等（新建与更新路径都出图）**：脚本的 `upload_attachment` 对同名附件幂等——首次发布走创建接口，更新已有页面（update）时同名 SVG 已存在会自动改走「更新附件数据」接口覆盖，不再因 400 `same file name` 退化为源码。**因此严禁把附件上传改回「仅创建、不处理已存在」的写法**：那会导致每次 update 把已渲染的图覆盖成源码块。
 - **回链**：脚本将 markdown 中的 `[文字](url)` 转为可点击链接。确保 PRD 正文中 `mcp` 配置声明的各类链接（`figma` 设计稿、`tech_solution` 技术方案、`jira` 工单）已写为 markdown 链接，即随正文一并发布；`prd` 为本体无需自链。某类别在 PRD 中无对应链接则跳过，不阻断发布。
 
 > **执行前提**：本机装有 Python 3.x（纯标准库，无需额外依赖），Windows 用 `python`、macOS / Linux 用 `python3`；`.cursor/mcp.json` 的 `confluenceRest` 三项非空。脚本默认从 `<脚本目录>/../../../mcp.json`（即 `.cursor/mcp.json`）读取凭证，路径不同可用 `--mcp <mcp.json 路径>` 指定。脚本跨平台实现（路径用 `os.path`、全程 UTF-8、mermaid 由纯标准库自绘），三系统行为一致。
@@ -102,6 +103,6 @@ python .cursor/skills/prd-publish/scripts/upload_confluence_v2.py --md "<PRD.md 
 
 - 解析脚本输出的 JSON：确认 `action`（create/update）、`page_id`、`version`、`url` 均已返回，`url` 可访问，退出码为 0。
 - **正文完整性校验（硬门禁）**：核对脚本 `stats`（章节、Story、AC 条数）与本地确认版一致，逐条 AC 的 GIVEN/WHEN/THEN 原文均已随全文写入。若发现缺章、缺 Story 或缺 AC，修正本地 `.md` 后重跑脚本更新，不得以精简版结束发布。
-- **图表**：检查 `mermaid_pending` 是否为空。非空表示对应图未渲染成功，需在回报中标注图待渲染（含源码与文字兜底），并视情况修正 mermaid 源码后重跑。
+- **图表（硬门禁）**：检查 `mermaid_pending` 是否为空。**非空即视为发布未达标**：先本地单独跑渲染定位失败在「SVG 自绘」还是「附件上传」——自绘失败则修 mermaid 源码；附件上传失败（如同名 400）则依赖脚本已内置的更新附件数据幂等重传，修正后**重跑至 `mermaid_pending` 为空**。不得以「已保留源码兜底」为由带着源码块结束发布。若确因环境无法渲染，须在回报中显式标注哪几张图未出图、原因与后续补图动作，不静默通过。
 - **失败处理**：退出码非 0 或 JSON 含 `error` 时，读取 `error` 中的 HTTP 状态与响应（如 401 凭证、403 权限、404 parent/space 错误），修正后重跑。不得改用会截断正文的 MCP 直写规避问题。
 - **回报**：页面标题、URL、版本号、本次为新建或更新、`stats` 完整性核对结果（章节/Story/AC 与本地是否一致）、`mermaid_pending` 图表渲染情况、正文中已建立的回链清单。

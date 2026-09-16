@@ -101,6 +101,8 @@ python .cursor/skills/tech-solution-publish/scripts/upload_confluence_v2.py --md
 
 - **正文完整（硬约束）**：脚本一次性提交整篇 storage 正文，不受 MCP 体量限制。禁止以内容过长或通道限制为由手工摘要、删减章节，亦不得改用 MCP 分段写入替代脚本。允许的差异仅限 mermaid 源码转为渲染后的图片、格式转换（markdown 转 storage HTML）。
 - **图表**：脚本自动将 mermaid flowchart 渲染为 SVG 附件并内联，渲染失败时退化为 code 宏加文字兜底，并在结果 JSON 的 `mermaid_pending` 中列出待渲染图号。
+  - **附件幂等（新建与更新路径都出图）**：`upload_attachment` 对同名附件幂等——首次发布走创建接口，更新已有页面（update）时同名 SVG 已存在会自动改走「更新附件数据」接口覆盖，不再因 400 `same file name` 退化为源码。**严禁把附件上传改回「仅创建、不处理已存在」的写法**，否则每次 update 会把已渲染的图覆盖成源码块。
+  - **硬门禁**：`mermaid_pending` 非空即发布未达标，须定位（自绘 vs 上传）修正后**重跑至为空**，不得带着源码块结束；确因环境无法渲染时在回报中显式标注未出图的图号、原因与补图动作，不静默通过。
 - **标题冲突**：脚本按 `--parent` + `--title` 判定为更新；若查询返回多条（≥2）由 skill 停止并交用户裁决，不擅自新建重复页。
 
 > **执行前提**：本机装有 Python 3.x（纯标准库），Windows 用 `python`、macOS / Linux 用 `python3`；`.cursor/mcp.json` 的 `confluenceRest` 三项非空。脚本默认从 `<脚本目录>/../../../mcp.json`（即 `.cursor/mcp.json`）读取凭证，路径不同可用 `--mcp <mcp.json 路径>` 指定。

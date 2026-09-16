@@ -147,8 +147,10 @@ AND   {附加预期}（可选）
 | 字段 | 处理 |
 |------|------|
 | 必填字段 | 全部必填，缺一即建单失败 |
-| Agile Team | 取 `mcp.jira.agile_team` 默认值填入（如 APP=Team Lóng）；配置为空（如 CMS）则留待人工填写，不臆造 |
-| 标签 | 仅从 `mcp.jira.labels` 的合法枚举中选，**大小写严格照枚举**；只自动填 `labels.auto_fill` 列出的类别（如 `business_domain` 单选，据 Story 所属业务域判定选 Commerce/Loyalty/Trips/Platform 之一）；过程标签（SM/QA/Reporter 按时机打）不自动填；标注 `status: pending_guideline` 的**预留类别（如 platform: iOS/Android）不自动填、不视为已确认**，待指南对齐后再启用；枚举外的标签不臆造，需先按指南与 TL/SM 对齐 |
+| Agile Team | 取 `mcp.jira.agile_team` 默认值填入；**CNAPP（APP 团队）所有 scrum 团队接的票必填 `Team Lóng`**；配置为空（如 CMS）则留待人工填写，不臆造 |
+| 标签 | 仅从 `mcp.jira.labels` 的合法枚举中选，**大小写严格照枚举**；只自动填 `labels.auto_fill` 列出的类别。**business_domain 为过滤性硬门禁**（`filter_gate: true`）：CNAPP 的票**必须**据 Story 所属业务域单选 `Commerce / Loyalty / Trips / Platform` 之一，**缺失会被下游过滤丢弃**；过程标签（SM/QA/Reporter 按时机打）不自动填；枚举外的标签不臆造，需先按指南与 TL/SM 对齐 |
+| Component | 按 `mcp.jira.components.platform_rule` 填（仅 CNAPP 适用）：**仅 iOS 专属的票**选 `Component = iOS`；**Android 票不选任何 Component**；跨端/与平台无关的票按需留空。未配置 `components` 的团队（如 CMS）不处理 |
+| 优先级 | **需填**，取 PRD Story 优先级（P1/P2/P3），按 `mcp.jira.priority.moscow_map` 映射为目标项目合法值：CNAPP 需求类用 MoSCoW（P1→`Critical or Must Have`、P2→`High or Should Have`、P3→`Medium or Could Have`），勿留 `None or Not Defined`，勿与缺陷类 `P1-P4 Defect` 混用 |
 | 按条件填写的字段 | 按条件填（字段名取自团队配置，如 Impacted Systems） |
 | 估点字段 | **一律不填**（不参与估点），由 DEV/QA 估点 |
 | 发布字段 | 不填（发布流程 / CRQ 回填） |

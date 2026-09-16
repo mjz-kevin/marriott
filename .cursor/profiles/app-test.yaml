@@ -8,22 +8,31 @@ mcp:
     project_key: CNAPP
     issue_type: "故事"
     initial_status: backlog
-    agile_team: "Team Lóng"          # 建单默认 Agile Team
+    agile_team: "Team Lóng"          # 建单默认 Agile Team：所有 CNAPP scrum 团队接的票必选 Team Lóng
     labels:                          # 标签枚举，来源见 source；大小写敏感
       source: "https://marriottcloud.atlassian.net/wiki/spaces/DBU4/pages/3386999508"
       case_sensitive: true
       auto_fill: [business_domain]   # 允许自动填充的类别；未列出的仅作合法值校验
-      business_domain:               # 必填、单选
+      business_domain:               # 必填、单选：CNAPP 的票必须打这四个之一，否则会被过滤掉
         mandatory: true
         select: unique
+        filter_gate: true            # 缺失即被下游过滤：建单前硬门禁，缺一即停
         values: [Commerce, Loyalty, Trips, Platform]   # Content 已并入 Loyalty
-      platform:                      # 预留，未纳入 auto_fill，待指南确认
-        status: pending_guideline
-        select: unique
-        values: [iOS, Android]
       process_labels:                # 过程标签，仅校验、不自动填
         auto_fill: false
         values: [AdhocRequest, UnplannedSprintTicket, CrossSprintTicket, CrossSprintCommitted, DevOnly, QAOnly, Compliance, NoCodeChanges, BugReviewed, Design, VQA, StoryBug, RegressionBug, ProdKnownIssue, ProdIncident, BugPriorityUpdated]
+    components:                      # Jira Component 字段规则（CNAPP）
+      platform_rule:
+        ios_only: iOS                # 仅 iOS 专属的票：Component 选 iOS
+        android: none                # Android 票：不选任何 Component
+        note: "只有 iOS 专属票选 Component=iOS；Android 票不选 Component。跨端/无关平台的票按需留空。"
+    priority:                        # 优先级字段：CNAPP 用 MoSCoW 命名，需从 PRD 的 P1/P2/P3 映射
+      required: true                 # Story 建单必填，不可留 None
+      moscow_map:                    # PRD 优先级 -> CNAPP MoSCoW 值
+        P1: "Critical or Must Have"
+        P2: "High or Should Have"
+        P3: "Medium or Could Have"
+      note: "CNAPP 的需求类优先级为 MoSCoW（Critical/High/Medium/None），与缺陷类 P1-P4 Defect 不同；建单按 PRD 优先级映射填入，勿留 None or Not Defined。"
     links: [prd, figma, tech_solution]
 
   confluence:
