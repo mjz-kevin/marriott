@@ -1,0 +1,59 @@
+
+team: APP
+display_name: APP 团队
+
+mcp:
+  jira:
+    host: https://marriottcloud.atlassian.net
+    project_key: CNAPP
+    issue_type: "故事"
+    initial_status: backlog
+    agile_team: "Team Lóng"          # 建单默认 Agile Team
+    labels:                          # 标签枚举，来源见 source；大小写敏感
+      source: "https://marriottcloud.atlassian.net/wiki/spaces/DBU4/pages/3386999508"
+      case_sensitive: true
+      auto_fill: [business_domain]   # 允许自动填充的类别；未列出的仅作合法值校验
+      business_domain:               # 必填、单选
+        mandatory: true
+        select: unique
+        values: [Commerce, Loyalty, Trips, Platform]   # Content 已并入 Loyalty
+      platform:                      # 预留，未纳入 auto_fill，待指南确认
+        status: pending_guideline
+        select: unique
+        values: [iOS, Android]
+      process_labels:                # 过程标签，仅校验、不自动填
+        auto_fill: false
+        values: [AdhocRequest, UnplannedSprintTicket, CrossSprintTicket, CrossSprintCommitted, DevOnly, QAOnly, Compliance, NoCodeChanges, BugReviewed, Design, VQA, StoryBug, RegressionBug, ProdKnownIssue, ProdIncident, BugPriorityUpdated]
+    links: [prd, figma, tech_solution]
+
+  confluence:
+    base_url: https://marriottcloud.atlassian.net/wiki
+    space: DBU4
+    parent_pages:
+      prd: "4147151138"
+      tech_solution: "4198531132"
+    naming:
+      prd: "APP-PRD-{feature_name}-{date}-{version}"
+      tech_solution_epic: "APP-TS-Epic-{feature_name}-{date}-{version}"
+      tech_solution_spike: "APP-TS-Spike-{spike_key}-{topic}-{date}"
+      tech_solution_detail: "APP-TS-Detail-{story_key}-{title}-{date}"
+    content_format: markdown
+
+  github:
+    default_branch: develop
+
+# ---------------------------------------------------------------- 产物模板
+artifacts:
+  prd_kind: prd
+  prd_template: references/prd-template.md
+  user_story_template: references/user-story-app.md
+
+# ---------------------------------------------------------------- 内容模型
+content_model:
+  required: false
+
+# ---------------------------------------------------------------- 产物语言
+doc:
+  body_language: zh-CN
+  ac_language: zh-CN
+  ac_format: GIVEN/WHEN/AND/THEN

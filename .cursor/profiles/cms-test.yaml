@@ -1,0 +1,45 @@
+
+team: CMS
+display_name: CMS 团队
+
+mcp:
+  jira:
+    host: https://marriottcloud.atlassian.net
+    project_key: GCD
+    issue_type: "故事"
+    initial_status: Backlog
+    agile_team: ""       # 空 = 无默认，人工填写
+    labels: {}           # 空 = 无枚举规则，人工填写
+    links: [prd, figma, tech_solution]
+
+  confluence:
+    base_url: https://marriottcloud.atlassian.net/wiki
+    space: DBU4
+    parent_pages:
+      prd: "4147151138"
+      tech_solution: "4198531132"
+    naming:
+      prd: CMS-PRD-{feature_name}-{date}-{version}
+      tech_solution_epic: CMS-TS-Epic-{feature_name}-{date}-{version}
+      tech_solution_spike: CMS-TS-Spike-{spike_key}-{topic}-{date}
+      tech_solution_detail: CMS-TS-Detail-{story_key}-{title}-{date}
+    content_format: markdown
+
+  github:
+    default_branch: main
+
+# ---------------------------------------------------------------- 产物模板
+artifacts:
+  prd_kind: prd
+  prd_template: references/prd-template.md
+  user_story_template: references/user-story-cms.md
+
+# ---------------------------------------------------------------- 内容模型
+content_model:
+  required: true
+
+# ---------------------------------------------------------------- 产物语言
+doc:
+  body_language: zh-CN
+  ac_language: zh-CN
+  ac_format: GIVEN/WHEN/AND/THEN
