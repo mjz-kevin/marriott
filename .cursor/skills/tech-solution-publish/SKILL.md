@@ -14,7 +14,7 @@ metadata:
 
 将已确认的三档技术方案写入 Confluence 指定路径，并闭环回写到需求文档或工单。
 
-> **发布方式**：技术方案正文体量常超过 Atlassian MCP 单次写入上限，MCP 直接写入会被截断或拒绝。本 skill 统一采用本目录的 `scripts/upload_confluence_v2.py` 脚本上传。脚本通过 Confluence REST API 一次性提交完整 storage 正文，内置幂等查重、新建/更新升版本、mermaid 渲染为图片、完整性统计。
+> **发布方式**：技术方案正文体量常超过 Atlassian MCP 单次写入上限，MCP 直接写入会被截断或拒绝。本 skill 统一采用本目录的 `scripts/upload_confluence_v2.py` 脚本上传。脚本通过 Confluence REST API 一次性提交完整 storage 正文，内置幂等查重、新建/更新升版本、mermaid 渲染为高分辨率图片、完整性统计。
 
 > **归档位置（文件夹模式）**：技术方案按 epic 分层归档，与 PRD 同处一个 epic 夹。层级为 **一级根目录「Mobile Team Requirement Materials」→ 二级 `{epic}` → 三级 `{epic}-Tech Solution`**，epic / spike / detail 三档页面都放在该三级 `{epic}-Tech Solution` 夹下。发布前须先确定所属 **Jira Epic key**（如 `CNAPP-5661`，不用功能名或中文 slug）；脚本以 `--root`（一级根页 ID）+ `--epic`（Jira Epic key）+ `--kind tech_solution` 自动判断各级文件夹是否存在，缺失则自动创建，再把方案页建/更到最内层夹下。三档仅标题（`--title`）不同，回写闭环与 Jira 只读约束不变。
 
@@ -109,12 +109,9 @@ python .cursor/skills/tech-solution-publish/scripts/upload_confluence_v2.py --md
 
 - **正文完整（硬约束）**：脚本一次性提交整篇 storage 正文，不受 MCP 体量限制。禁止因内容过长或通道限制而手工摘要、删减章节，也不得改用 MCP 分段写入替代脚本。允许的差异仅限 mermaid 源码转为渲染后的图片、格式转换（markdown 转 storage HTML）。
 - **禁止用 MCP 写页面（硬约束）**：发布/更新一律走本脚本的 REST 通道。禁止调用 Atlassian MCP 的 `updateConfluencePage` 或 `createConfluencePage` 写入或更新页面，否则 MCP 单次写入受体量限制会截断正文、丢图、破坏 storage 结构。脚本报错时只修入参或凭证后重跑，不得改用上述 MCP 工具兜底。MCP 的只读查询（如按标题/CQL 查页、读版本）不受此限。
-- **图表**：脚本自动将 mermaid flowchart 渲染为 SVG 附件并内联，渲染失败时退化为 code 宏加文字兜底，并在结果 JSON 的 `mermaid_pending` 中列出待渲染图号。
-  - **附件幂等（新建与更新路径都出图）**：`upload_attachment` 对同名附件幂等——首次发布走创建接口，更新已有页面（update）时同名 SVG 已存在会自动改走「更新附件数据」接口覆盖，不再因 400 `same file name` 退化为源码。禁止把附件上传改回「仅创建、不处理已存在」的写法，否则每次 update 会把已渲染的图覆盖成源码块。
-  - **硬门禁**：`mermaid_pending` 非空视为发布未达标，须定位（自绘 vs 上传）修正后重跑至为空，不得带着源码块结束；确因环境无法渲染时在回报中显式标注未出图的图号、原因与补图动作，不静默通过。
-- **标题冲突**：脚本在三级 `{epic}-Tech Solution` 夹下按 `--title` 判定为更新；若查询返回多条（≥2）由 skill 停止并交用户裁决，不擅自新建重复页。
+- **图表**：mermaid 由 mmdc 渲染为高分辨率图片附件内联，支持全部图类型；结果记入 `mermaid_pending`（空为全部成功）。含 mermaid 时本机须有 Node.js（`npx`），缺失即阻断（`--allow-degraded-diagrams` 可显式降级，默认不启用）。
 
-> **执行前提**：本机装有 Python 3.x（纯标准库），Windows 用 `python`、macOS / Linux 用 `python3`；`.cursor/mcp.json` 的 `confluenceRest` 三项非空。脚本默认从 `<脚本目录>/../../../mcp.json`（即 `.cursor/mcp.json`）读取凭证，路径不同可用 `--mcp <mcp.json 路径>` 指定。
+> **执行前提**：本机装有 Python 3.x，`.cursor/mcp.json` 的 `confluenceRest` 三项非空；含 mermaid 时还须 Node.js（`npx`），缺失即阻断发布。凭证默认读 `.cursor/mcp.json`，路径不同用 `--mcp` 指定。跨平台一致（Windows 用 `python`，macOS / Linux 用 `python3`）。
 
 ### S5 回写
 
@@ -143,6 +140,17 @@ python .cursor/skills/tech-solution-publish/scripts/upload_confluence_v2.py --md
 
 以上两项默认交给有 Jira 写权限的建单环节执行，并在回报中列出。
 
+### S5.5 结果校验
+
+解析脚本输出 JSON，确认退出码为 0 且 `action`、`page_id`、`version`、`url` 均返回、`url` 可访问。以下门禁任一未过即视为发布未达标，须修正后重跑，不得以降级版结束；确因环境限制无法达标时在回报中标注具体项、原因与后续动作。
+
+| 门禁 | 通过标准 | 未过时的处理 |
+|------|---------|-------------|
+| 正文完整性 | `stats`（章节 / Story / AC）与本地确认版一致 | 修正本地 `.md` 后重跑更新 |
+| 图表 | `mermaid_pending` 为空 | 按图号定位（mmdc 不可用 / 网络下载 / 源码语法）修正后重跑 |
+| 标题命中 | 三级夹下 `--title` 唯一命中（更新）或无命中（新建） | 返回多条（≥2）时停止并交用户裁决，不擅自新建重复页 |
+| 调用通道 | 全程走脚本 REST | 退出码非 0 或含 `error` 时按 HTTP 状态修正后重跑；禁止改用 MCP `updateConfluencePage` / `createConfluencePage` 兜底 |
+
 ## 3. 规则
 
 - **按源文档正文发布**：逐节对应技术方案模板，不添加模板未定义的内容——不加顶部同步脚注（Source/Last synced/Owner/Status），不加「上游 PRD / Jira」等模板外的信息行。链接关系放在模板既有位置（如评审结论的回写项、或 PRD 附录回链），不在正文另起多余段落。
@@ -168,6 +176,8 @@ python .cursor/skills/tech-solution-publish/scripts/upload_confluence_v2.py --md
   - Jira 回链：待有 Jira 写权限的建单环节执行（本 Agent 对 Jira 只读）
 - **待回写内容**：（附可直接粘贴的文本）
 ```
+
+> 完整性与图表须先通过 S5.5 门禁表再回报。
 
 ## 5. 相关
 
