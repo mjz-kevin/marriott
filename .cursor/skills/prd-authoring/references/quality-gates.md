@@ -93,5 +93,4 @@ Confluence 发布前必须按标题 CQL 查重；Jira 建单前必须按「Paren
 | 节点 ID 用 ASCII | `甲["会员"]` | `A["会员"]` |
 | 语法可渲染 | 未经校验直接交付 | 经 mermaid 预览器/live 确认无 Lexical error |
 
-**发布侧**：若Confluence中无Mermaid 渲染插件，直接写 mermaid 代码宏可能只显示源码。
-`prd-publish` 必须按其 SKILL「步骤 6：写入 → 图表处理（图表发布）」把图渲染成 PNG 附件后嵌入，不依赖站点插件。
+**发布侧**：若 Confluence 无 Mermaid 渲染插件，直接写 mermaid 代码宏可能只显示源码。发布环节须把图渲染成图片附件后嵌入，不依赖站点插件。

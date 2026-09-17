@@ -8,17 +8,22 @@ upload_confluence_v2.py — 将本地 Markdown 发布到 Confluence（storage �
   - 凭证从 .cursor/mcp.json 的 confluenceRest 读取（base_url/email/api_token）
   - Markdown -> Confluence storage HTML（标题/表格/列表/引用/代码/mermaid 占位/行内格式）
   - 按标题在指定父目录下幂等查重：无则新建，有则更新并升版本
+  - 目录层级（文件夹模式）：--root/--epic/--kind 时自动确保
+    root → {epic} → {epic}-PRD | {epic}-Tech Solution 三级目录存在，缺失即建容器页
   - mermaid flowchart -> SVG（纯标准库自绘，Windows/macOS/Linux 通用），作附件 + <ac:image> 内联；
     渲染失败时退化为 code 宏加文字兜底，并在结果中标注 mermaid_pending
   - 完整性统计：章节数(h2)/Story 数/AC 条数，供 skill 与本地对照
   - 全程 UTF-8
 
 用法:
+  # 文件夹模式（推荐）：自动建 epic 二级夹与 PRD/Tech Solution 三级夹
+  python upload_confluence_v2.py --md <md> --space CMI --root <根页ID> --epic <Jira Epic key，如 CNAPP-5661> --kind prd --title <标题>
+  # 旧模式：直接指定父页
   python upload_confluence_v2.py --md <md> --space CMI --parent <id> --title <标题>
       [--mcp <mcp.json>] [--version-msg <msg>] [--dry-run]
 退出码: 0 成功 / 非 0 失败。结果 JSON 打印到 stdout。
 """
-import argparse, base64, html, json, os, re, ssl, sys, uuid
+import argparse, base64, html, json, os, re, shutil, ssl, subprocess, sys, tempfile, uuid
 import urllib.request, urllib.error, urllib.parse
 from collections import deque
 
@@ -243,6 +248,117 @@ def render_mermaid_svg(code, out_svg):
     return True
 
 
+# mmdc（@mermaid-js/mermaid-cli）优先渲染：支持 flowchart / sequenceDiagram / gantt 等全部图类型，
+# 渲染质量与本地预览一致。仅在本机无 node/npx 或渲染失败时，才回退到上面的纯标准库自绘（仅 flowchart）。
+_MMDC_UNAVAILABLE = False
+
+
+def render_mermaid_mmdc(code, out_path, scale=3):
+    """用 mermaid-cli 把 mermaid 源码渲染为图片（按 out_path 扩展名，支持 .png/.svg）。
+
+    成功返回 True，不可用/失败返回 False。首次调用会由 npx 拉取 @mermaid-js/mermaid-cli
+    与无头 Chromium，可能较久且需联网；之后走 npm 缓存。PNG 用 -s 提高分辨率，保证在
+    Confluence 缩放后文字依然清晰。任何异常都返回 False 交由回退处理。
+    """
+    global _MMDC_UNAVAILABLE
+    if _MMDC_UNAVAILABLE:
+        return False
+    npx = shutil.which("npx")
+    if not npx:
+        _MMDC_UNAVAILABLE = True
+        return False
+    src = out_path + ".mmd"
+    cfg = out_path + ".mmdc.json"
+    try:
+        with open(src, "w", encoding="utf-8") as f:
+            f.write(code)
+        # puppeteer 在受限环境需 --no-sandbox；配置文件让 CJK 字体与背景可控。
+        with open(cfg, "w", encoding="utf-8") as f:
+            json.dump({"args": ["--no-sandbox", "--disable-setuid-sandbox"]}, f)
+        cmd = [npx, "-y", "@mermaid-js/mermaid-cli", "-i", src, "-o", out_path,
+               "-b", "white", "-p", cfg]
+        if out_path.lower().endswith(".png"):
+            cmd += ["-s", str(scale)]
+        proc = subprocess.run(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=180,
+        )
+        if proc.returncode == 0 and os.path.exists(out_path) and os.path.getsize(out_path) > 200:
+            return True
+        return False
+    except FileNotFoundError:
+        _MMDC_UNAVAILABLE = True
+        return False
+    except Exception:
+        return False
+    finally:
+        for f in (src, cfg):
+            try:
+                os.remove(f)
+            except OSError:
+                pass
+
+
+def render_mermaid(code, out_base):
+    """统一入口：优先 mmdc 渲高分辨率 PNG（全图类型、清晰、Confluence 缩放友好），
+    失败回退纯标准库自绘 SVG（仅 flowchart）。
+
+    out_base 为不含扩展名的输出路径前缀。返回 (ok, engine, out_path, content_type)。
+    engine ∈ {"mmdc", "fallback", ""}。回退仅能处理 flowchart；对 sequenceDiagram 等
+    非 flowchart 语法回退会失败，从而计入 mermaid_pending，避免假成功。
+    """
+    png = out_base + ".png"
+    if render_mermaid_mmdc(code, png, scale=3):
+        return True, "mmdc", png, "image/png"
+    try:
+        first = next((l.strip() for l in code.splitlines() if l.strip()), "")
+    except Exception:
+        first = ""
+    if first.startswith("flowchart") or first.startswith("graph"):
+        svg = out_base + ".svg"
+        try:
+            if render_mermaid_svg(code, svg):
+                return True, "fallback", svg, "image/svg+xml"
+        except Exception:
+            pass
+    return False, "", "", ""
+
+
+class MermaidUnavailable(SystemExit):
+    pass
+
+
+def ensure_mermaid_available():
+    """强制前置：确认 mmdc（node/npx + mermaid-cli）可真正渲染，否则抛错阻断发布。
+
+    仅在文档确实包含 mermaid 图、且未显式放行降级时调用。用一张最小探针图实际渲染，
+    既校验 npx/node 存在，也校验能拉起 mermaid-cli 与无头 Chromium（首次需联网下载）。
+    不可用则抛 MermaidUnavailable，附带安装指引；发布/更新一律不进行，避免图表降级上线。
+    """
+    if not shutil.which("npx"):
+        raise MermaidUnavailable(
+            "图表渲染前置未满足：未找到 npx（Node.js）。\n"
+            "本脚本用 mmdc（@mermaid-js/mermaid-cli）渲染 mermaid，须先安装 Node.js（含 npx）。\n"
+            "安装后重试；或显式加 --allow-degraded-diagrams 允许降级（flowchart 退化为低质量自绘、"
+            "sequenceDiagram 等无法出图），但不推荐。"
+        )
+    probe = os.path.join(tempfile.gettempdir(), f"mmdc-probe-{uuid.uuid4().hex}.png")
+    try:
+        ok = render_mermaid_mmdc("flowchart TD\n  A[\"probe\"] --> B[\"ok\"]", probe, scale=1)
+    finally:
+        try:
+            os.remove(probe)
+        except OSError:
+            pass
+    if not ok:
+        raise MermaidUnavailable(
+            "图表渲染前置未满足：检测到 npx 但 mmdc 渲染探针失败。\n"
+            "常见原因：首次运行需联网下载 @mermaid-js/mermaid-cli 与无头 Chromium 但网络不可达，"
+            "或 Chromium 依赖缺失。请确保联网后重试，或先手动执行一次："
+            "`npx -y @mermaid-js/mermaid-cli -i in.mmd -o out.png` 预热缓存。\n"
+            "如确需在无渲染环境发布，可显式加 --allow-degraded-diagrams（不推荐，图表会降级）。"
+        )
+
+
 # ============================= Confluence 附件 & 页面 =============================
 def _multipart_body(file_path, filename, content_type):
     boundary = "----up" + uuid.uuid4().hex
@@ -296,21 +412,28 @@ def replace_mermaid(body, mermaid_blocks, page_id, base_url, auth, workdir, feat
     pending = []
     for idx, code in enumerate(mermaid_blocks, 1):
         token = f"[[MERMAID_{idx}]]"
-        svg = os.path.join(workdir, f"{feature}-diagram-{idx}.svg")
-        fname = os.path.basename(svg)
+        out_base = os.path.join(workdir, f"{feature}-diagram-{idx}")
         fallback = ('<ac:structured-macro ac:name="code" ac:schema-version="1">'
                     '<ac:parameter ac:name="language">mermaid</ac:parameter>'
                     "<ac:plain-text-body><![CDATA[" + code + "]]></ac:plain-text-body>"
                     "</ac:structured-macro>"
                     "<blockquote><p>（图待渲染：已保留 mermaid 源码与文字说明）</p></blockquote>")
         ok = False
+        out_path = ""
+        content_type = ""
         try:
-            ok = render_mermaid_svg(code, svg)
+            ok, _engine, out_path, content_type = render_mermaid(code, out_base)
         except Exception:
             ok = False
         if page_id and ok:
-            st, _ = upload_attachment(base_url, auth, page_id, svg, fname, "image/svg+xml")
-            repl = (f'<ac:image ac:align="center"><ri:attachment ri:filename="{fname}"/></ac:image>'
+            fname = os.path.basename(out_path)
+            st, _ = upload_attachment(base_url, auth, page_id, out_path, fname, content_type)
+            # 用 <p> 包裹每张图独立成段：相邻两个居中 <ac:image> 若不分段，
+            # Confluence 会把设了 max-width 的图叠在一起渲染，导致多图重叠。
+            # 显式 ac:width 给一个合适的展示宽度：高分辨率 PNG 缩放到该宽度仍清晰，
+            # 且避免宽图（如多分支 flowchart）被 max-width 压得过小、文字看不清。
+            repl = (f'<p><ac:image ac:align="center" ac:width="900">'
+                    f'<ri:attachment ri:filename="{fname}"/></ac:image></p>'
                     if st in (200, 201) else fallback)
             if st not in (200, 201):
                 pending.append(idx)
@@ -327,6 +450,64 @@ def find_page(base_url, auth, space, parent, title):
     if st == 200 and isinstance(data, dict) and data.get("results"):
         return data["results"][0]["id"]
     return None
+
+
+def _find_direct_child(base_url, auth, parent, title):
+    """在 parent 的直接子项中按精确标题查找（区别于 find_page 的 ancestor 递归查找）。
+
+    先查 v1 /child/page（page 类型子页）；再用 v2 /folders/{id}/direct-children 兜底，
+    以识别新版「Folder」类型的同名子项（v1 child/page 不含 folder）。父级本身可为
+    page 或 folder，两种情况都适用。返回命中的子项 id，未命中返回 None。
+    """
+    url = f"{base_url}/rest/api/content/{parent}/child/page?limit=200"
+    st, data = api("GET", url, auth)
+    if st == 200 and isinstance(data, dict):
+        for it in data.get("results", []):
+            if it.get("title") == title:
+                return it["id"]
+    # v2 兜底：父级为 folder 或子项为 folder 时，v1 child/page 查不到
+    url2 = f"{base_url}/api/v2/folders/{parent}/direct-children?limit=200"
+    st2, data2 = api("GET", url2, auth)
+    if st2 == 200 and isinstance(data2, dict):
+        for it in data2.get("results", []):
+            if it.get("title") == title:
+                return it["id"]
+    return None
+
+
+def ensure_child_page(base_url, auth, space, parent, title):
+    """确保 parent 下存在标题为 title 的子页（容器文件夹）；不存在则建空页。返回 (page_id, created)。"""
+    existing = _find_direct_child(base_url, auth, parent, title)
+    if existing:
+        return existing, False
+    placeholder = ("<p>本页为目录容器，由发布脚本自动创建，用于归档下属文档。</p>")
+    st, data = create_page(base_url, auth, space, parent, title, placeholder)
+    if st in (200, 201) and isinstance(data, dict):
+        return data["id"], True
+    raise SystemExit(f"创建容器页失败：parent={parent} title={title} -> {st} {data}")
+
+
+def resolve_parent(base_url, auth, space, root, epic, kind):
+    """按 root → epic 二级夹 → {epic}-{PRD|Tech Solution} 三级夹解析出目标父页 ID。
+
+    层级：
+      一级 root（Mobile Team Requirement Materials，传入 page_id）
+        二级 {epic}
+          三级 {epic}-PRD             （kind=prd）
+          三级 {epic}-Tech Solution   （kind=tech_solution）
+    缺失的二级/三级夹自动创建。返回 (parent_id, ensured)。
+    """
+    kind_suffix = {"prd": "PRD", "tech_solution": "Tech Solution"}
+    if kind not in kind_suffix:
+        raise SystemExit(f"--kind 仅支持 prd / tech_solution，收到：{kind}")
+    ensured = []
+    epic_id, c1 = ensure_child_page(base_url, auth, space, root, epic)
+    ensured.append({"level": 2, "title": epic, "id": epic_id, "created": c1})
+    leaf_title = f"{epic}-{kind_suffix[kind]}"
+    leaf_id, c2 = ensure_child_page(base_url, auth, space, epic_id, leaf_title)
+    ensured.append({"level": 3, "title": leaf_title, "id": leaf_id, "created": c2})
+    return leaf_id, ensured
+
 
 
 def create_page(base_url, auth, space, parent, title, body):
@@ -353,12 +534,29 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--md", required=True)
     ap.add_argument("--space", required=True)
-    ap.add_argument("--parent", required=True)
+    ap.add_argument("--parent", default=None,
+                    help="直接指定父页 ID（旧模式）。与 --root/--epic/--kind 二选一。")
+    ap.add_argument("--root", default=None,
+                    help="一级根目录页 ID（Mobile Team Requirement Materials）。与 --epic/--kind 配套。")
+    ap.add_argument("--epic", default=None, help="二级 epic 文件夹名，取 Jira Epic key（如 CNAPP-5661），不用功能名或中文 slug。")
+    ap.add_argument("--kind", default=None, choices=["prd", "tech_solution"],
+                    help="决定三级文件夹：prd→{epic}-PRD，tech_solution→{epic}-Tech Solution。")
     ap.add_argument("--title", required=True)
     ap.add_argument("--mcp", default=None)
     ap.add_argument("--version-msg", default="Publish from local doc")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--allow-degraded-diagrams", action="store_true",
+                    help="放行图表降级：不强制 mmdc，缺失时回退纯标准库自绘（flowchart 低质量、"
+                         "sequenceDiagram 等无法出图）。默认不允许，缺 mmdc 直接阻断发布。")
     args = ap.parse_args()
+
+    use_folder = bool(args.root or args.epic or args.kind)
+    if use_folder:
+        missing = [k for k, v in (("--root", args.root), ("--epic", args.epic), ("--kind", args.kind)) if not v]
+        if missing:
+            raise SystemExit(f"文件夹模式需同时提供 --root/--epic/--kind，缺少：{', '.join(missing)}")
+    elif not args.parent:
+        raise SystemExit("需提供 --parent（旧模式）或 --root/--epic/--kind（文件夹模式）之一")
 
     here = os.path.dirname(os.path.abspath(__file__))
     mcp_path = args.mcp or os.path.abspath(os.path.join(here, "..", "..", "..", "mcp.json"))
@@ -371,17 +569,33 @@ def main():
     feature = re.sub(r"[^A-Za-z0-9]+", "-", os.path.splitext(os.path.basename(args.md))[0]).strip("-")
     workdir = os.path.dirname(os.path.abspath(args.md))
 
+    # 图表质量硬前置：文档含 mermaid 时，除非显式放行降级，否则强制要求 mmdc 可用。
+    # 放在 dry-run 之前，让预检阶段就能暴露"本机无法出图"的问题，而非发布后才发现图糊/缺图。
+    if mermaid_blocks and not args.allow_degraded_diagrams:
+        ensure_mermaid_available()
+
     result = {"title": args.title, "stats": stats, "base_url": base_url}
 
     if args.dry_run:
-        result.update({"dry_run": True, "storage_chars": len(body)})
+        result.update({"dry_run": True, "storage_chars": len(body),
+                       "target": ({"mode": "folder", "root": args.root, "epic": args.epic, "kind": args.kind}
+                                  if use_folder else {"mode": "parent", "parent": args.parent})})
         print(json.dumps(result, ensure_ascii=False, indent=2)); return 0
 
-    existing = find_page(base_url, auth, args.space, args.parent, args.title)
+    if use_folder:
+        parent, ensured = resolve_parent(base_url, auth, args.space, args.root, args.epic, args.kind)
+        result["folders"] = ensured
+        # 文件夹模式下 PRD 页是三级夹的直接子页，用直接子级精确匹配查重
+        # （比 CQL ancestor 更可靠，且父级可能是 folder 类型）
+        existing = _find_direct_child(base_url, auth, parent, args.title)
+    else:
+        parent = args.parent
+        existing = find_page(base_url, auth, args.space, parent, args.title)
+
     if existing:
         page_id = existing; result["action"] = "update"
     else:
-        st, data = create_page(base_url, auth, args.space, args.parent, args.title, body)
+        st, data = create_page(base_url, auth, args.space, parent, args.title, body)
         if st not in (200, 201):
             result["error"] = f"create failed: {st} {data}"
             print(json.dumps(result, ensure_ascii=False, indent=2)); return 1

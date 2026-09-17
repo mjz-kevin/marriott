@@ -18,7 +18,7 @@ metadata:
 | 定位 | 幂等建单 + 填字段 + 建 link（Parent Epic + 团队声明的链接集合）+ 状态流转 |
 | 输入 | 上游 User Story 撰写环节产出的 Story 清单（已过 PO 确认）+ 团队 Jira 配置 |
 | 产出 | Jira 工单（新建 / 跳过）+ 回报（含待回写内容） |
-| 权限 | 本 Skill 有 Jira **写**权限；对 Confluence 为**只读**，需求文档附录回写产出内容交有权限环节执行 |
+| 权限 | 本环节有 Jira 写权限；对 Confluence 为只读，需求文档附录回写产出内容交有权限环节执行 |
 
 ## 0. 配置取值
 
@@ -69,7 +69,7 @@ project = "{project}" AND summary ~ "{摘要}" AND parent = "{Epic key}"
 | 结果 | 动作 |
 |------|------|
 | 0 条 | 创建 |
-| 1 条 | **跳过**，报告已存在的 key，不更新（避免覆盖人工修改） |
+| 1 条 | 跳过，报告已存在的 key，不更新（避免覆盖人工修改） |
 | ≥2 条 | 停止并交用户裁决 |
 
 > 已存在时默认**不更新**。仅当用户明确要求更新时才进入编辑流程。
@@ -82,19 +82,19 @@ project = "{project}" AND summary ~ "{摘要}" AND parent = "{Epic key}"
 |------|------|
 | Type | 取 `mcp.jira.issue_type`（当前为「故事」） |
 | Parent | 必须填 Epic |
-| Agile Team | 取 `mcp.jira.agile_team` 默认值填入；**CNAPP（APP 团队）所有 scrum 团队接的票必填 `Team Lóng`**（`app.yaml` 已配默认值，直接填）；配置为空（如 CMS）则留空待人工填写 |
-| Component | 按 `mcp.jira.components.platform_rule` 填：**仅 iOS 专属的票**选 `Component = iOS`；**Android 票不选任何 Component**；跨端/与平台无关的票按需留空。仅 CNAPP 适用；未配置 `components` 的团队（如 CMS）不处理 Component |
-| 优先级 | **需填**，不留空。取 PRD 的 Story 优先级（P1/P2/P3），按 `mcp.jira.priority.moscow_map` 映射为目标项目的合法值：CNAPP 需求类用 MoSCoW（P1→`Critical or Must Have`、P2→`High or Should Have`、P3→`Medium or Could Have`），**勿留 `None or Not Defined`**；注意 CNAPP 的 MoSCoW 与缺陷类 `P1-P4 Defect` 是两套，勿混用。未配 `priority.moscow_map` 的团队按项目实际 priority 命名填 |
-| 标签 | 仅从 `mcp.jira.labels` 合法枚举中选、**大小写严格照枚举**；只写 `labels.auto_fill` 列出类别。**business_domain 为过滤性硬门禁**（`filter_gate: true`）：CNAPP 的票**必须**打 `Commerce / Loyalty / Trips / Platform` 之一（据 Story 所属业务域单选判定），**缺失即被下游过滤丢弃**，故建单前校验缺失即停、不建单；枚举外标签不臆造，命中枚举外即停并按指南与 TL/SM 对齐 |
+| Agile Team | 取 `mcp.jira.agile_team` 默认值填入；CNAPP（APP 团队）所有 scrum 团队接的票必填 `Team Lóng`（`app.yaml` 已配默认值，直接填）；配置为空（如 CMS）则留空待人工填写 |
+| Component | 按 `mcp.jira.components.platform_rule` 填：仅 iOS 专属的票选 `Component = iOS`；Android 票不选任何 Component；跨端/与平台无关的票按需留空。仅 CNAPP 适用；未配置 `components` 的团队（如 CMS）不处理 Component |
+| 优先级 | 需填，不留空。取 PRD 的 Story 优先级（P1/P2/P3），按 `mcp.jira.priority.moscow_map` 映射为目标项目的合法值：CNAPP 需求类用 MoSCoW（P1→`Critical or Must Have`、P2→`High or Should Have`、P3→`Medium or Could Have`），勿留 `None or Not Defined`；注意 CNAPP 的 MoSCoW 与缺陷类 `P1-P4 Defect` 是两套，勿混用。未配 `priority.moscow_map` 的团队按项目实际 priority 命名填 |
+| 标签 | 仅从 `mcp.jira.labels` 合法枚举中选、大小写严格照枚举；只写 `labels.auto_fill` 列出类别。**business_domain 为过滤性硬门禁**（`filter_gate: true`）：CNAPP 的票必须打 `Commerce / Loyalty / Trips / Platform` 之一（据 Story 所属业务域单选判定），缺失即被下游过滤丢弃，故建单前校验缺失即停、不建单；枚举外标签不臆造，命中枚举外即停并按指南与 TL/SM 对齐 |
 | Acceptance Criteria | 支持 Markdown，按团队的 AC 书写格式 |
-| 描述 | 团队要求描述自成一体 时**必须自带完整背景**；**排版规范**见下 |
-| 估点字段 | **不填**（不参与估点） |
+| 描述 | 团队要求描述自成一体 时须自带完整背景；排版规范见下 |
+| 估点字段 | 不填（不参与估点） |
 | 发布字段 | 不填（发布流程回填） |
 
 **描述排版规范**：
 
-- 用户故事句式关键词（`As a` / `When`（或 `For`）/ `I will be able to` / `So that`）与各小节标题（如 `【背景】`/`【范围】`/`【数据契约（概览）】`/`【性能】`/`【链接的工作项 / 参考文档】`）**一律加粗**。
-- **提交方式**：Jira 描述为 ADF，纯文本里的 `**` 不会渲染为加粗。写入时用 `editJiraIssue` / `createJiraIssue` 的 `contentFormat: "markdown"`（由 Jira 自动转 ADF），或直接构造 ADF 的 `strong` mark；**不要**把 `**xxx**` 作为纯文本提交。
+- 用户故事句式关键词（`As a` / `When`（或 `For`）/ `I will be able to` / `So that`）与各小节标题（如 `【背景】`/`【范围】`/`【数据契约（概览）】`/`【性能】`/`【链接的工作项 / 参考文档】`）一律加粗。
+- 提交方式：Jira 描述为 ADF，纯文本里的 `**` 不会渲染为加粗。写入时用 `editJiraIssue` / `createJiraIssue` 的 `contentFormat: "markdown"`（由 Jira 自动转 ADF），或直接构造 ADF 的 `strong` mark；不要把 `**xxx**` 作为纯文本提交。
 
 ### S5 建链接
 
@@ -107,14 +107,14 @@ project = "{project}" AND summary ~ "{摘要}" AND parent = "{Epic key}"
 | `figma` | 设计稿 URL |
 | `tech_solution` | Confluence 技术方案页 |
 
-> 团队配置的链接集合里没有的项自动不建链接，不需要在 Skill 里写分支。
+> 团队配置的链接集合里没有的项自动不建链接，无需在流程中另写分支。
 
-**回链落点规范（重要）**：`prd` / `figma` / `tech_solution` 指向的是 Confluence 页或外部 URL，不是 Jira issue。
+**回链落点规范**：`prd` / `figma` / `tech_solution` 指向的是 Confluence 页或外部 URL，不是 Jira issue。
 
 - **Parent（Epic）**：用层级父子关系（`parent` 字段），这是 issue↔issue 链接，正常建。
-- **指向 URL 的回链**：优先建 Jira **Web 链接（远程链接）**，显示在 issue 的 Links 区域。
-- URL 回链**写入 Story 描述的「链接的工作项 / 参考文档」小节**（正文内、可点击、随 Story 一起被读到）。
-- **禁止把 URL 回链塞进评论**：评论不是正规回链落点，易被淹没、不随描述沉淀。仅当描述字段不可写时才可退而用评论，并在回报中显式说明原因。
+- **指向 URL 的回链**：优先建 Jira Web 链接（远程链接），显示在 issue 的 Links 区域。
+- URL 回链写入 Story 描述的「链接的工作项 / 参考文档」小节（正文内、可点击、随 Story 一起被读到）。
+- **禁止把 URL 回链塞进评论**：评论不是正规回链落点，易被淹没、不随描述沉淀。仅当描述字段不可写时才退而用评论，并在回报中说明原因。
 - 某类别（如 `figma`）无对应链接则写「未提供（待补充）」占位，不留空、不臆造；占位措辞只写「待补充」。
 
 ### S6 回写
@@ -125,20 +125,20 @@ project = "{project}" AND summary ~ "{摘要}" AND parent = "{Epic key}"
    - Story → Tech Solution 链接
    - （spike 场景）把 spike 结论以评论形式写到 spike ticket
 
-> 回写 Confluence 需要写权限，本环节对 Confluence 为 **只读（R）**。
-> **当前处理**：产出回写内容并提示，由有 Confluence 写权限的环节执行。
+> 回写 Confluence 需要写权限，本环节对 Confluence 为只读（R）。
+> 产出回写内容并提示，由有 Confluence 写权限的环节执行。
 
 ### S7 状态流转
 
 建单后停在 `mcp.jira.initial_status` 指定的初始状态。
-**不自动向后流转**，排期由 PO 决策。
+不自动向后流转，排期由 PO 决策。
 
 ## 3. 规则
 
 | 规则 | 说明 |
 |------|------|
 | 批量建单需 PO 确认 | 未经确认不执行 |
-| **不删除、不重构字段** | 只填值、建链接、加评论，不改字段结构 |
+| 不删除、不重构字段 | 只填值、建链接、加评论，不改字段结构 |
 | 已存在则跳过 | 不覆盖人工修改 |
 | 失败即停 | 部分失败时报告已建清单，不重试已成功的项 |
 | 敏感信息阻断 | 命中真实密钥 / 真实会员号即停，不脱敏后继续 |
@@ -168,7 +168,7 @@ project = "{project}" AND summary ~ "{摘要}" AND parent = "{Epic key}"
 | 必填字段缺失导致创建失败 | 停止，列出缺失字段，不猜值 |
 | 网络超时 | 报告已建清单与未建清单，不重复创建 |
 | 链接类型不存在 | 警告并跳过该链接，不阻断建单 |
-| 团队常量缺失 | **停止**，说明缺失项与对应补齐责任方 |
+| 团队常量缺失 | 停止，说明缺失项与对应补齐责任方 |
 
 ## 6. 相关
 

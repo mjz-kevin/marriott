@@ -11,7 +11,8 @@
     "AKIAIOSFODNN7EXAMPLE",
     "00000000000",
     "13800138000",
-    "123 Example Street"
+    "123 Example Street",
+    "20260917-130342"
   ],
   "patterns": [
     "(?i)<[^>]*(?:password|token|secret|key)[^>]*>",
