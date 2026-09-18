@@ -19,6 +19,16 @@
         },
         "figma-mcp": {
             "url": "https://mcp.figma.com/mcp"
+        },
+        "marriott-github": {
+            "_comment": "GITHUB_TOKEN 获取地址：git.marriott.com → Settings → Developer settings → Personal access tokens",
+            "command": "npx",
+            "args": ["-y", "github-mcp-server-js"],
+            "env": {
+                "GITHUB_TOKEN": "",
+                "GITHUB_SERVER_URL": "git.marriott.com",
+                "GITHUB_PERMISSION": "read-write"
+            }
         }
     }
 }

@@ -10,7 +10,7 @@ metadata:
   agent: UserStory Agent
 ---
 
-# User Story Authoring（User Story 撰写）
+# User Story Authoring — User Story 撰写
 
 把需求文档拆成可交付、可验收、可估点的 Story 清单，供建单前逐条填齐字段。
 
@@ -185,9 +185,9 @@ AND   {附加预期}（可选）
 | 字段         | 处理                                                                                                                                                                                                                                                                       |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 必填字段       | 全部必填，缺一即建单失败                                                                                                                                                                                                                                                             |
-| Agile Team | 取 `mcp.jira.agile_team` 默认值填入；CNAPP（APP 团队）所有 scrum 团队接的票必填 `Team Lóng`；配置为空（如 CMS）则留待人工填写，不臆造 |
-| 标签         | 仅从 `mcp.jira.labels` 的合法枚举中选，大小写严格照枚举；只自动填 `labels.auto_fill` 列出的类别。**business_domain 为过滤性硬门禁**（`filter_gate: true`）：CNAPP 的票必须据 Story 所属业务域单选 `Commerce / Loyalty / Trips / Platform` 之一，缺失会被下游过滤丢弃；过程标签（SM/QA/Reporter 按时机打）不自动填；枚举外的标签不臆造，需先按指南与 TL/SM 对齐 |
-| Component  | 按 `mcp.jira.components.platform_rule` 填（仅 CNAPP 适用）：仅 iOS 专属的票选 `Component = iOS`；Android 票不选任何 Component；跨端/与平台无关的票按需留空。未配置 `components` 的团队（如 CMS）不处理 |
+| Agile Team | 取 `mcp.jira.agile_team` 默认值填入；该键为空表示团队无默认值，留待人工填写，不臆造 |
+| 标签         | 仅从 `mcp.jira.labels` 的合法枚举中选，大小写严格照 `labels.case_sensitive`；只自动填 `labels.auto_fill` 列出的类别。当 `labels.business_domain.filter_gate` 为 true 时该类别为过滤性硬门禁：须据 Story 所属业务域按 `business_domain.select` 从 `business_domain.values` 中选定，缺失会被下游过滤丢弃；`process_labels.auto_fill` 为 false 的过程标签只校验不自动填；枚举外的标签不臆造，需先按 `labels.source` 指南与 TL/SM 对齐。`labels` 为空的团队无此约束 |
+| Component  | 按 `mcp.jira.components.platform_rule` 填：`ios_only` 指定的平台专属票选对应 Component，`android` 为 `none` 的平台票不选 Component，跨端/与平台无关的票按需留空。未配置 `components` 的团队不处理 |
 | 优先级        | 不填                                                                                                                                                                                                                                                                       |
 | 按条件填写的字段   | 按条件填（字段名取自团队配置，如 Impacted Systems）                                                                                                                                                                                                                                       |
 | 估点字段       | **一律不填**                                                                                                                                                                                                                                                                 |

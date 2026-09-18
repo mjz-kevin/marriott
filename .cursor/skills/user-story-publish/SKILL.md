@@ -9,7 +9,7 @@ metadata:
   agent: UserStory Agent
 ---
 
-# User Story Publish（Jira 建单）
+# User Story Publish — Jira 建单
 
 把已确认的 Story 清单在 Jira 建单、填字段、建回链，并代执行技术方案发布遗留的回写项。
 
@@ -80,16 +80,15 @@ project = "{project}" AND summary ~ "{摘要}" AND parent = "{Epic key}"
 
 | 字段 | 处理 |
 |------|------|
-| Type | 取 `mcp.jira.issue_type`（当前为「故事」） |
+| Type | 取 `mcp.jira.issue_type` |
 | Parent | 必须填 Epic |
-| Agile Team | 取 `mcp.jira.agile_team` 默认值填入；CNAPP（APP 团队）所有 scrum 团队接的票必填 `Team Lóng`（`app.yaml` 已配默认值，直接填）；配置为空（如 CMS）则留空待人工填写 |
-| Component | 按 `mcp.jira.components.platform_rule` 填：仅 iOS 专属的票选 `Component = iOS`；Android 票不选任何 Component；跨端/与平台无关的票按需留空。仅 CNAPP 适用；未配置 `components` 的团队（如 CMS）不处理 Component |
-| 优先级 | 需填，不留空。取 PRD 的 Story 优先级（P1/P2/P3），按 `mcp.jira.priority.moscow_map` 映射为目标项目的合法值：CNAPP 需求类用 MoSCoW（P1→`Critical or Must Have`、P2→`High or Should Have`、P3→`Medium or Could Have`），勿留 `None or Not Defined`；注意 CNAPP 的 MoSCoW 与缺陷类 `P1-P4 Defect` 是两套，勿混用。未配 `priority.moscow_map` 的团队按项目实际 priority 命名填 |
-| 标签 | 仅从 `mcp.jira.labels` 合法枚举中选、大小写严格照枚举；只写 `labels.auto_fill` 列出类别。**business_domain 为过滤性硬门禁**（`filter_gate: true`）：CNAPP 的票必须打 `Commerce / Loyalty / Trips / Platform` 之一（据 Story 所属业务域单选判定），缺失即被下游过滤丢弃，故建单前校验缺失即停、不建单；枚举外标签不臆造，命中枚举外即停并按指南与 TL/SM 对齐 |
-| Acceptance Criteria | 支持 Markdown，按团队的 AC 书写格式 |
-| 描述 | 团队要求描述自成一体 时须自带完整背景；排版规范见下 |
-| 估点字段 | 不填（不参与估点） |
-| 发布字段 | 不填（发布流程回填） |
+| Agile Team | 按 `mcp.jira.agile_team`：有值即填，为空则留空待人工填写 |
+| Component | 按 `mcp.jira.components.platform_rule`；未配置 `components` 的团队不处理 |
+| 优先级 | 不填 |
+| 标签 | 按 `mcp.jira.labels`（合法枚举、`case_sensitive`、`auto_fill` 类别、`business_domain` 门禁均由该配置键定义）。**建单期强制**：`business_domain.filter_gate` 为 true 时缺失该类别即停、不建单；命中枚举外标签即停并按 `labels.source` 对齐 |
+| Acceptance Criteria | 支持 Markdown，按 `doc.ac_format` |
+| 描述 | 团队要求描述自成一体时须自带完整背景；排版规范见下 |
+| 估点字段 / 发布字段 | 不填（发布流程回填） |
 
 **描述排版规范**：
 
@@ -125,8 +124,7 @@ project = "{project}" AND summary ~ "{摘要}" AND parent = "{Epic key}"
    - Story → Tech Solution 链接
    - （spike 场景）把 spike 结论以评论形式写到 spike ticket
 
-> 回写 Confluence 需要写权限，本环节对 Confluence 为只读（R）。
-> 产出回写内容并提示，由有 Confluence 写权限的环节执行。
+> 回写 Confluence 需要写权限，本环节对 Confluence 为只读（R）：只产出回写内容并提示，由有 Confluence 写权限的环节执行。
 
 ### S7 状态流转
 

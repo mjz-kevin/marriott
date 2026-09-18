@@ -26,13 +26,6 @@ mcp:
         ios_only: iOS                # 仅 iOS 专属的票：Component 选 iOS
         android: none                # Android 票：不选任何 Component
         note: "只有 iOS 专属票选 Component=iOS；Android 票不选 Component。跨端/无关平台的票按需留空。"
-    priority:                        # 优先级字段：CNAPP 用 MoSCoW 命名，需从 PRD 的 P1/P2/P3 映射
-      required: true                 # Story 建单必填，不可留 None
-      moscow_map:                    # PRD 优先级 -> CNAPP MoSCoW 值
-        P1: "Critical or Must Have"
-        P2: "High or Should Have"
-        P3: "Medium or Could Have"
-      note: "CNAPP 的需求类优先级为 MoSCoW（Critical/High/Medium/None），与缺陷类 P1-P4 Defect 不同；建单按 PRD 优先级映射填入，勿留 None or Not Defined。"
     links: [prd, figma, tech_solution]
 
   confluence:

@@ -10,7 +10,7 @@ metadata:
   agent: Eval Agent
 ---
 
-# PRD Authoring（需求文档撰写）
+# PRD Authoring — 需求文档撰写
 
 基于已放行的澄清结论，按PRD模板撰写 PRD，交 PO 确认后进入发布环节。
 

@@ -9,7 +9,7 @@ metadata:
   agent: Tech Solution Agent
 ---
 
-# Tech Solution — Detail 级（Story 级详细设计）
+# Tech Solution — Detail 级
 
 Story 级明细技术方案，在开发启动前基于 User Story + AC 产出，是唯一可供 DEV 直接照此实现的一档，也是单测编写、接口契约比对、任务验收的比对基线。
 
@@ -63,7 +63,7 @@ Story 级明细技术方案，在开发启动前基于 User Story + AC 产出，
 ### S3 主流程
 
 按模板的主流程章节填写：入口、请求时机、数据加载、业务异常、状态切换、关键操作后跳转，
-并附流程图或架构图。mermaid 图遵循 `prd-authoring` 的「图表规范」（图类型声明、文本/边标签加引号、ASCII 节点 ID、分支完整、渲染自检、发布一致）；发布经 mmdc 渲染为图片，须装 Node.js（`npx`）。
+并附流程图或架构图。mermaid 图遵循图表规范：首行声明图类型与方向、节点文本与边标签加双引号、节点 ID 用 ASCII、分支边覆盖全部出口、完稿后预览器渲染自检；发布经 mmdc 渲染为图片，须装 Node.js（`npx`）。
 
 ### S4 契约与依赖
 

@@ -8,8 +8,9 @@ upload_confluence_v2.py — 将本地 Markdown 发布到 Confluence（storage �
   - 凭证从 .cursor/mcp.json 的 confluenceRest 读取（base_url/email/api_token）
   - Markdown -> Confluence storage HTML（标题/表格/列表/引用/代码/mermaid 占位/行内格式）
   - 按标题在指定父目录下幂等查重：无则新建，有则更新并升版本
-  - 目录层级（文件夹模式）：--root/--epic/--kind 时自动确保
-    root → {epic} → {epic}-PRD | {epic}-Tech Solution 三级目录存在，缺失即建容器页
+  - 目录层级（文件夹模式，--root/--epic/--kind）：查询 epic 的 Jira 父项自适应分层，
+    有父项为 root → {epic_parent} → {epic} → {epic}-PRD | {epic}-Tech Solution（四级），
+    无父项省略 {epic_parent} 层（三级）；缺失文件夹自动建容器页。--epic-parent 可覆盖
   - mermaid flowchart -> SVG（纯标准库自绘，Windows/macOS/Linux 通用），作附件 + <ac:image> 内联；
     渲染失败时退化为 code 宏加文字兜底，并在结果中标注 mermaid_pending
   - 完整性统计：章节数(h2)/Story 数/AC 条数，供 skill 与本地对照
@@ -23,7 +24,7 @@ upload_confluence_v2.py — 将本地 Markdown 发布到 Confluence（storage �
       [--mcp <mcp.json>] [--version-msg <msg>] [--dry-run]
 退出码: 0 成功 / 非 0 失败。结果 JSON 打印到 stdout。
 """
-import argparse, base64, html, json, os, re, shutil, ssl, subprocess, sys, tempfile, uuid
+import argparse, base64, html, json, os, platform, re, shutil, ssl, subprocess, sys, tempfile, uuid
 import urllib.request, urllib.error, urllib.parse
 from collections import deque
 
@@ -327,6 +328,20 @@ class MermaidUnavailable(SystemExit):
     pass
 
 
+def nodejs_install_hint():
+    """按当前操作系统给出 Node.js（含 npx）的安装指引，供缺失时引导用户自行安装。"""
+    sysname = platform.system()
+    if sysname == "Darwin":
+        cmds = "  brew install node        # 推荐（需 Homebrew）\n  nvm install --lts        # 或用 nvm"
+    elif sysname == "Windows":
+        cmds = "  winget install OpenJS.NodeJS.LTS   # 或到 https://nodejs.org 下载 LTS 安装包"
+    else:
+        cmds = ("  # Debian/Ubuntu: sudo apt-get install -y nodejs npm\n"
+                "  # RHEL/CentOS:   sudo yum install -y nodejs\n"
+                "  nvm install --lts        # 或用 nvm（跨平台）")
+    return ("安装 Node.js（含 npx）后重试：\n" + cmds + "\n  npx --version            # 验证安装成功")
+
+
 def ensure_mermaid_available():
     """强制前置：确认 mmdc（node/npx + mermaid-cli）可真正渲染，否则抛错阻断发布。
 
@@ -337,8 +352,9 @@ def ensure_mermaid_available():
     if not shutil.which("npx"):
         raise MermaidUnavailable(
             "图表渲染前置未满足：未找到 npx（Node.js）。\n"
-            "本脚本用 mmdc（@mermaid-js/mermaid-cli）渲染 mermaid，须先安装 Node.js（含 npx）。\n"
-            "安装后重试；或显式加 --allow-degraded-diagrams 允许降级（flowchart 退化为低质量自绘、"
+            "本脚本用 mmdc（@mermaid-js/mermaid-cli）渲染 mermaid。\n"
+            + nodejs_install_hint() + "\n"
+            "或显式加 --allow-degraded-diagrams 允许降级（flowchart 退化为低质量自绘、"
             "sequenceDiagram 等无法出图），但不推荐。"
         )
     probe = os.path.join(tempfile.gettempdir(), f"mmdc-probe-{uuid.uuid4().hex}.png")
@@ -487,25 +503,57 @@ def ensure_child_page(base_url, auth, space, parent, title):
     raise SystemExit(f"创建容器页失败：parent={parent} title={title} -> {st} {data}")
 
 
-def resolve_parent(base_url, auth, space, root, epic, kind):
-    """按 root → epic 二级夹 → {epic}-{PRD|Tech Solution} 三级夹解析出目标父页 ID。
+def get_jira_parent(base_url, auth, epic):
+    """查询 Jira Epic 的直接父项 key（仅上溯一级）。
 
-    层级：
-      一级 root（Mobile Team Requirement Materials，传入 page_id）
-        二级 {epic}
-          三级 {epic}-PRD             （kind=prd）
-          三级 {epic}-Tech Solution   （kind=tech_solution）
-    缺失的二级/三级夹自动创建。返回 (parent_id, ensured)。
+    复用 Confluence 站点与凭证：Confluence base_url 形如
+    https://<site>.atlassian.net/wiki，去除末尾 /wiki 得站点根，
+    Jira REST 位于 <site>.atlassian.net/rest/api/3，email 与 api_token 通用。
+
+    返回父项 key（如 PORT-1301）。无父项、查询失败或响应异常均返回 None，
+    由调用方回退至无父项层的三级结构，不因查询失败中断发布。
+    """
+    site = re.sub(r"/wiki/?$", "", base_url)
+    url = f"{site}/rest/api/3/issue/{urllib.parse.quote(epic)}?fields=parent"
+    try:
+        st, data = api("GET", url, auth)
+    except Exception:
+        return None
+    if st == 200 and isinstance(data, dict):
+        parent = (data.get("fields") or {}).get("parent")
+        if isinstance(parent, dict) and parent.get("key"):
+            return parent["key"]
+    return None
+
+
+def resolve_parent(base_url, auth, space, root, epic, kind, epic_parent=None):
+    """解析目标父页 ID：root →（可选 {epic_parent}）→ {epic} → {epic}-{PRD|Tech Solution}。
+
+    层级随 epic 父项自适应（有父项四级 / 无父项三级）：
+      root（一级根目录页 ID）
+        [{epic_parent}]             仅当 epic 有父项时插入
+          {epic}
+            {epic}-PRD              kind=prd
+            {epic}-Tech Solution    kind=tech_solution
+    epic_parent 为已解析的父项 key，None 表示无父项、退回三级。
+    缺失的各级文件夹自动创建。返回 (parent_id, ensured)。
     """
     kind_suffix = {"prd": "PRD", "tech_solution": "Tech Solution"}
     if kind not in kind_suffix:
         raise SystemExit(f"--kind 仅支持 prd / tech_solution，收到：{kind}")
     ensured = []
-    epic_id, c1 = ensure_child_page(base_url, auth, space, root, epic)
-    ensured.append({"level": 2, "title": epic, "id": epic_id, "created": c1})
+    container = root
+    level = 2
+    if epic_parent:
+        ep_id, c0 = ensure_child_page(base_url, auth, space, root, epic_parent)
+        ensured.append({"level": level, "title": epic_parent, "id": ep_id, "created": c0})
+        container = ep_id
+        level += 1
+    epic_id, c1 = ensure_child_page(base_url, auth, space, container, epic)
+    ensured.append({"level": level, "title": epic, "id": epic_id, "created": c1})
     leaf_title = f"{epic}-{kind_suffix[kind]}"
     leaf_id, c2 = ensure_child_page(base_url, auth, space, epic_id, leaf_title)
-    ensured.append({"level": 3, "title": leaf_title, "id": leaf_id, "created": c2})
+    ensured.append({"level": level + 1, "title": leaf_title, "id": leaf_id, "created": c2})
     return leaf_id, ensured
 
 
@@ -539,6 +587,9 @@ def main():
     ap.add_argument("--root", default=None,
                     help="一级根目录页 ID（Mobile Team Requirement Materials）。与 --epic/--kind 配套。")
     ap.add_argument("--epic", default=None, help="二级 epic 文件夹名，取 Jira Epic key（如 CNAPP-5661），不用功能名或中文 slug。")
+    ap.add_argument("--epic-parent", dest="epic_parent", default=None,
+                    help="Epic 父项 key，作为 epic 之上一级的归档文件夹（如 PORT-1301）。"
+                         "省略时查询 Jira 取直接父项；值为 none 时强制无父项，退回三级结构。")
     ap.add_argument("--kind", default=None, choices=["prd", "tech_solution"],
                     help="决定三级文件夹：prd→{epic}-PRD，tech_solution→{epic}-Tech Solution。")
     ap.add_argument("--title", required=True)
@@ -548,6 +599,9 @@ def main():
     ap.add_argument("--allow-degraded-diagrams", action="store_true",
                     help="放行图表降级：不强制 mmdc，缺失时回退纯标准库自绘（flowchart 低质量、"
                          "sequenceDiagram 等无法出图）。默认不允许，缺 mmdc 直接阻断发布。")
+    ap.add_argument("--check-env", action="store_true",
+                    help="仅环境预检：检查凭证与（文档含 mermaid 时）Node.js/npx 是否就绪，"
+                         "报告结果后退出，不发布。缺失时打印按操作系统的安装指引。")
     args = ap.parse_args()
 
     use_folder = bool(args.root or args.epic or args.kind)
@@ -569,21 +623,43 @@ def main():
     feature = re.sub(r"[^A-Za-z0-9]+", "-", os.path.splitext(os.path.basename(args.md))[0]).strip("-")
     workdir = os.path.dirname(os.path.abspath(args.md))
 
+    # 环境预检：只报告不发布，供 skill 在正式发布前提前暴露"本机能否出图"。
+    if args.check_env:
+        has_npx = bool(shutil.which("npx"))
+        need_mermaid = bool(mermaid_blocks)
+        ready = (not need_mermaid) or has_npx or args.allow_degraded_diagrams
+        report = {"check_env": True, "mermaid_in_doc": need_mermaid,
+                  "npx_available": has_npx, "ready_to_publish": ready}
+        if need_mermaid and not has_npx and not args.allow_degraded_diagrams:
+            report["hint"] = nodejs_install_hint()
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        return 0 if ready else 2
+
     # 图表质量硬前置：文档含 mermaid 时，除非显式放行降级，否则强制要求 mmdc 可用。
     # 放在 dry-run 之前，让预检阶段就能暴露"本机无法出图"的问题，而非发布后才发现图糊/缺图。
     if mermaid_blocks and not args.allow_degraded_diagrams:
         ensure_mermaid_available()
 
+    # 解析 epic 父项以确定归档层级：--epic-parent 显式指定优先，值为 none 时强制无父项；
+    # 未指定则查询 Jira 取直接父项。有父项时在归档路径插入一级 {epic_parent} 文件夹，否则维持三级。
+    epic_parent = None
+    if use_folder:
+        if args.epic_parent:
+            epic_parent = None if args.epic_parent.strip().lower() == "none" else args.epic_parent.strip()
+        else:
+            epic_parent = get_jira_parent(base_url, auth, args.epic)
+
     result = {"title": args.title, "stats": stats, "base_url": base_url}
 
     if args.dry_run:
         result.update({"dry_run": True, "storage_chars": len(body),
-                       "target": ({"mode": "folder", "root": args.root, "epic": args.epic, "kind": args.kind}
+                       "target": ({"mode": "folder", "root": args.root, "epic_parent": epic_parent,
+                                   "epic": args.epic, "kind": args.kind}
                                   if use_folder else {"mode": "parent", "parent": args.parent})})
         print(json.dumps(result, ensure_ascii=False, indent=2)); return 0
 
     if use_folder:
-        parent, ensured = resolve_parent(base_url, auth, args.space, args.root, args.epic, args.kind)
+        parent, ensured = resolve_parent(base_url, auth, args.space, args.root, args.epic, args.kind, epic_parent)
         result["folders"] = ensured
         # 文件夹模式下 PRD 页是三级夹的直接子页，用直接子级精确匹配查重
         # （比 CQL ancestor 更可靠，且父级可能是 folder 类型）
