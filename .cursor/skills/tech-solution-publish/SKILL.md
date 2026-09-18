@@ -126,16 +126,18 @@ python .cursor/skills/tech-solution-publish/scripts/upload_confluence_v2.py --md
 python .cursor/skills/tech-solution-publish/scripts/upload_confluence_v2.py --md "<技术方案.md 路径>" --space "<space>" --root "<parent_pages.root>" --epic "<Jira Epic key，如 CNAPP-5661>" --kind tech_solution --title "<标题>" --version-msg "<mode> 技术方案发布：<变更说明>"
 ```
 
-- **正文完整（硬约束）**：脚本一次性提交整篇 storage 正文，不受 MCP 体量限制。禁止因内容过长或通道限制而手工摘要、删减章节，也不得改用 MCP 分段写入替代脚本。允许的差异仅限 mermaid 源码转为渲染后的图片、格式转换（markdown 转 storage HTML）。
-- **禁止用 MCP 写页面（硬约束）**：发布/更新一律走本脚本的 REST 通道。禁止调用 Atlassian MCP 的 `updateConfluencePage` 或 `createConfluencePage` 写入或更新页面，否则 MCP 单次写入受体量限制会截断正文、丢图、破坏 storage 结构。脚本报错时只修入参或凭证后重跑，不得改用上述 MCP 工具兜底。MCP 的只读查询（如按标题/CQL 查页、读版本）不受此限。
+- **正文完整、禁止 MCP 写页面（硬约束）**：脚本一次性提交整篇 storage，不受 MCP 体量限制。发布/更新一律走本脚本 REST；禁止手工摘要、删减章节，禁止用 Atlassian MCP 的 `updateConfluencePage`/`createConfluencePage` 写页面（单次写入受限会截断正文、丢图、破坏 storage）。脚本报错只修入参或凭证后重跑，不得改用 MCP 兜底。允许的差异仅限 mermaid 转图、markdown 转 storage HTML；MCP 只读查询不受此限。**唯一例外**见 S6：无本地源时对 PRD「技术方案链接」项做局部回写，须带写后完整性校验，仅限此场景。
 - **图表**：mermaid 由 mmdc 渲染为高分辨率图片附件内联，支持全部图类型；结果记入 `mermaid_pending`（空为全部成功）。含 mermaid 时本机须有 Node.js（`npx`），缺失即阻断（`--allow-degraded-diagrams` 可显式降级，默认不启用）。
 
 ### S6 回写
 
 **epic → 需求文档**
 
-- 有独立 PRD 页：用 CQL 找到 PRD 页（父目录 `mcp.confluence.parent_pages.prd`），把方案摘要 + 链接写入其「技术方案链接」章节，更新版本脚注
-- 无独立 PRD 页：把方案摘要写进 Story 描述的「技术方案」小节（由有 Jira 写权限的建单环节执行）
+epic 档的方案摘要 + 链接需回写到 PRD 的「技术方案链接」章节。写方案的人未必持有 PRD 本地 `.md` 源，按是否拿得到本地源分两条路径。回写遵循附录统一链接约定：填了 URL 就写成可点击超链接并去掉「（可选）」，空项才保留占位。
+
+- **持有本地源**：在本地 PRD 的「技术方案链接」项写入 `[方案标题](URL)`，去掉「（可选）」，再用发布脚本对 PRD 整篇 `update`（走脚本 REST，不用 MCP）。
+- **只有链接、无本地源**（常态）：用 MCP `getConfluencePage` 读回整篇 storage，**只在「技术方案链接」项内**写入 `<a href="URL">方案标题</a>` 并去掉「（可选）」（不改其他任何章节），再 `updateConfluencePage` 写回。这是「禁止 MCP 写页面」的**唯一例外**，仅限此局部回写，禁用于新建或整篇发布。写回后**必须**用 MCP 只读复查：storage 长度未明显缩短、关键章节标题仍在、`<ri:attachment>`/`<ac:image>` 数量未减少、新链接以 `<a href>` 存在；任一不过即**回滚写前版本**，改为产出待回写内容交 PO 手动补入。
+- **无独立 PRD 页**：方案摘要写进 Story 描述的「技术方案」小节（由建单环节执行）。
 
 **spike → Jira ticket**（按权限方案，默认产出内容不直接写）
 
@@ -170,10 +172,9 @@ python .cursor/skills/tech-solution-publish/scripts/upload_confluence_v2.py --md
 
 ## 3. 规则
 
-- **按源文档正文发布**：逐节对应技术方案模板，不添加模板未定义的内容——不加顶部同步脚注（Source/Last synced/Owner/Status），不加「上游 PRD / Jira」等模板外的信息行。链接关系放在模板既有位置（如评审结论的回写项、或 PRD 附录回链），不在正文另起多余段落。
+- **按源文档正文发布**：逐节对应技术方案模板，不加模板外内容（如顶部 Source/Owner/Status 脚注、「上游 PRD/Jira」信息行）。链接放在模板既有位置（评审结论回写项、PRD 附录回链），不另起段落。
 - 敏感信息命中即阻断，不脱敏后继续。
 - 不删除已有页面；脚本按 `--parent` + `--title` 命中即更新升版本，同一对象迭代沿用同一标题，不新建重复页。
-- 上传失败（脚本退出码非 0 或返回 `error`）时不做部分写入：读取 `error` 中的 HTTP 状态修正后重跑，不得改用 MCP 的 `updateConfluencePage` / `createConfluencePage` 或任何会截断正文的 MCP 直写规避。
 - 不自动 commit。
 - 默认不越权写 Jira；确需写入时先确认权限矩阵已更新。
 - space / 父页 / 命名一律取自团队配置，禁止写死。

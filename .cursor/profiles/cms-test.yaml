@@ -50,6 +50,6 @@ content_model:
 
 # ---------------------------------------------------------------- 产物语言
 doc:
-  body_language: zh-CN
-  ac_language: zh-CN
+  body_language: en-US
+  ac_language: en-US
   ac_format: GIVEN/WHEN/AND/THEN

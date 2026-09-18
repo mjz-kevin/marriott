@@ -93,7 +93,7 @@ project = "{project}" AND summary ~ "{摘要}" AND parent = "{Epic key}"
 **描述排版规范**：
 
 - 用户故事句式关键词（`As a` / `When`（或 `For`）/ `I will be able to` / `So that`）与各小节标题（如 `【背景】`/`【范围】`/`【数据契约（概览）】`/`【性能】`/`【链接的工作项 / 参考文档】`）一律加粗。
-- 提交方式：Jira 描述为 ADF，纯文本里的 `**` 不会渲染为加粗。写入时用 `editJiraIssue` / `createJiraIssue` 的 `contentFormat: "markdown"`（由 Jira 自动转 ADF），或直接构造 ADF 的 `strong` mark；不要把 `**xxx**` 作为纯文本提交。
+- 提交方式：Jira 描述为 ADF，纯文本里的 `**` 不会渲染为加粗。用 `editJiraIssue` / `createJiraIssue` 的 `contentFormat: "markdown"`（Jira 自动转 ADF），或直接构造 ADF `strong` mark；不要把 `**xxx**` 当纯文本提交。
 
 ### S5 建链接
 
@@ -108,13 +108,12 @@ project = "{project}" AND summary ~ "{摘要}" AND parent = "{Epic key}"
 
 > 团队配置的链接集合里没有的项自动不建链接，无需在流程中另写分支。
 
-**回链落点规范**：`prd` / `figma` / `tech_solution` 指向的是 Confluence 页或外部 URL，不是 Jira issue。
+**回链落点规范**（`prd` / `figma` / `tech_solution` 指向 Confluence 页或外部 URL，非 Jira issue）：
 
-- **Parent（Epic）**：用层级父子关系（`parent` 字段），这是 issue↔issue 链接，正常建。
-- **指向 URL 的回链**：优先建 Jira Web 链接（远程链接），显示在 issue 的 Links 区域。
-- URL 回链写入 Story 描述的「链接的工作项 / 参考文档」小节（正文内、可点击、随 Story 一起被读到）。
-- **禁止把 URL 回链塞进评论**：评论不是正规回链落点，易被淹没、不随描述沉淀。仅当描述字段不可写时才退而用评论，并在回报中说明原因。
-- 某类别（如 `figma`）无对应链接则写「未提供（待补充）」占位，不留空、不臆造；占位措辞只写「待补充」。
+- **Parent（Epic）**：用层级父子关系（`parent` 字段，issue↔issue），正常建。
+- **URL 回链**：写入 Story 描述的「链接的工作项 / 参考文档」小节（正文内、随 Story 沉淀）。**必须是可点击超链接**：markdown 提交写 `[显示文字](URL)`，或构造带 `link` mark 的 ADF；禁止裸 URL（仅靠前端 autolink，导出 / API 读取时退化为不可点击文本）。若 MCP 支持写 Jira Web 远程链接，可同时在 Links 区域建一条。
+- **禁止塞进评论**：评论不是正规回链落点，易被淹没；仅当描述不可写时才退而用评论并在回报说明。
+- 某类别无对应链接则写「未提供（待补充）」占位，不留空、不臆造。
 
 ### S6 回写
 

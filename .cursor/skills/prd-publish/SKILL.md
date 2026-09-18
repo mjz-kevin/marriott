@@ -73,11 +73,9 @@ metadata:
 
 - 以经 PO 确认的本地 `.md` 全文文件作为发布源，脚本按文件逐节转换为 Confluence storage。
 - 若 PRD 尚在对话中而未写入文件，须先保存为本地 `.md` 再发布。脚本仅以文件为发布源。
-- **确定 epic（硬约束，必须主动询问用户）**：PRD 按 epic 分层归档，发布前须明确所属 **Jira Epic key**（如 `CNAPP-5661`），不用功能名或中文 slug，以保证归档夹稳定可检索。该 key 作为脚本 `--epic` 传入，决定二级 `{epic}` 夹与三级 `{epic}-PRD` 夹。
-  - **除非用户在本次指令中已显式给出 Epic key，否则一律先向用户提问确认，不得自行推断、不得沿用历史记录、不得留空。** 即使能从 PRD 内容、Jira 父子关系、`state.md` 历史等线索推断出候选 Epic，也仅作为「建议默认值」供用户确认，不得直接采用。
-  - 提问时把推断出的候选（含来源，如「GCD-105 的父 Epic」）作为推荐项列给用户，并明确要求其确认或改填；用户回复确认后方可继续。
-  - 当存在多个候选（如 `state.md` 记录了不同的历史 Epic），必须把冲突全部列出让用户裁决，禁止静默择一。
-  - 拿到用户确认的 Epic key 后，在回报中如实记录「Epic 由用户确认」，不得表述为自行推断的结果。
+- **确定 epic（硬约束，必须主动询问用户）**：PRD 按 epic 分层归档，发布前须明确所属 **Jira Epic key**（如 `CNAPP-5661`，不用功能名或中文 slug），作为脚本 `--epic` 传入，决定 `{epic}` 与 `{epic}-PRD` 夹。
+  - **除非用户本次已显式给出 Epic key，否则一律先提问确认**，不得自行推断、沿用历史或留空。从 PRD 内容、Jira 父子关系、`state.md` 推断出的候选仅作「建议默认值」，须标注来源（如「GCD-105 的父 Epic」）交用户确认；多个候选时全部列出让用户裁决，禁止静默择一。
+  - 回报中如实记录「Epic 由用户确认」，不表述为自行推断。
 
 ### 步骤 4：生成标题
 
@@ -112,8 +110,7 @@ python .cursor/skills/prd-publish/scripts/upload_confluence_v2.py --md "<PRD.md 
 - **文件夹自动分层**：按开头「归档位置」定义的规则由脚本落地——以 `--root` 为一级根，自动查该 epic 的直接父项决定四级 / 三级，缺失夹自动建空容器页，最后把 PRD 建/更到最内层 `{epic}-PRD` 夹下。返回 JSON 的 `folders` 字段列出各级夹的 id 与是否本次新建。`--epic-parent <key>` 手动指定父项、`--epic-parent none` 强制无父项；Jira 查询失败时静默回退为无父项（不阻断发布）。
 - **幂等新建或更新**：脚本在三级 `{epic}-PRD` 夹下按 `--title` 查重。已存在则 `update` 并升版本、写入 `--version-msg`；不存在则 `create`。同一 feature 迭代须沿用同一 epic 与标题以更新原页面，不新建重复页。
 - **旧模式回退**：未配 `parent_pages.root` 的团队（如 CMS）仍可用 `--parent <parent_pages.prd>` 直挂固定父页，不走文件夹分层。
-- **正文完整（硬约束）**：脚本一次性提交整篇 storage 正文，不受 MCP 体量限制。禁止因内容过长或通道限制而手工摘要、删减章节或 AC 原文，也不得改用 MCP 分段写入替代脚本。允许的差异仅限两类：mermaid 源码转为渲染后的图片、格式转换（markdown 转 storage HTML）。
-- **禁止用 MCP 写页面（硬约束）**：发布/更新一律走本脚本的 REST 通道。禁止调用 Atlassian MCP 的 `updateConfluencePage` 或 `createConfluencePage` 写入或更新页面，否则 MCP 单次写入受体量限制会截断正文、丢图、破坏 storage 结构。脚本报错时只修脚本入参或凭证后重跑，不得改用上述 MCP 工具兜底。MCP 的只读查询（如按标题/CQL 查页、读版本）不受此限。
+- **正文完整、禁止 MCP 写页面（硬约束）**：脚本一次性提交整篇 storage，不受 MCP 体量限制。发布/更新一律走本脚本 REST；禁止手工摘要、删减章节或 AC 原文，禁止用 Atlassian MCP 的 `updateConfluencePage`/`createConfluencePage` 写页面（单次写入受限会截断正文、丢图、破坏 storage）。脚本报错只修入参或凭证后重跑，不得改用 MCP 兜底。允许的差异仅限 mermaid 转图、markdown 转 storage HTML；MCP 只读查询不受此限。
 - **正文格式**：脚本内置 markdown 转 Confluence storage 的转换（标题、表格、列表、引用、代码宏、行内加粗/代码/链接）。`content_format` 保持 `markdown` 即可直接使用本地 `.md`。
 - **图表**：mermaid 由 mmdc 渲染为高分辨率图片附件内联，支持全部图类型；结果记入 `mermaid_pending`（空为全部成功），本地 `.md` 保留源码。含 mermaid 时本机须有 Node.js（`npx`），缺失即阻断（`--allow-degraded-diagrams` 可显式降级，默认不启用）。
 - **图片附件**：markdown 的 `![alt](path)` 自动处理，本地相对路径上传为附件、网络图片外链，失败或不支持记入 `image_pending`。引用的设计稿/截图须与 `.md` 同目录，体积与格式按撰写环节的设计稿图片适配规范控制。
