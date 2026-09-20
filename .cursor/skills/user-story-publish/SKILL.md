@@ -117,8 +117,7 @@ project = "{project}" AND summary ~ "{摘要}" AND parent = "{Epic key}"
 
 ### S6 回写
 
-1. **需求文档附录 Jira link**：把新建的 Story/Epic key 写回需求文档附录
-   （要求建独立页 → Confluence PRD 页；否则 → 并入 Story 描述）
+1. **需求文档附录 Jira link**：把本 PRD 对应的 **Epic key** 写回需求文档附录的 Jira link 字段（该字段仅放 Epic，不写 Story key）。Story 自身的回链在 S5 已挂到各条 Story 上，不反向灌入 PRD 附录。
 2. **技术方案回链**：执行技术方案发布环节留下的「待回写内容」
    - Story → Tech Solution 链接
    - （spike 场景）把 spike 结论以评论形式写到 spike ticket
