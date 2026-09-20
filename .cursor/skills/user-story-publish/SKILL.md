@@ -85,7 +85,7 @@ project = "{project}" AND summary ~ "{摘要}" AND parent = "{Epic key}"
 | Agile Team | 按 `mcp.jira.agile_team`：有值即填，为空则留空待人工填写 |
 | Component | 按 `mcp.jira.components.platform_rule`；未配置 `components` 的团队不处理 |
 | 优先级 | 不填 |
-| 标签 | 按 `mcp.jira.labels`（合法枚举、`case_sensitive`、`auto_fill` 类别、`business_domain` 门禁均由该配置键定义）。**建单期强制**：`business_domain.filter_gate` 为 true 时缺失该类别即停、不建单；命中枚举外标签即停并按 `labels.source` 对齐 |
+| 标签 | 按 `mcp.jira.labels`（合法枚举、`case_sensitive`、`auto_fill` 类别、`business_domain` 门禁、`ai_provenance` 溯源标签均由该配置键定义）。**建单期强制**：`auto_apply: always` 的类别（如 `ai_provenance` → `AIGenerated`）无条件恒定打上，标记经 agent 创建/同步的工单；`business_domain.filter_gate` 为 true 时缺失该类别即停、不建单；命中枚举外标签即停并按 `labels.source` 对齐 |
 | Acceptance Criteria | 支持 Markdown，按 `doc.ac_format` |
 | 描述 | 团队要求描述自成一体时须自带完整背景；排版规范见下 |
 | 估点字段 / 发布字段 | 不填（发布流程回填） |

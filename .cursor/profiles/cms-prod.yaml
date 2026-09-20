@@ -9,7 +9,13 @@ mcp:
     issue_type: "故事"
     initial_status: Backlog
     agile_team: ""       # 空 = 无默认，人工填写
-    labels: {}           # 空 = 无枚举规则，人工填写
+    labels:                # CMS 无 business_domain 等枚举门禁，其余标签人工填写
+      case_sensitive: true
+      auto_fill: [ai_provenance]
+      ai_provenance:       # 溯源标签：凡经 agent 创建/同步的 Jira，建单时恒定自动打上
+        auto_apply: always # 无条件添加，不依赖需求内容
+        select: unique
+        values: [AIGenerated]   # 固定值（无空格：Jira label 不允许空格，否则会被拆成两个标签）
     links: [prd, figma, tech_solution]
 
   confluence:
