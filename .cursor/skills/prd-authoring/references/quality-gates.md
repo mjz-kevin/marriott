@@ -61,7 +61,7 @@
 | 产物 | 确认人 |
 |------|--------|
 | PRD | PO |
-| Epic 级技术方案 | TL，PRD 中的方案章节需 PO 确认 |
+| PRD 级技术方案 | TL，PRD 中的方案章节需 PO 确认 |
 | Spike 结论 | TL |
 | Story 级明细方案 | DEV |
 | User Story 清单 | PO |

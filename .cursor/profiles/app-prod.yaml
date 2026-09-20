@@ -46,7 +46,7 @@ mcp:
       level3_tech_solution: "{epic}-Tech Solution"  # 三级：技术方案归档夹
     naming:
       prd: "APP-PRD-{feature_name}-{date}-{version}"
-      tech_solution_epic: "APP-TS-Epic-{feature_name}-{date}-{version}"
+      tech_solution_prd: "APP-TS-Prd-{feature_name}-{date}-{version}"
       tech_solution_spike: "APP-TS-Spike-{spike_key}-{topic}-{date}"
       tech_solution_detail: "APP-TS-Detail-{story_key}-{title}-{date}"
     content_format: markdown

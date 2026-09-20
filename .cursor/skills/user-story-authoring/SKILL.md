@@ -18,7 +18,7 @@ metadata:
 | 维度   | 说明                                                     |
 | ---- | ------------------------------------------------------ |
 | 定位   | 基于需求澄清结论与技术方案，把 PRD 拆成标准化 User Story 并写全 AC 与 Jira 字段值 |
-| 输入   | PRD（含 Figma 链接）、Epic 级及以上技术方案                          |
+| 输入   | PRD（含 Figma 链接）、PRD 级及以上技术方案                          |
 | 产出   | 会话内 Story 清单（含句式、描述、AC、字段值、回链），不落地文件；交 PO 确认后供建单环节消费   |
 | 边界   | 只写 what 不写 how；AI 不估点；不建单（建单属发布环节）                     |
 | 核心判断 | 拆分质量的唯一标准：DEV 无需查阅 PRD 即可开工，QA 无需查阅 PRD 即可编写用例         |
@@ -47,7 +47,7 @@ metadata:
 | #   | 条件                        |
 | --- | ------------------------- |
 | 1   | 已有需求文档（PRD）               |
-| 2   | 技术方案至少到 epic 档（决定拆分粒度与依赖） |
+| 2   | 技术方案至少到 prd 档（决定拆分粒度与依赖） |
 
 
 
@@ -233,6 +233,6 @@ AND   {附加预期}（可选）
 ## 7. 相关
 
 - 模板：references/user-story-app.md / references/user-story-cms.md（按 `artifacts.user_story_template` 取用）
-- 上游：prd-authoring、tech-solution-epic、tech-solution-detail
+- 上游：prd-authoring、tech-solution-prd、tech-solution-detail
 - 下游：user-story-publish
 

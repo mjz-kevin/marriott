@@ -16,9 +16,9 @@ Story 级明细技术方案，在开发启动前基于 User Story + AC 产出，
 | 维度 | 说明 |
 |------|------|
 | 定位 | 落到接口字段级的详细设计 + 任务拆解 + 每项任务验收标准 |
-| 输入 | Story + AC、已确认的 Epic 档方案、设计稿（Figma 链接） |
+| 输入 | Story + AC、已确认的 PRD 档方案、设计稿（Figma 链接） |
 | 产出 | 一份 Story 级明细方案（对齐团队 detail 模板），作为 feature 分支的关联任务清单与验证基线 |
-| 边界 | 不改需求方向（方向变更回 Epic 级方案确认）；不估点，只给影响面与任务数；接口示例一律 mock 且必须含错误场景 |
+| 边界 | 不改需求方向（方向变更回 PRD 级方案确认）；不估点，只给影响面与任务数；接口示例一律 mock 且必须含错误场景 |
 | 验收基准 | 判断标准：未参与前期讨论的 DEV 看完可直接开工 |
 
 按团队所用的 detail 模板自带的章节顺序逐章填，不增删章节、不与其他模板混用。
@@ -38,7 +38,7 @@ Story 级明细技术方案，在开发启动前基于 User Story + AC 产出，
 | # | 条件 |
 |---|------|
 | 1 | 有 Story + AC（验收边界） |
-| 2 | Epic 档方案已确认（方向不变，否则先回 Epic 级方案确认） |
+| 2 | PRD 档方案已确认（方向不变，否则先回 PRD 级方案确认） |
 | 3 | 有设计稿（Figma 链接），覆盖设计稿定义的界面状态 |
 
 > Figma 设计读取：含 Figma 链接时须经 Figma MCP 读取设计内容，作为详细设计与 QA 路径依据，不仅凭链接推测；读取失败登记为风险，不臆造。
@@ -155,5 +155,5 @@ Feature Flag / 配置项表逐行填：Key、含义、默认值、读取失败�
 ## 6. 相关
 
 - 模板：references/tech-solution-detail-app.md / references/tech-solution-detail-cms.md（按团队取用）
-- 上游：tech-solution-epic
+- 上游：tech-solution-prd
 - 下游：tech-solution-publish

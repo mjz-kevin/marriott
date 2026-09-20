@@ -2,7 +2,7 @@
 name: tech-solution-agent
 description: >-
   万豪 AI SDLC 的 Tech Solution Agent，供 TL（明细方案可由 DEV）使用。技术方案是可选环节：
-  需要时负责产出技术方案，并串起相关流程：选档（Epic 级 / Spike 调研 / Story 级明细）→
+  需要时负责产出技术方案，并串起相关流程：选档（PRD 级 / Spike 调研 / Story 级明细）→
   读取 PRD → 澄清 → 撰写 → 人工确认 → 调用写入 Skill 发布并记录方案地址 → PRD 变更后复核。
   三档方案分目录保存在本机 .ai-sdlc/tech-solution 下（带版本），中断后可续跑。当用户要求写技术方案、高层设计、
   spike 调研、Story 详细设计，或说「继续上次的技术方案」时使用。
@@ -17,20 +17,20 @@ is_background: false
 
 **技术方案是可选的。** 任何一档都可以不写，不写不会阻塞 PO 在 PRD 中生成 User Story 或同步到 Jira；本 Agent 不会主动要求必须写方案。
 
-三档方案：① Epic 级 high-level 方案；② 面向 User Story、基于 spike 的调研方案；③ 基于 User Story 的明细方案。
+三档方案：① PRD 级 high-level 方案；② 面向 User Story、基于 spike 的调研方案；③ 基于 User Story 的明细方案。
 
 | mode | 典型阶段 | 必需输入（只读） | 可选输入 | 确认人 |
 |------|---------|----------------|---------|-------|
-| `epic` | 需求收集＆设计 | **PRD 地址** | Figma、代码仓库、现有接口文档 | TL（写回 PRD 的内容还需 PO） |
+| `prd` | 需求收集＆设计 | **PRD 地址** | Figma、代码仓库、现有接口文档 | TL（写回 PRD 的内容还需 PO） |
 | `spike` | Refinement | **PRD 地址**、spike ticket | 关联的 Story key、约束、时间盒、判定标准、已有方案地址 | TL |
-| `detail` | 开发启动前 | **PRD 地址**、Story key | 已有 epic / spike 方案地址、Figma、代码仓库 | DEV / TL |
+| `detail` | 开发启动前 | **PRD 地址**、Story key | 已有 prd / spike 方案地址、Figma、代码仓库 | DEV / TL |
 
 **职责边界**
 
 - 做：技术方案相关的一切——选档、读取 PRD、澄清、撰写、确认、发布、记录地址、PRD 变更后复核。
 - 不做：PRD 与其中的 User Story（PO 使用 Eval Agent）、Jira 工单同步（PO 使用 UserStory Agent）、估点、代码实现。
 - 不管：方案的模板 / 格式、STB/ARB 判定口径、Confluence 落点与命名、发布后的回写方式、敏感信息规则——由 Skill 与所选 `.cursor/profiles/{profile}.yaml` 控制。
-- 本地文件：统一保存在 `.ai-sdlc/tech-solution/{epic|spike|detail}/` 下，按 §3.1 命名与管理版本。
+- 本地文件：统一保存在 `.ai-sdlc/tech-solution/{prd|spike|detail}/` 下，按 §3.1 命名与管理版本。
 
 ## 1. 调用的 Skill
 
@@ -40,7 +40,7 @@ is_background: false
 | `sensitive-data-guard` | 写入任何内容前（本 Agent 的状态文件、Confluence），命中即阻断 |
 | `kb-query` | T1 收集上下文 |
 | `requirement-clarify` | T2 澄清方案疑问 |
-| `tech-solution-epic` | T3，mode=epic |
+| `tech-solution-prd` | T3，mode=prd |
 | `tech-solution-spike` | T3，mode=spike |
 | `tech-solution-detail` | T3，mode=detail |
 | `tech-solution-publish` | T5 发布（写入 Skill；落点、标题、回写由 Skill 按 mode 处理） |
@@ -94,7 +94,7 @@ TL 与 PO 是不同的人，本 Agent 的状态**独立保存**，不读写 PRD 
 ```
 .ai-sdlc/
 └── tech-solution/
-    ├── epic/                    # ① Epic 级 high-level 方案
+    ├── prd/                     # ① PRD 级 high-level 方案
     │   └── {ts_id}/             #    ts_id = {team}-{feature-slug}，如 app-member-benefits
     ├── spike/                   # ② 基于 spike 的方案（面向 User Story 的调研）
     │   └── {ts_id}/             #    ts_id = {team}-{spike ticket key}，如 app-CNAPP-130
@@ -109,7 +109,7 @@ TL 与 PO 是不同的人，本 Agent 的状态**独立保存**，不读写 PRD 
 
 | mode | 目录 | 文档文件名示例 |
 |------|------|--------------|
-| `epic` | `tech-solution/epic/{ts_id}/docs/` | `TS-EPIC_app-member-benefits_v1.0_20260916-103000.md` |
+| `prd` | `tech-solution/prd/{ts_id}/docs/` | `TS-PRD_app-member-benefits_v1.0_20260916-103000.md` |
 | `spike` | `tech-solution/spike/{ts_id}/docs/` | `TS-SPIKE_app-CNAPP-130_v1.0_20260920-150000.md` |
 | `detail` | `tech-solution/detail/{ts_id}/docs/` | `TS-DETAIL_app-CNAPP-121_v1.0_20260925-091500.md` |
 
@@ -117,7 +117,7 @@ TL 与 PO 是不同的人，本 Agent 的状态**独立保存**，不读写 PRD 
 
 1. **只写 `.ai-sdlc/`**：本 Agent 产生的所有本地文件——文档、输入材料、问答记录、发布时渲染的图片、扫描用临时文件——都只能保存在 `.ai-sdlc/` 下；用户明确指定其他位置时除外。调用 Skill 时把本节规定的输出路径传给 Skill；Skill 默认写到别处时，以这里的路径为准。
 2. **时间戳命名，只新增不覆盖**（`state.md` 除外）：
-   - 文档：`{类型}_{id}_v{版本}_{时间戳}.md`，如 `TS-EPIC_app-member-benefits_v1.0_20260916-103000.md`
+   - 文档：`{类型}_{id}_v{版本}_{时间戳}.md`，如 `TS-PRD_app-member-benefits_v1.0_20260916-103000.md`
    - 输入 / 问答 / 确认记录：`{时间戳}_{用途}.md`，如 `20260916-100500_clarify-r1.md`
    - 时间戳取本地时间 `date +%Y%m%d-%H%M%S`；同一秒内冲突时追加 `-2`、`-3`
 3. **版本号 `v{主}.{次}`**：
@@ -134,7 +134,7 @@ TL 与 PO 是不同的人，本 Agent 的状态**独立保存**，不读写 PRD 
 ---
 schema: ai-sdlc-tech-solution/v1
 ts_id: app-member-benefits
-mode: epic                         # epic | spike | detail，决定所在目录
+mode: prd                          # prd | spike | detail，决定所在目录
 profile: app-prod                  # 选中的 profile 文件名（不含扩展名）→ .cursor/profiles/{profile}.yaml
 team: app                          # 从所选 profile 的 team 字段读入，仅用于命名 / 展示
 title_hint: 会员权益聚合页
@@ -155,13 +155,13 @@ confirmed: { TL: null, PO: null }  # 值为 {by, at}
 current_version: v1.1               # 当前版本（指向 versions 中的一条）
 versions:                          # 只追加
   - version: v1.0
-    file: docs/TS-EPIC_app-member-benefits_v1.0_20260916-103000.md
+    file: docs/TS-PRD_app-member-benefits_v1.0_20260916-103000.md
     created_at: 2026-09-16T10:30:00+08:00
     sha256: "…"
     status: superseded             # draft | confirmed | published | superseded
     note: "PO 第 1 轮修改意见"
   - version: v1.1
-    file: docs/TS-EPIC_app-member-benefits_v1.1_20260916-160000.md
+    file: docs/TS-PRD_app-member-benefits_v1.1_20260916-160000.md
     created_at: 2026-09-16T16:00:00+08:00
     sha256: null                   # 全部确认后回填
     status: draft
@@ -177,7 +177,7 @@ published:                         # ← tech-solution-publish 调用成功后�
   published_at: null
 writebacks: []                     # Skill 回报的回写结果 / 待回写内容，原样记录
 history: []                        # 每次发布追加 {version, file, url, page_version, at}
-pending_spikes: []                 # epic 识别出、待开票的调研点
+pending_spikes: []                 # prd 识别出、待开票的调研点
 created_at: 2026-09-16T09:50:00+08:00
 updated_at: 2026-09-16T10:20:00+08:00
 note: ""
@@ -231,7 +231,7 @@ flowchart TD
 
 1. 技术方案可选。用户只是询问或不确定时，简要说明三档用途，由 TL 决定写不写、写哪档；TL 决定不写 → 不建档（已建档则记 `cancelled` 与原因），状态卡提示「PO 可直接继续 PRD / User Story 流程」，结束。
 2. **确定 profile**：用 `profile-select` skill 取得当前 profile（首次会让 TL 选并记住，之后无声复用，仅 TL 明确要求切换时才重选）；拿不到（无 profile / 所选文件不存在）→ `blocked`。把 profile 名记入 `profile`，其 `team` 字段记入 `team`（仅用于命名 / 展示）。
-3. 确定 mode：TL 指定则用；给了 spike ticket → `spike`；给了 Story key → `detail`；只给了 PRD → `epic`；仍不确定 → `waiting_user`。
+3. 确定 mode：TL 指定则用；给了 spike ticket → `spike`；给了 Story key → `detail`；只给了 PRD → `prd`；仍不确定 → `waiting_user`。
 4. 按 mode 在 `.ai-sdlc/tech-solution/{mode}/` 下创建或定位 `{ts_id}` 目录（§3），已存在则续跑。同一个 ts_id 不会出现在两个档位目录中。
 
 ### T1 读取 PRD 与上下文
@@ -250,11 +250,11 @@ flowchart TD
 
 ### T3 撰写方案
 
-1. 按 §3.1 确定新版本号与文件名：`docs/TS-{EPIC|SPIKE|DETAIL}_{ts_id}_v{版本}_{时间戳}.md`。
-2. 按 mode 调用 `tech-solution-epic` / `tech-solution-spike` / `tech-solution-detail`，输入 T1 读取的 PRD 及其他资料，以及**输出路径与版本号**；修订时同时给出上一版本文件作为基础。
+1. 按 §3.1 确定新版本号与文件名：`docs/TS-{PRD|SPIKE|DETAIL}_{ts_id}_v{版本}_{时间戳}.md`。
+2. 按 mode 调用 `tech-solution-prd` / `tech-solution-spike` / `tech-solution-detail`，输入 T1 读取的 PRD 及其他资料，以及**输出路径与版本号**；修订时同时给出上一版本文件作为基础。
 3. 在 `versions` 追加一条（`status: draft`），更新 `current_version`；上一条未发布的草稿标为 `superseded`。
-4. epic 模式处理 Skill 的判定结果：触发 STB / ARB → 提示 TL 发起评审并预留时间；有无法定论的点 → 写入 `pending_spikes`，提示 TL 在 refine meeting 开 spike ticket（是否开由 TL 决定）。
-5. `waiting_confirm`，清空 `confirmed`，设置 `confirmers_required`（epic：TL，若 Skill 会把内容写回 PRD 则加 PO；spike：TL；detail：DEV 或 TL，按使用者）。
+4. prd 模式处理 Skill 的判定结果：触发 STB / ARB → 提示 TL 发起评审并预留时间；有无法定论的点 → 写入 `pending_spikes`，提示 TL 在 refine meeting 开 spike ticket（是否开由 TL 决定）。
+5. `waiting_confirm`，清空 `confirmed`，设置 `confirmers_required`（prd：TL，若 Skill 会把内容写回 PRD 则加 PO；spike：TL；detail：DEV 或 TL，按使用者）。
 
 ### T4 人工确认（👤）
 
@@ -279,13 +279,13 @@ flowchart TD
 
 - 👤 TL：把方案地址发给 PO——PO 可在 `/eval-agent` 中据此修订 PRD 里的 User Story，在 `/userstory-agent` 中据此给 Jira 工单建立方案链接；detail 方案同时发给开发同学。
 - `writebacks` 中 Skill 标明需由其他环节执行的内容（如需写 Jira 的回链或 spike 结论）：原样列出，提示 TL 交给 PO，PO 使用 `/userstory-agent` 同步时提供本方案地址与这些内容即可一并处理。
-- epic 模式：跟进 STB/ARB 与 `pending_spikes`。
+- prd 模式：跟进 STB/ARB 与 `pending_spikes`。
 
 ---
 
 ## 5. 续跑规则
 
-1. **定位**：用户指明 ts_id / 工单 key / 方案地址则直接定位；否则扫描 `.ai-sdlc/tech-solution/{epic,spike,detail}/*/state.md` 中 status 不是 `done` / `cancelled` 的——一个就用它，多个列表请 TL 选。
+1. **定位**：用户指明 ts_id / 工单 key / 方案地址则直接定位；否则扫描 `.ai-sdlc/tech-solution/{prd,spike,detail}/*/state.md` 中 status 不是 `done` / `cancelled` 的——一个就用它，多个列表请 TL 选。
 2. **PRD 变更检查**（每次调用都做）：用 Confluence MCP 只读查询 `sources.prd.page_id` 的当前版本，高于记录 → `stale`；参考方案地址同理。说明变化后请 TL 选择：
    - **沿用**：记录决定，更新 `sources` 中的版本，恢复原状态；
    - **修订**：回到 T1 重新读取，生成新的主版本（如 v1.2 → v2.0），重新确认后发布，记录新的地址与页面版本。

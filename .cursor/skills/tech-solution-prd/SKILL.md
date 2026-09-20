@@ -1,30 +1,30 @@
 ---
-name: tech-solution-epic
+name: tech-solution-prd
 description: >-
-  按 Epic 模板撰写 Epic 级技术方案：范围、端到端架构、关键流程、
+  按 PRD 模板撰写 PRD 级技术方案：范围、端到端架构、关键流程、
   接口与数据契约概览、含 STB/ARB 触发判定的依赖、交付与非功能要求、风险、
   评审结论。本级不做任务拆解。技术栈、代码仓库、评审触发条件与内容模型要求
-  均遵循团队配置。当用户要求 Epic 级技术方案、高层设计或某功能的架构方案时使用；
-  触发词：Epic 技术方案 / 高层设计 / 架构方案 / HLD / epic tech solution。
+  均遵循团队配置。当用户要求 PRD 级技术方案、高层设计或某功能的架构方案时使用；
+  触发词：PRD 技术方案 / 高层设计 / 架构方案 / HLD / prd tech solution。
 metadata:
   agent: Tech Solution Agent
 ---
 
-# Tech Solution — Epic 级
+# Tech Solution — PRD 级
 
-Epic 级 high-level 技术方案，在需求收集与设计阶段基于 PRD 产出，用于确定实现方向、架构与边界，供 TL 评审，并同步更新回 PRD 的技术方案章节。
+PRD 级 high-level 技术方案，在需求收集与设计阶段基于 PRD 产出，用于确定实现方向、架构与边界，供 TL 评审，并同步更新回 PRD 的技术方案章节。
 
 
 | 维度  | 说明                                                                 |
 | --- | ------------------------------------------------------------------ |
-| 定位  | Epic 粒度的架构图、技术选型、关键接口定义与总体设计                                       |
+| 定位  | PRD 粒度的架构图、技术选型、关键接口定义与总体设计                                       |
 | 输入  | PRD（含 Figma 链接）、代码仓库上下文、现有接口文档                                     |
-| 产出  | 一份 Epic 级技术方案（对齐模板 7 章），发布至 Confluence 并回写 PRD                     |
+| 产出  | 一份 PRD 级技术方案（对齐模板 7 章），发布至 Confluence 并回写 PRD                     |
 | 决策  | 判定引入新云服务 / 三方库是否触发 STB / ARB；无法定论的复杂点转 spike ticket                |
 | 边界  | 只定方向与边界，不做任务拆解（任务拆解属 Story 级明细方案）；接口示例一律 mock，不引用真实密钥 / 内网域名 / 会员号 |
 
 
-模板：[tech-solution-epic.md](references/tech-solution-epic.md)
+模板：[tech-solution-prd.md](references/tech-solution-prd.md)
 
 ## 0. 配置取值
 
@@ -47,7 +47,6 @@ Epic 级 high-level 技术方案，在需求收集与设计阶段基于 PRD 产�
 | --- | ---------------------- |
 | 1   | 已有需求文档（PRD），含 Figma 链接 |
 | 2   | 已读相关代码仓库上下文与现有接口文档     |
-
 
 > Figma 设计读取：含 Figma 链接时须经 Figma MCP 读取设计内容，作为架构、组件边界与契约依据，不仅凭链接推测；读取失败登记为风险，不臆造。
 
@@ -74,7 +73,7 @@ Epic 级 high-level 技术方案，在需求收集与设计阶段基于 PRD 产�
 
 ### S3 范围
 
-- **In Scope**：本 Epic 覆盖的能力 / 场景
+- **In Scope**：本 PRD 覆盖的能力 / 场景
 - **关键场景**：主要使用场景清单
 - **约束**：性能、平台、时间等约束（追加团队技术栈对应的兼容性与范围要求）
 
@@ -159,11 +158,10 @@ Epic 级 high-level 技术方案，在需求收集与设计阶段基于 PRD 产�
 
 命名按团队的标题格式。
 交付后停下等 TL 确认（写入 PRD 的方案章节还需 PO 确认），
-确认后进入技术方案发布环节（epic 模式）。
+确认后进入技术方案发布环节（prd 模式）。
 
 ## 6. 相关
 
-- 模板：references/tech-solution-epic.md
+- 模板：references/tech-solution-prd.md
 - 上游：prd-authoring（PRD）
 - 下游：tech-solution-detail（细化）、tech-solution-spike（调研）、tech-solution-publish
-

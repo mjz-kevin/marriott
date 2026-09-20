@@ -1,7 +1,7 @@
 ---
 name: tech-solution-publish
 description: >-
-  将团队技术方案发布到 Confluence 并闭环回写：epic 级同步回需求文档，
+  将团队技术方案发布到 Confluence 并闭环回写：prd 级同步回需求文档，
   spike 级将结论回写到 spike 工单，story 级回链 Jira Story。
   正文体量常超出 MCP 单次写入上限，因此统一采用 scripts/upload_confluence_v2.py 脚本上传。
   落点、命名与路径遵循团队配置。当用户要求发布、同步或推送技术方案到 Confluence 时使用；
@@ -23,7 +23,7 @@ metadata:
 └── {epic_parent}               父项 key（无父项时省略此层）
     └── {epic}                  Jira Epic key，如 CNAPP-5661
         ├── {epic}-PRD          → PRD 文档
-        └── {epic}-Tech Solution → epic / spike / detail 三档文档
+        └── {epic}-Tech Solution → prd / spike / detail 三档文档
 ```
 
 `{epic}` 取 Jira Epic key（非功能名/slug）。三档仅标题不同，落点同为 `{epic}-Tech Solution` 夹。父项可 `--epic-parent <key>` 覆盖、`--epic-parent none` 强制无父项。
@@ -31,7 +31,7 @@ metadata:
 | 维度 | 说明 |
 |------|------|
 | 定位 | 按 epic 分层将技术方案发布到 `{epic}-Tech Solution` 夹，并按档位回写关联对象 |
-| 输入 | 经人工确认的技术方案（epic / spike / detail 之一）、所属 Jira Epic key 与团队 Confluence 配置 |
+| 输入 | 经人工确认的技术方案（prd / spike / detail 之一）、所属 Jira Epic key 与团队 Confluence 配置 |
 | 产出 | Confluence 页面（新建或更新），返回 URL、版本、完整性统计与待回写内容 |
 | 手段 | `scripts/upload_confluence_v2.py`（REST 上传，不受 MCP 体量限制，正文完整提交） |
 | 权限 | 本 Agent 对 Jira 只读：spike 结论回写、Story 回链仅产出「待回写内容」，交由有 Jira 写权限的建单环节代写 |
@@ -40,7 +40,7 @@ metadata:
 
 | mode | Confluence 落点 | 回写目标 |
 |------|-----------------|----------|
-| `epic` | `{epic}-Tech Solution` 夹（epic 级方案页） | 需求文档（PRD 页或 Story 描述，按团队约定） |
+| `prd` | `{epic}-Tech Solution` 夹（prd 级方案页） | 需求文档（PRD 页或 Story 描述，按团队约定） |
 | `spike` | `{epic}-Tech Solution` 夹（Spike 结论页） | spike 工单结论（Jira） |
 | `detail` | `{epic}-Tech Solution` 夹（Story 详细方案页） | Jira Story 回链 |
 
@@ -55,8 +55,8 @@ metadata:
 | 一级根目录页 ID | `profiles/{profile}.yaml` → `mcp.confluence.parent_pages.root`，对应脚本 `--root`（根目录名见 `folder_layout.level1`；为 `TBD` 即阻断） |
 | 文件夹层级约定 | `profiles/{profile}.yaml` → `mcp.confluence.folder_layout`（一级根 →〔epic 有父项时〕`{epic_parent}` → `{epic}` → `{epic}-Tech Solution`；epic 无父项时省略 `{epic_parent}` 层，三档共用最内层夹） |
 | 技术方案父目录 ID（旧模式回退） | `profiles/{profile}.yaml` → `mcp.confluence.parent_pages.tech_solution`，仅未配 `root` 的团队用，对应脚本 `--parent` |
-| PRD 父目录 ID（epic 回写用） | `profiles/{profile}.yaml` → `mcp.confluence.parent_pages.prd` |
-| epic 标题模板 | `profiles/{profile}.yaml` → `mcp.confluence.naming.tech_solution_epic` |
+| PRD 父目录 ID（prd 回写用） | `profiles/{profile}.yaml` → `mcp.confluence.parent_pages.prd` |
+| prd 标题模板 | `profiles/{profile}.yaml` → `mcp.confluence.naming.tech_solution_prd` |
 | spike 标题模板 | `profiles/{profile}.yaml` → `mcp.confluence.naming.tech_solution_spike` |
 | detail 标题模板 | `profiles/{profile}.yaml` → `mcp.confluence.naming.tech_solution_detail` |
 | 正文格式 | `profiles/{profile}.yaml` → `mcp.confluence.content_format` |
@@ -71,7 +71,7 @@ metadata:
 |---|------|
 | 1 | 模板章节齐全无空章节，无 `[填写]` / `TODO` 残留 |
 | 2 | 全文无真实密钥、内网域名、真实会员号、真实手机号（命中即阻断） |
-| 3 | 人工确认已完成（epic→TL；spike→TL；detail→DEV） |
+| 3 | 人工确认已完成（prd→TL；spike→TL；detail→DEV） |
 | 4 | 目标空间、一级根目录页（`parent_pages.root`）与所属 Jira Epic key 齐备（为 TBD 即硬拦） |
 | 5 | `.cursor/mcp.json` 的 `confluenceRest` 三项非空，且 `api_token` 不会被回显到对话或日志 |
 | 6 | 技术方案已保存为本地 `.md` 文件（脚本仅以文件为发布源） |
@@ -84,7 +84,7 @@ metadata:
 - S3 环境预检（--check-env：含 mermaid 时验证 Node.js/npx 就绪）
 - S4 dry-run 预检（核对 stats 与完整性）
 - S5 脚本上传 Confluence（幂等新建/更新，正文完整）
-- S6 回写（epic→需求文档 / spike→结论 / detail→回链）
+- S6 回写（prd→需求文档 / spike→结论 / detail→回链）
 - S7 回报
 ```
 
@@ -95,7 +95,7 @@ space : mcp.confluence.space
 root  : mcp.confluence.parent_pages.root                （一级根目录页 ID）
 epic  : 所属 Jira Epic key（如 CNAPP-5661）              （二级夹 = {epic}，三级夹 = {epic}-Tech Solution）
 kind  : tech_solution                                    （三档共用同一三级夹）
-title : 按 mode 取 naming.tech_solution_{epic|spike|detail} 渲染
+title : 按 mode 取 naming.tech_solution_{prd|spike|detail} 渲染
 ```
 
 脚本以 `--root/--epic/--kind tech_solution` 按开头「归档位置」定义的规则自动分层：查该 epic 的直接父项决定四级 / 三级，缺失即建容器页，再把方案页落到最内层 `{epic}-Tech Solution` 夹下。`--epic-parent <key>` 手动指定、`--epic-parent none` 强制无父项。未配 `root` 的团队回退：改传 `--parent <parent_pages.tech_solution>` 直挂。
@@ -131,9 +131,9 @@ python .cursor/skills/tech-solution-publish/scripts/upload_confluence_v2.py --md
 
 ### S6 回写
 
-**epic → 需求文档**
+**prd → 需求文档**
 
-epic 档的方案摘要 + 链接需回写到 PRD 的「技术方案链接」章节。写方案的人未必持有 PRD 本地 `.md` 源，按是否拿得到本地源分两条路径。回写遵循附录统一链接约定：填了 URL 就写成可点击超链接并去掉「（可选）」，空项才保留占位。
+prd 档的方案摘要 + 链接需回写到 PRD 的「技术方案链接」章节。写方案的人未必持有 PRD 本地 `.md` 源，按是否拿得到本地源分两条路径。回写遵循附录统一链接约定：填了 URL 就写成可点击超链接并去掉「（可选）」，空项才保留占位。
 
 - **持有本地源**：在本地 PRD 的「技术方案链接」项写入 `[方案标题](URL)`，去掉「（可选）」，再用发布脚本对 PRD 整篇 `update`（走脚本 REST，不用 MCP）。
 - **只有链接、无本地源**（常态）：用 MCP `getConfluencePage` 读回整篇 storage，**只在「技术方案链接」项内**写入 `<a href="URL">方案标题</a>` 并去掉「（可选）」（不改其他任何章节），再 `updateConfluencePage` 写回。这是「禁止 MCP 写页面」的**唯一例外**，仅限此局部回写，禁用于新建或整篇发布。写回后**必须**用 MCP 只读复查：storage 长度未明显缩短、关键章节标题仍在、`<ri:attachment>`/`<ac:image>` 数量未减少、新链接以 `<a href>` 存在；任一不过即**回滚写前版本**，改为产出待回写内容交 PO 手动补入。
@@ -199,6 +199,6 @@ epic 档的方案摘要 + 链接需回写到 PRD 的「技术方案链接」章�
 
 ## 5. 相关
 
-- 上游：tech-solution-epic、tech-solution-spike、tech-solution-detail
+- 上游：tech-solution-prd、tech-solution-spike、tech-solution-detail
 - 回写执行方：user-story-publish
 - 权限：本环节对 Jira 只读，回写一律产出「待回写内容」，交有 Jira 写权限的建单环节执行
