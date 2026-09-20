@@ -85,7 +85,7 @@ project = "{project}" AND summary ~ "{摘要}" AND parent = "{Epic key}"
 | Agile Team | 按 `mcp.jira.agile_team`：有值即填，为空则留空待人工填写 |
 | Component | 按 `mcp.jira.components.platform_rule`；未配置 `components` 的团队不处理 |
 | 优先级 | 不填 |
-| 标签 | 按 `mcp.jira.labels`（合法枚举、`case_sensitive`、`auto_fill` 类别、`business_domain` 门禁均由该配置键定义）。**建单期强制**：`business_domain.filter_gate` 为 true 时缺失该类别即停、不建单；命中枚举外标签即停并按 `labels.source` 对齐 |
+| 标签 | 按 `mcp.jira.labels`（合法枚举、`case_sensitive`、`auto_fill` 类别、`business_domain` 门禁、`ai_provenance` 溯源标签均由该配置键定义）。**建单期强制**：`auto_apply: always` 的类别（如 `ai_provenance` → `AIGenerated`）无条件恒定打上，标记经 agent 创建/同步的工单；`business_domain.filter_gate` 为 true 时缺失该类别即停、不建单；命中枚举外标签即停并按 `labels.source` 对齐 |
 | Acceptance Criteria | 支持 Markdown，按 `doc.ac_format` |
 | 描述 | 团队要求描述自成一体时须自带完整背景；排版规范见下 |
 | 估点字段 / 发布字段 | 不填（发布流程回填） |
@@ -117,8 +117,7 @@ project = "{project}" AND summary ~ "{摘要}" AND parent = "{Epic key}"
 
 ### S6 回写
 
-1. **需求文档附录 Jira link**：把新建的 Story/Epic key 写回需求文档附录
-   （要求建独立页 → Confluence PRD 页；否则 → 并入 Story 描述）
+1. **需求文档附录 Jira link**：把本 PRD 对应的 **Epic key** 写回需求文档附录的 Jira link 字段（该字段仅放 Epic，不写 Story key）。Story 自身的回链在 S5 已挂到各条 Story 上，不反向灌入 PRD 附录。
 2. **技术方案回链**：执行技术方案发布环节留下的「待回写内容」
    - Story → Tech Solution 链接
    - （spike 场景）把 spike 结论以评论形式写到 spike ticket

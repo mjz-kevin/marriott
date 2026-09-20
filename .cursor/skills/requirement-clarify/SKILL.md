@@ -6,7 +6,7 @@ description: >-
   当用户粘贴原始需求、会议纪要或一句话想法，并要求澄清、检查完整性或撰写 PRD 时使用；
   触发词：需求澄清 / 需求是否完整 / 帮我提问 / 澄清一下 / clarify requirements。
 metadata:
-  agent: Eval Agent, Tech Solution Agent
+  agent: Eval Agent
 ---
 
 # Requirement Clarify — 需求澄清

@@ -11,17 +11,24 @@ upload_confluence_v2.py — 将本地 Markdown 发布到 Confluence（storage �
   - 目录层级（文件夹模式，--root/--epic/--kind）：查询 epic 的 Jira 父项自适应分层，
     有父项为 root → {epic_parent} → {epic} → {epic}-PRD | {epic}-Tech Solution（四级），
     无父项省略 {epic_parent} 层（三级）；缺失文件夹自动建容器页。--epic-parent 可覆盖
-  - mermaid flowchart -> SVG（纯标准库自绘，Windows/macOS/Linux 通用），作附件 + <ac:image> 内联；
-    渲染失败时退化为 code 宏加文字兜底，并在结果中标注 mermaid_pending
+  - mermaid 渲染：优先 mmdc（@mermaid-js/mermaid-cli）出高分辨率 PNG（支持 flowchart/sequence/
+    gantt 等全图类型），本机无 node/npx 或渲染失败时回退纯标准库自绘 SVG（仅 flowchart/graph）；
+    作附件 + <ac:image> 内联。两条路径都失败时退化为 code 宏加文字兜底，结果中标注 mermaid_pending。
+    文档含 mermaid 且未加 --allow-degraded-diagrams 时，强制要求 mmdc 可用，否则阻断发布
   - 完整性统计：章节数(h2)/Story 数/AC 条数，供 skill 与本地对照
   - 全程 UTF-8
 
 用法:
-  # 文件夹模式（推荐）：自动建 epic 二级夹与 PRD/Tech Solution 三级夹
-  python upload_confluence_v2.py --md <md> --space CMI --root <根页ID> --epic <Jira Epic key，如 CNAPP-5661> --kind prd --title <标题>
+  # 文件夹模式（推荐）：在 root 下自适应建 {epic_parent} → {epic} → {epic}-PRD|Tech Solution 文件夹
+  python upload_confluence_v2.py --md <md> --space <spaceKey> --root <根页ID> \
+      --epic <Jira Epic key，如 CNAPP-5661> --kind prd --title <标题>
+  #   --epic-parent 可覆盖 epic 之上的归档层：给定 key（如 PORT-1301）→ 四级；
+  #   省略则查询 Jira 取直接父项；值为 none 时强制三级（省略 {epic_parent} 层）
   # 旧模式：直接指定父页
-  python upload_confluence_v2.py --md <md> --space CMI --parent <id> --title <标题>
-      [--mcp <mcp.json>] [--version-msg <msg>] [--dry-run]
+  python upload_confluence_v2.py --md <md> --space <spaceKey> --parent <id> --title <标题>
+  # 通用可选:
+      [--epic-parent <key|none>] [--mcp <mcp.json>] [--version-msg <msg>] [--dry-run]
+      [--allow-degraded-diagrams] [--check-env]
 退出码: 0 成功 / 非 0 失败。结果 JSON 打印到 stdout。
 """
 import argparse, base64, html, json, os, platform, re, shutil, ssl, subprocess, sys, tempfile, uuid
@@ -76,6 +83,20 @@ def _inline(s):
     return s
 
 
+def _cell(s):
+    """表格单元格：支持字面 <br>/<br/>/<br /> 换行（先占位，_inline 转义后还原）。"""
+    s = re.sub(r"<br\s*/?>", "\x00BR\x00", s, flags=re.I)
+    s = _inline(s)
+    return s.replace("\x00BR\x00", "<br/>")
+
+
+def _split_cells(row):
+    """按未转义的 | 切分表格行；\\| 视为单元格内的字面竖线。"""
+    row = row.strip().strip("|")
+    parts = re.split(r"(?<!\\)\|", row)
+    return [p.strip().replace("\\|", "|") for p in parts]
+
+
 def md_to_storage(md_text):
     """返回 (storage_html, mermaid_blocks, images, stats)。
     mermaid 用 [[MERMAID_n]] 占位；本地图片用 [[IMAGE_n]] 占位。"""
@@ -117,24 +138,66 @@ def md_to_storage(md_text):
             continue
         if line.strip().startswith("|") and i + 1 < n and re.match(r"^\s*\|[\s:|\-]+\|\s*$", lines[i + 1]):
             flush()
-            header = [c.strip() for c in line.strip().strip("|").split("|")]
+            header = _split_cells(line)
             i += 2; rows = []
             while i < n and lines[i].strip().startswith("|"):
-                rows.append([c.strip() for c in lines[i].strip().strip("|").split("|")]); i += 1
-            t = ["<table><tbody><tr>"] + [f"<th><p>{_inline(h)}</p></th>" for h in header] + ["</tr>"]
+                rows.append(_split_cells(lines[i])); i += 1
+            t = ["<table><tbody><tr>"] + [f"<th><p>{_cell(h)}</p></th>" for h in header] + ["</tr>"]
             for r in rows:
-                t.append("<tr>" + "".join(f"<td><p>{_inline(c)}</p></td>" for c in r) + "</tr>")
+                t.append("<tr>" + "".join(f"<td><p>{_cell(c)}</p></td>" for c in r) + "</tr>")
             t.append("</tbody></table>"); out.append("".join(t)); continue
         if line.strip().startswith(">"):
             flush(); q = [re.sub(r"^\s*>\s?", "", line)]; i += 1
             while i < n and lines[i].strip().startswith(">"):
                 q.append(re.sub(r"^\s*>\s?", "", lines[i])); i += 1
             out.append("<blockquote><p>" + _inline(" ".join(q)) + "</p></blockquote>"); continue
-        if re.match(r"^\s*[-*]\s+", line):
-            flush(); items = []
-            while i < n and re.match(r"^\s*[-*]\s+", lines[i]):
-                items.append(re.sub(r"^\s*[-*]\s+", "", lines[i])); i += 1
-            out.append("<ul>" + "".join(f"<li><p>{_inline(it)}</p></li>" for it in items) + "</ul>"); continue
+        lm = re.match(r"^(\s*)([-*]|\d+\.)\s+(.*)$", line)
+        if lm:
+            flush()
+            # 收集连续列表行（含缩进），构建嵌套 <ul>/<ol>
+            rows = []  # (indent:int, ordered:bool, text:str)
+            while i < n:
+                m2 = re.match(r"^(\s*)([-*]|\d+\.)\s+(.*)$", lines[i])
+                if not m2:
+                    break
+                indent = len(m2.group(1).expandtabs(4))
+                ordered = m2.group(2).endswith(".")
+                text = m2.group(3); i += 1
+                # 续行：缩进的非空、非列表、非表格/引用/代码/图片行，并入当前项
+                while i < n:
+                    nxt = lines[i]
+                    if nxt.strip() == "":
+                        break
+                    if re.match(r"^(\s*)([-*]|\d+\.)\s+", nxt):
+                        break
+                    if re.match(r"^\s*(\||>|```|#|!\[)", nxt):
+                        break
+                    if len(nxt) - len(nxt.lstrip()) == 0:
+                        break  # 无缩进 = 新段落，非续行
+                    text += " " + nxt.strip(); i += 1
+                rows.append((indent, ordered, text))
+            # 按缩进用栈组装；每层记录 (indent, ordered)
+            html_out = []
+            stack = []  # list of (indent, ordered)
+            for indent, ordered, text in rows:
+                while stack and indent < stack[-1][0]:
+                    html_out.append("</li></ol>" if stack[-1][1] else "</li></ul>")
+                    stack.pop()
+                if stack and indent == stack[-1][0]:
+                    html_out.append("</li>")  # 关闭同层上一个 li
+                    tag = "ol" if ordered else "ul"
+                    if stack[-1][1] != ordered:  # 同层列表类型切换
+                        html_out.append(f"</{'ol' if stack[-1][1] else 'ul'}><{tag}>")
+                        stack[-1] = (indent, ordered)
+                else:
+                    tag = "ol" if ordered else "ul"
+                    html_out.append(f"<{tag}>")
+                    stack.append((indent, ordered))
+                html_out.append(f"<li><p>{_inline(text)}</p>")
+            while stack:
+                html_out.append("</li></ol>" if stack[-1][1] else "</li></ul>")
+                stack.pop()
+            out.append("".join(html_out)); continue
         if line.strip() == "":
             flush(); i += 1; continue
         para.append(line.strip()); i += 1
@@ -312,7 +375,7 @@ def render_mermaid(code, out_base):
     失败回退纯标准库自绘 SVG（仅 flowchart）。
 
     out_base 为不含扩展名的输出路径前缀。返回 (ok, engine, out_path, content_type)。
-    engine ∈ {"mmdc", "fallback", ""}。回退仅能处理 flowchart；对 sequenceDiagram 等
+    engine ∈ {"mmdc", "fallback", ""}。回退仅能处理 flowchart/graph；对 sequenceDiagram 等
     非 flowchart 语法回退会失败，从而计入 mermaid_pending，避免假成功。
     """
     png = out_base + ".png"
@@ -525,6 +588,10 @@ def replace_images(body, images, page_id, base_url, auth, md_path):
             repl = f'<blockquote><p>（图未内联：{html.escape(src)}）</p></blockquote>'
         body = body.replace(token, repl)
     return body, pending
+
+
+def find_page(base_url, auth, space, parent, title):
+    """旧模式（--parent）查重：在 parent 的所有后代中按标题精确匹配（CQL ancestor 递归）。"""
     cql = f'ancestor = {parent} AND type = page AND title = "{title}" AND space = {space}'
     url = f"{base_url}/rest/api/content/search?cql=" + urllib.parse.quote(cql) + "&limit=5"
     st, data = api("GET", url, auth)
@@ -650,13 +717,13 @@ def main():
     ap.add_argument("--parent", default=None,
                     help="直接指定父页 ID（旧模式）。与 --root/--epic/--kind 二选一。")
     ap.add_argument("--root", default=None,
-                    help="一级根目录页 ID（Mobile Team Requirement Materials）。与 --epic/--kind 配套。")
-    ap.add_argument("--epic", default=None, help="二级 epic 文件夹名，取 Jira Epic key（如 CNAPP-5661），不用功能名或中文 slug。")
+                    help="根目录页 ID（profile 的 parent_pages.root）。与 --epic/--kind 配套。")
+    ap.add_argument("--epic", default=None, help="epic 文件夹名，取 Jira Epic key（如 CNAPP-5661），不用功能名或中文 slug。")
     ap.add_argument("--epic-parent", dest="epic_parent", default=None,
                     help="Epic 父项 key，作为 epic 之上一级的归档文件夹（如 PORT-1301）。"
                          "省略时查询 Jira 取直接父项；值为 none 时强制无父项，退回三级结构。")
     ap.add_argument("--kind", default=None, choices=["prd", "tech_solution"],
-                    help="决定三级文件夹：prd→{epic}-PRD，tech_solution→{epic}-Tech Solution。")
+                    help="决定叶子文件夹后缀：prd→{epic}-PRD，tech_solution→{epic}-Tech Solution。")
     ap.add_argument("--title", required=True)
     ap.add_argument("--mcp", default=None)
     ap.add_argument("--version-msg", default="Publish from local doc")

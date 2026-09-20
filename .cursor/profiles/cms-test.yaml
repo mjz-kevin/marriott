@@ -9,7 +9,13 @@ mcp:
     issue_type: "故事"
     initial_status: Backlog
     agile_team: ""       # 空 = 无默认，人工填写
-    labels: {}           # 空 = 无枚举规则，人工填写
+    labels:                # CMS 无 business_domain 等枚举门禁，其余标签人工填写
+      case_sensitive: true
+      auto_fill: [ai_provenance]
+      ai_provenance:       # 溯源标签：凡经 agent 创建/同步的 Jira，建单时恒定自动打上
+        auto_apply: always # 无条件添加，不依赖需求内容
+        select: unique
+        values: [AIGenerated]   # 固定值（无空格：Jira label 不允许空格，否则会被拆成两个标签）
     links: [prd, figma, tech_solution]
 
   confluence:
@@ -17,17 +23,19 @@ mcp:
     space: DBU4
     parent_pages:
       # 文件夹模式（当前）：一级根目录页 ID（folder 类型，与 app-test 一致）。
-      # 发布脚本在此根下自动建/找 二级 {epic} → 三级 {epic}-PRD / {epic}-Tech Solution。
-      # {epic} 一律取 Jira Epic key（如 CNAPP-5661），不用功能名或中文 slug，保证归档夹稳定可检索。
+      # 发布脚本在此根下自动建/找 二级 {epic_parent} → 三级 {epic} → 四级 {epic}-PRD / {epic}-Tech Solution。
+      # {epic_parent} 取 Epic 的父级 Jira key（Initiative/计划，如 PORT-352）；{epic} 取 Jira Epic key（如 CNAPP-5661）。
+      # 一律用 Jira key，不用功能名或中文 slug，保证归档夹稳定可检索。
       root: "4205314140"             # 一级根目录页 ID（AI SDLC Poilt Test，test/DBU4，folder 类型，与 app-test 一致）
       # 旧模式回退（直接父页，仅当未走文件夹模式时使用）：
       prd: "4147151138"
       tech_solution: "4198531132"
-    folder_layout:                   # 文件夹层级约定（供 skill 说明用；实际由脚本 --root/--epic/--kind 落地）
-      level1: "AI SDLC Poilt Test"                   # 一级：固定根目录（即 parent_pages.root）
-      level2: "{epic}"                              # 二级：Jira Epic key（如 CNAPP-5661）
-      level3_prd: "{epic}-PRD"                      # 三级：PRD 归档夹
-      level3_tech_solution: "{epic}-Tech Solution"  # 三级：技术方案归档夹
+    folder_layout:                   # 文件夹层级约定（供 skill 说明用；实际由脚本 --root/--epic-parent/--epic/--kind 落地）
+      level1: "AI SDLC Poilt Test"                  # 一级：固定根目录（即 parent_pages.root）
+      level2: "{epic_parent}"                       # 二级：Epic 的父级 Jira key（Initiative/计划，如 PORT-352）
+      level3: "{epic}"                              # 三级：Jira Epic key（如 CNAPP-5661）
+      level4_prd: "{epic}-PRD"                      # 四级：PRD 归档夹
+      level4_tech_solution: "{epic}-Tech Solution"  # 四级：技术方案归档夹
     naming:
       prd: CMS-PRD-{feature_name}-{date}-{version}
       tech_solution_prd: CMS-TS-Prd-{feature_name}-{date}-{version}
