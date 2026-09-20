@@ -38,11 +38,52 @@ from collections import deque
 
 # ============================= npx 解析（自包含、跨平台） =============================
 # 本段不依赖任何外部模块，随脚本一起分发。解析 npx 的优先级：
-#   1) 系统 PATH
-#   2) 自动扫描固定运行时目录 C:/AI-SDLC/runtime（可用环境变量 AI_SDLC_RUNTIME 覆盖）下的 node-*
-#   3) 默认名 "npx"
+#   1) <repo>/.cursor/setup.json 当前平台段/common 段的绝对路径
+#   2) 系统 PATH
+#   3) 自动扫描固定运行时目录 C:/AI-SDLC/runtime（可用环境变量 AI_SDLC_RUNTIME 覆盖）下的 node-*
+#   4) 默认名 "npx"
 # 详细的多工具自检见 env-setup skill 的 scripts/env-setup.py。
 _DEFAULT_RUNTIME_ROOT = "C:/AI-SDLC/runtime"
+
+
+def _platform_key():
+    if sys.platform == "win32":
+        return "windows"
+    if sys.platform == "darwin":
+        return "macos"
+    return "linux"
+
+
+def _repo_root():
+    cur = os.path.dirname(os.path.abspath(__file__))
+    while True:
+        if os.path.isdir(os.path.join(cur, ".cursor")) or os.path.isdir(os.path.join(cur, ".git")):
+            return cur
+        parent = os.path.dirname(cur)
+        if parent == cur:
+            return os.path.dirname(os.path.abspath(__file__))
+        cur = parent
+
+
+def _configured_npx():
+    """从 setup.json 读当前平台段或 common 段的 npx 绝对路径。"""
+    p = os.path.join(_repo_root(), ".cursor", "setup.json")
+    if not os.path.isfile(p):
+        return ""
+    try:
+        with open(p, encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception:
+        return ""
+    if not isinstance(data, dict):
+        return ""
+    for section in (_platform_key(), "common"):
+        seg = data.get(section)
+        if isinstance(seg, dict):
+            val = seg.get("npx")
+            if isinstance(val, str) and val.strip():
+                return os.path.expanduser(val.strip())
+    return ""
 
 
 def _scan_runtime_npx():
@@ -65,6 +106,9 @@ def _scan_runtime_npx():
 
 def _resolve_npx():
     """返回可用的 npx 路径（保证非空），供直接传给 subprocess。"""
+    configured = _configured_npx()
+    if configured:
+        return configured
     hit = shutil.which("npx")
     if hit:
         return hit
@@ -75,7 +119,10 @@ def _resolve_npx():
 
 
 def _npx_available():
-    """npx 是否真的可用（PATH 命中，或运行时目录扫到）。"""
+    """npx 是否真的可用（setup 配置绝对路径存在、PATH 命中、或运行时目录扫到）。"""
+    configured = _configured_npx()
+    if configured:
+        return os.path.isfile(configured) or os.access(configured, os.X_OK)
     if shutil.which("npx"):
         return True
     return bool(_scan_runtime_npx())

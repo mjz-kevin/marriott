@@ -5,13 +5,14 @@
 供环境准备阶段自检与排障。在 Windows 绿色版运行时（未加入系统 PATH）也能零配置识别。
 
 解析优先级（对每个工具依次尝试，命中即返回）：
-  1. 系统 PATH 中的默认名（python→python3、node、npm、npx）
-  2. 自动扫描固定运行时目录：默认 C:/AI-SDLC/runtime（可用环境变量 AI_SDLC_RUNTIME 覆盖），
+  1. <repo>/.cursor/setup.json 中「当前平台段」或 common 段的绝对路径（手动覆盖用）
+  2. 系统 PATH 中的默认名（python→python3、node、npm、npx）
+  3. 自动扫描固定运行时目录：默认 C:/AI-SDLC/runtime（可用环境变量 AI_SDLC_RUNTIME 覆盖），
      匹配其下 python-* 与 node-* 目录里的可执行文件——这是 Windows 绿色版的零配置路径
-  3. 都找不到时返回默认名字符串，交由调用方在执行阶段自然报错
+  4. 都找不到时返回默认名字符串，交由调用方在执行阶段自然报错
 
 即：把打包好的绿色版解压到 C:/AI-SDLC/runtime/ 后无需填任何配置；
-运行时放在别处时，设环境变量 AI_SDLC_RUNTIME 指向其根目录即可。
+运行时放在别处时，设环境变量 AI_SDLC_RUNTIME 指向其根目录，或在 setup.json 写绝对路径覆盖。
 路径统一用正斜杠 /，Windows 下也有效。
 
 命令行自检：
@@ -41,6 +42,45 @@ def platform_key() -> str:
 def runtime_root() -> str:
     """返回绿色版运行时根目录：优先环境变量 AI_SDLC_RUNTIME，否则默认 C:/AI-SDLC/runtime。"""
     return os.environ.get("AI_SDLC_RUNTIME", _DEFAULT_RUNTIME_ROOT)
+
+
+def find_repo_root(start=None) -> str:
+    """从给定位置（默认本文件所在目录）向上定位仓库根（含 .cursor/ 或 .git/）。"""
+    here = os.path.abspath(start or os.path.dirname(os.path.abspath(__file__)))
+    cur = here
+    while True:
+        if os.path.isdir(os.path.join(cur, ".cursor")) or os.path.isdir(os.path.join(cur, ".git")):
+            return cur
+        parent = os.path.dirname(cur)
+        if parent == cur:
+            return here
+        cur = parent
+
+
+def _load_config() -> dict:
+    """读 <repo>/.cursor/setup.json；缺失或解析失败则返回空。"""
+    p = os.path.join(find_repo_root(), ".cursor", "setup.json")
+    if os.path.isfile(p):
+        try:
+            with open(p, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                return data
+        except Exception:
+            pass
+    return {}
+
+
+def _configured(tool: str) -> str:
+    """从 setup 配置取绝对路径：先当前平台段，再 common 段。忽略空串与 _ 开头注释键。"""
+    cfg = _load_config()
+    for section in (platform_key(), "common"):
+        seg = cfg.get(section)
+        if isinstance(seg, dict):
+            val = seg.get(tool)
+            if isinstance(val, str) and val.strip():
+                return os.path.expanduser(val.strip())
+    return ""
 
 
 def _default_name(tool: str) -> str:
@@ -109,6 +149,9 @@ def resolve(tool: str) -> str:
     """解析单个工具，返回可执行文件路径或默认名（保证非空，供直接传给 subprocess）。"""
     if tool not in _TOOLS:
         raise ValueError(f"未知工具：{tool}（支持 {', '.join(_TOOLS)}）")
+    configured = _configured(tool)
+    if configured:
+        return configured
     hit = _which(_default_name(tool))
     if hit:
         return hit
@@ -119,7 +162,9 @@ def resolve(tool: str) -> str:
 
 
 def source(tool: str) -> str:
-    """返回解析来源：path（系统 PATH）/ runtime（自动扫描）/ default（都没找到）。"""
+    """返回解析来源：configured（setup.json）/ path（系统 PATH）/ runtime（自动扫描）/ default（都没找到）。"""
+    if _configured(tool):
+        return "configured"
     if _which(_default_name(tool)):
         return "path"
     if _scan_runtime(tool):
@@ -128,7 +173,10 @@ def source(tool: str) -> str:
 
 
 def npx_available() -> bool:
-    """npx 是否真的可用（PATH 命中，或运行时目录扫到）。"""
+    """npx 是否真的可用（setup 配置绝对路径存在、PATH 命中、或运行时目录扫到）。"""
+    configured = _configured("npx")
+    if configured:
+        return os.path.isfile(configured) or os.access(configured, os.X_OK)
     if _which("npx"):
         return True
     return bool(_scan_runtime("npx"))
@@ -143,13 +191,14 @@ def _main(argv):
     if as_json:
         print(json.dumps({
             "platform": platform_key(),
+            "repo_root": find_repo_root(),
             "runtime_root": runtime_root(),
             "tools": _as_dict(),
         }, ensure_ascii=False, indent=2))
         return 0
     print(f"平台：{platform_key()}")
     print(f"运行时目录：{runtime_root()}    {'(存在)' if os.path.isdir(runtime_root()) else '(不存在，跳过自动扫描)'}")
-    print("解析结果（来源：path 系统PATH / runtime 自动扫描 / default 都没找到）：")
+    print("解析结果（来源：configured 配置 / path 系统PATH / runtime 自动扫描 / default 都没找到）：")
     for t in _TOOLS:
         print(f"  - {t:<6} = {resolve(t)}    [{source(t)}]")
     return 0

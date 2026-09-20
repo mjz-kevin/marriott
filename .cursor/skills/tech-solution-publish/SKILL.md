@@ -112,7 +112,7 @@ python .cursor/skills/tech-solution-publish/scripts/upload_confluence_v2.py --md
 
 先执行 `--dry-run`，脚本不写入 Confluence，仅输出标题、`stats`（章节 h2 数、Story 数、AC 条数、mermaid 图数）、`storage_chars` 与 `target`（root/epic_parent/epic/kind）。核对 `stats` 与本地确认版一致、`target.epic` 指向预期 epic，并核对 `target.epic_parent`（脚本自动查 Jira 得到的父项，有则四级归档、`null` 则三级）符合预期后再正式上传。
 
-> **命令写法（跨平台统一）**：命令为单行、不含续行符，可在 Windows PowerShell / CMD、macOS、Linux 直接运行。下文示例中的 `python` 是启动器占位符：macOS / Linux 用 PATH 里的 `python` / `python3`；Windows 绿色版（Python 未加入 PATH）用运行时目录里的解释器 `C:/AI-SDLC/runtime/python-*/python.exe`。脚本运行后会自动解析 `npx`（渲染 mermaid 用）——依次尝试系统 PATH 与运行时目录 `C:/AI-SDLC/runtime/node-*`，无需在命令里指定 Node 路径。若不确定本机解释器/工具路径，先运行 `python .cursor/skills/env-setup/scripts/env-setup.py` 查看解析结果。
+> **命令写法（跨平台统一）**：命令为单行、不含续行符，可在 Windows PowerShell / CMD、macOS、Linux 直接运行。下文示例中的 `python` 是启动器占位符：macOS / Linux 用 PATH 里的 `python` / `python3`；Windows 绿色版（Python 未加入 PATH）用环境准备环节自检输出的 Python 解释器路径。脚本运行后会自动解析 `npx`（渲染 mermaid 用），无需在命令里指定 Node 路径。若不确定本机解释器/工具路径，先运行 `python .cursor/skills/env-setup/scripts/env-setup.py` 查看解析结果。
 
 ```bash
 python .cursor/skills/tech-solution-publish/scripts/upload_confluence_v2.py --md "<技术方案.md 路径>" --space "<space>" --root "<parent_pages.root>" --epic "<Jira Epic key，如 CNAPP-5661>" --kind tech_solution --title "<按 mode 渲染的标题>" --dry-run

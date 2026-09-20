@@ -97,7 +97,7 @@ python scripts/config.py create <name>       # generate whitelists/<name>.json
 python scripts/config.py path                # print the selection file path
 ```
 
-On Windows, if `python` is unavailable, use `py -3` or `python3`.
+On Windows, if `python` isn't on `PATH` (for example, the portable build), use the Python interpreter path from the env-setup self-check output.
 
 ## scan.py options
 

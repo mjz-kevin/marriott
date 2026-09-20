@@ -26,7 +26,7 @@ each repo is asked only once**.
 
 ## Cross-platform notes (macOS / Windows)
 
-- The scripts depend only on the **Python 3 standard library**. Prefer the `python` / `python3` on your system `PATH`. If Python isn't on `PATH` (for example, the portable Windows build), use the interpreter shipped in the runtime directory: `C:/AI-SDLC/runtime/python-*/python.exe` (see the self-check output from the environment-setup step).
+- The scripts depend only on the **Python 3 standard library**. Prefer the `python` / `python3` on your system `PATH`. If Python isn't on `PATH` (for example, the portable Windows build), use the Python interpreter path from the env-setup self-check output.
 - Location of the memory file (can be overridden with `PROFILE_SELECT_HOME`):
   - **Windows:** `%APPDATA%\ai-sdlc-profile-select\selection.json`
   - **macOS / Linux:** `~/.config/ai-sdlc-profile-select/selection.json`
