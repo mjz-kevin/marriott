@@ -24,7 +24,7 @@ description: >-
 
 ## 跨平台说明(macOS / Windows)
 
-- 脚本仅依赖 **Python 3 标准库**。调用时优先 `python`,不可用再试 `python3` 或 `py -3`。
+- 脚本仅依赖 **Python 3 标准库**。调用时用系统 PATH 里的 `python` / `python3`;若 Python 未加入 PATH(如 Windows 绿色版),用运行时目录里的解释器 `C:/AI-SDLC/runtime/python-*/python.exe`(参见环境准备环节的自检输出)。
 - 记忆文件位置(可用 `PROFILE_SELECT_HOME` 覆盖):
   - **Windows:** `%APPDATA%\ai-sdlc-profile-select\selection.json`
   - **macOS / Linux:** `~/.config/ai-sdlc-profile-select/selection.json`

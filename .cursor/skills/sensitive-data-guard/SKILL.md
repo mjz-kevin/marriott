@@ -17,7 +17,7 @@ description: >-
 ## 跨平台说明(macOS / Windows)
 
 - 脚本仅依赖 **Python 3 标准库**,macOS 与 Windows 均可运行。
-- 调用脚本时优先用 `python`;若不可用再试 `python3` 或 `py -3`(Windows)。
+- 调用脚本时用系统 PATH 里的 `python` / `python3`;若 Python 未加入 PATH(如 Windows 绿色版),用运行时目录里的解释器 `C:/AI-SDLC/runtime/python-*/python.exe`(参见环境准备环节的自检输出)。
 - **优先使用 `--file` 或 `--text` 扫描**,避免依赖 shell 管道(Windows cmd/PowerShell
   对管道支持不一致)。
 - 路径在 Python 中可用正斜杠 `/`,Windows 上也有效。
