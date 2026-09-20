@@ -29,6 +29,51 @@ import urllib.request, urllib.error, urllib.parse
 from collections import deque
 
 
+# ============================= npx 解析（自包含、跨平台） =============================
+# 本段不依赖任何外部模块，随脚本一起分发。解析 npx 的优先级：
+#   1) 系统 PATH
+#   2) 自动扫描固定运行时目录 C:/AI-SDLC/runtime（可用环境变量 AI_SDLC_RUNTIME 覆盖）下的 node-*
+#   3) 默认名 "npx"
+# 详细的多工具自检见 env-setup skill 的 scripts/env-setup.py。
+_DEFAULT_RUNTIME_ROOT = "C:/AI-SDLC/runtime"
+
+
+def _scan_runtime_npx():
+    """扫描固定运行时目录下 node-* 的 npx（Windows: npx.cmd；*nix: bin/npx）。"""
+    root = os.environ.get("AI_SDLC_RUNTIME", _DEFAULT_RUNTIME_ROOT)
+    if not root or not os.path.isdir(root):
+        return ""
+    import glob
+    dirs = sorted(d for d in glob.glob(os.path.join(root, "node-*")) if os.path.isdir(d))
+    if not dirs:
+        return ""
+    base = dirs[-1]
+    cands = ([os.path.join(base, "npx.cmd")] if sys.platform == "win32"
+             else [os.path.join(base, "bin", "npx"), os.path.join(base, "npx")])
+    for c in cands:
+        if os.path.isfile(c):
+            return c.replace("\\", "/")
+    return ""
+
+
+def _resolve_npx():
+    """返回可用的 npx 路径（保证非空），供直接传给 subprocess。"""
+    hit = shutil.which("npx")
+    if hit:
+        return hit
+    scanned = _scan_runtime_npx()
+    if scanned:
+        return scanned
+    return "npx"
+
+
+def _npx_available():
+    """npx 是否真的可用（PATH 命中，或运行时目录扫到）。"""
+    if shutil.which("npx"):
+        return True
+    return bool(_scan_runtime_npx())
+
+
 # ============================= 凭证 & HTTP =============================
 def load_creds(mcp_path):
     with open(mcp_path, encoding="utf-8") as f:
@@ -264,7 +309,7 @@ def render_mermaid_mmdc(code, out_path, scale=3):
     global _MMDC_UNAVAILABLE
     if _MMDC_UNAVAILABLE:
         return False
-    npx = shutil.which("npx")
+    npx = _resolve_npx() if _npx_available() else None
     if not npx:
         _MMDC_UNAVAILABLE = True
         return False
@@ -349,7 +394,7 @@ def ensure_mermaid_available():
     既校验 npx/node 存在，也校验能拉起 mermaid-cli 与无头 Chromium（首次需联网下载）。
     不可用则抛 MermaidUnavailable，附带安装指引；发布/更新一律不进行，避免图表降级上线。
     """
-    if not shutil.which("npx"):
+    if not _npx_available():
         raise MermaidUnavailable(
             "图表渲染前置未满足：未找到 npx（Node.js）。\n"
             "本脚本用 mmdc（@mermaid-js/mermaid-cli）渲染 mermaid。\n"
@@ -625,7 +670,7 @@ def main():
 
     # 环境预检：只报告不发布，供 skill 在正式发布前提前暴露"本机能否出图"。
     if args.check_env:
-        has_npx = bool(shutil.which("npx"))
+        has_npx = _npx_available()
         need_mermaid = bool(mermaid_blocks)
         ready = (not need_mermaid) or has_npx or args.allow_degraded_diagrams
         report = {"check_env": True, "mermaid_in_doc": need_mermaid,

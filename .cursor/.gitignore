@@ -1,1 +1,5 @@
 mcp.json
+
+# Python 编译缓存（skill 脚本运行时生成，不提交）
+**/__pycache__/
+*.pyc

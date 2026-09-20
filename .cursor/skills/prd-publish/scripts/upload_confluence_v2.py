@@ -7,8 +7,10 @@ upload_confluence_v2.py — 将本地 Markdown 发布到 Confluence（storage �
 特性：
   - 凭证从 .cursor/mcp.json 的 confluenceRest 读取（base_url/email/api_token）
   - Markdown -> Confluence storage HTML（标题/表格/列表/引用/代码/mermaid 占位/行内格式）
-  - 按标题在指定父目录下幂等查重：无则新建，有则更新并升版本
-  - 目录层级（文件夹模式，--root/--epic/--kind）：查询 epic 的 Jira 父项自适应分层，
+  - 表格列宽自适应：按各列内容视觉宽度生成 <colgroup> 像素列宽 + data-table-width
+    （Confluence Cloud 忽略百分比列宽，必须用像素且各列之和等于 data-table-width）
+  - 在 {epic}-{PRD|Tech Solution} 叶子夹下按标题幂等查重：无则新建，有则更新并升版本
+  - 目录层级（--root/--epic/--kind）：查询 epic 的 Jira 父项自适应分层，
     有父项为 root → {epic_parent} → {epic} → {epic}-PRD | {epic}-Tech Solution（四级），
     无父项省略 {epic_parent} 层（三级）；缺失文件夹自动建容器页。--epic-parent 可覆盖
   - mermaid 渲染：优先 mmdc（@mermaid-js/mermaid-cli）出高分辨率 PNG（支持 flowchart/sequence/
@@ -19,13 +21,11 @@ upload_confluence_v2.py — 将本地 Markdown 发布到 Confluence（storage �
   - 全程 UTF-8
 
 用法:
-  # 文件夹模式（推荐）：在 root 下自适应建 {epic_parent} → {epic} → {epic}-PRD|Tech Solution 文件夹
+  # 在 root 下自适应建 {epic_parent} → {epic} → {epic}-PRD|Tech Solution 文件夹并发布
   python upload_confluence_v2.py --md <md> --space <spaceKey> --root <根页ID> \
       --epic <Jira Epic key，如 CNAPP-5661> --kind prd --title <标题>
   #   --epic-parent 可覆盖 epic 之上的归档层：给定 key（如 PORT-1301）→ 四级；
   #   省略则查询 Jira 取直接父项；值为 none 时强制三级（省略 {epic_parent} 层）
-  # 旧模式：直接指定父页
-  python upload_confluence_v2.py --md <md> --space <spaceKey> --parent <id> --title <标题>
   # 通用可选:
       [--epic-parent <key|none>] [--mcp <mcp.json>] [--version-msg <msg>] [--dry-run]
       [--allow-degraded-diagrams] [--check-env]
@@ -34,6 +34,51 @@ upload_confluence_v2.py — 将本地 Markdown 发布到 Confluence（storage �
 import argparse, base64, html, json, os, platform, re, shutil, ssl, subprocess, sys, tempfile, uuid
 import urllib.request, urllib.error, urllib.parse
 from collections import deque
+
+
+# ============================= npx 解析（自包含、跨平台） =============================
+# 本段不依赖任何外部模块，随脚本一起分发。解析 npx 的优先级：
+#   1) 系统 PATH
+#   2) 自动扫描固定运行时目录 C:/AI-SDLC/runtime（可用环境变量 AI_SDLC_RUNTIME 覆盖）下的 node-*
+#   3) 默认名 "npx"
+# 详细的多工具自检见 env-setup skill 的 scripts/env-setup.py。
+_DEFAULT_RUNTIME_ROOT = "C:/AI-SDLC/runtime"
+
+
+def _scan_runtime_npx():
+    """扫描固定运行时目录下 node-* 的 npx（Windows: npx.cmd；*nix: bin/npx）。"""
+    root = os.environ.get("AI_SDLC_RUNTIME", _DEFAULT_RUNTIME_ROOT)
+    if not root or not os.path.isdir(root):
+        return ""
+    import glob
+    dirs = sorted(d for d in glob.glob(os.path.join(root, "node-*")) if os.path.isdir(d))
+    if not dirs:
+        return ""
+    base = dirs[-1]
+    cands = ([os.path.join(base, "npx.cmd")] if sys.platform == "win32"
+             else [os.path.join(base, "bin", "npx"), os.path.join(base, "npx")])
+    for c in cands:
+        if os.path.isfile(c):
+            return c.replace("\\", "/")
+    return ""
+
+
+def _resolve_npx():
+    """返回可用的 npx 路径（保证非空），供直接传给 subprocess。"""
+    hit = shutil.which("npx")
+    if hit:
+        return hit
+    scanned = _scan_runtime_npx()
+    if scanned:
+        return scanned
+    return "npx"
+
+
+def _npx_available():
+    """npx 是否真的可用（PATH 命中，或运行时目录扫到）。"""
+    if shutil.which("npx"):
+        return True
+    return bool(_scan_runtime_npx())
 
 
 # ============================= 凭证 & HTTP =============================
@@ -97,6 +142,68 @@ def _split_cells(row):
     return [p.strip().replace("\\|", "|") for p in parts]
 
 
+def _visual_len(s):
+    """去掉常见 markdown 行内标记后，按 CJK 计 2、其余计 1 估算视觉宽度。"""
+    s = re.sub(r"<br\s*/?>", " ", s, flags=re.I)
+    s = re.sub(r"[`*]", "", s)
+    s = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", s)   # 链接只算显示文字
+    w = 0
+    for ch in s:
+        w += 2 if ord(ch) > 0x2E7F else 1            # CJK/全角约计 2
+    return w
+
+
+def _colgroup(header, rows, table_width=760):
+    """按各列内容的最大视觉宽度自适应生成 <colgroup>（Confluence Cloud 要求像素值，
+    百分比会被忽略导致等宽）。返回 (table_width, colgroup_html)：各列像素之和等于
+    table_width，短列（如「优先级」P0/P1）窄、长文本列宽；用平方根压缩避免超长列吞掉
+    全部宽度。每列宽度不小于「表头本身所需宽度」，避免表头被硬折行（如 UI Component→UI Componen/t）。"""
+    ncol = len(header)
+    if ncol <= 1:
+        return table_width, ""
+    import math
+    widths = []
+    for c in range(ncol):
+        cells = [header[c] if c < len(header) else ""]
+        cells += [r[c] if c < len(r) else "" for r in rows]
+        widths.append(max((_visual_len(x) for x in cells), default=1))
+    # 平方根压缩：削弱极长列的主导，同时拉高极短列的占比
+    weights = [math.sqrt(max(w, 1)) for w in widths]
+    total = sum(weights) or 1
+    # 每列下限：全局最小值与「表头所需像素」取大，保证表头单行不折断。
+    # 表头所需像素 ≈ 视觉单位数 × 每单位像素 + 左右内边距（Confluence 单元格约 16px）。
+    PX_PER_UNIT = 9
+    CELL_PAD = 18
+    floor_global = max(48, int(table_width * 0.05))
+    min_px = [max(floor_global, _visual_len(header[c] if c < len(header) else "") * PX_PER_UNIT + CELL_PAD)
+              for c in range(ncol)]
+    # 若各列下限之和已超过 table_width，等比放大 table_width 容纳（宽表允许更宽）。
+    if sum(min_px) > table_width:
+        table_width = sum(min_px)
+    raw = [w / total * table_width for w in weights]
+    px = [max(min_px[c], int(round(raw[c]))) for c in range(ncol)]
+    # 修正总和：多退少补，优先从「离下限最远」的列回收，避免把某列压到表头以下
+    diff = table_width - sum(px)
+    if diff != 0 and px:
+        if diff > 0:
+            widest = max(range(ncol), key=lambda k: px[k])
+            px[widest] += diff
+        else:
+            # 需要收缩：从冗余（px - min_px）最多的列依次扣减，不破坏表头下限
+            need = -diff
+            order = sorted(range(ncol), key=lambda k: px[k] - min_px[k], reverse=True)
+            for k in order:
+                if need <= 0:
+                    break
+                spare = px[k] - min_px[k]
+                take = min(spare, need)
+                px[k] -= take; need -= take
+            if need > 0:  # 仍不足（下限之和≈table_width），并入最宽列
+                px[max(range(ncol), key=lambda k: px[k])] -= need
+    cols = "".join(f'<col style="width: {p}px;"/>' for p in px)
+    return table_width, f"<colgroup>{cols}</colgroup>"
+
+
 def md_to_storage(md_text):
     """返回 (storage_html, mermaid_blocks, images, stats)。
     mermaid 用 [[MERMAID_n]] 占位；本地图片用 [[IMAGE_n]] 占位。"""
@@ -142,7 +249,9 @@ def md_to_storage(md_text):
             i += 2; rows = []
             while i < n and lines[i].strip().startswith("|"):
                 rows.append(_split_cells(lines[i])); i += 1
-            t = ["<table><tbody><tr>"] + [f"<th><p>{_cell(h)}</p></th>" for h in header] + ["</tr>"]
+            tw, cg = _colgroup(header, rows, 760)
+            layout = ' data-layout="full-width"' if tw > 760 else ' data-layout="default"'
+            t = [f'<table data-table-width="{tw}"{layout}>', cg, "<tbody><tr>"] + [f"<th><p>{_cell(h)}</p></th>" for h in header] + ["</tr>"]
             for r in rows:
                 t.append("<tr>" + "".join(f"<td><p>{_cell(c)}</p></td>" for c in r) + "</tr>")
             t.append("</tbody></table>"); out.append("".join(t)); continue
@@ -205,7 +314,7 @@ def md_to_storage(md_text):
     body = "".join(out)
     stats = {
         "h2": len(re.findall(r"^##\s+", md_text, re.M)),
-        "stories": len(re.findall(r"Story\s+S?\d+", md_text)),
+        "stories": len(re.findall(r"^#{2,4}\s+Story\s+\d+", md_text, re.M)),
         "ac": len(re.findall(r"\bAC\s*\d+\b", md_text)),
         "mermaid": len(mermaid),
         "images": len(images),
@@ -335,7 +444,7 @@ def render_mermaid_mmdc(code, out_path, scale=3):
     global _MMDC_UNAVAILABLE
     if _MMDC_UNAVAILABLE:
         return False
-    npx = shutil.which("npx")
+    npx = _resolve_npx() if _npx_available() else None
     if not npx:
         _MMDC_UNAVAILABLE = True
         return False
@@ -420,7 +529,7 @@ def ensure_mermaid_available():
     既校验 npx/node 存在，也校验能拉起 mermaid-cli 与无头 Chromium（首次需联网下载）。
     不可用则抛 MermaidUnavailable，附带安装指引；发布/更新一律不进行，避免图表降级上线。
     """
-    if not shutil.which("npx"):
+    if not _npx_available():
         raise MermaidUnavailable(
             "图表渲染前置未满足：未找到 npx（Node.js）。\n"
             "本脚本用 mmdc（@mermaid-js/mermaid-cli）渲染 mermaid。\n"
@@ -590,18 +699,8 @@ def replace_images(body, images, page_id, base_url, auth, md_path):
     return body, pending
 
 
-def find_page(base_url, auth, space, parent, title):
-    """旧模式（--parent）查重：在 parent 的所有后代中按标题精确匹配（CQL ancestor 递归）。"""
-    cql = f'ancestor = {parent} AND type = page AND title = "{title}" AND space = {space}'
-    url = f"{base_url}/rest/api/content/search?cql=" + urllib.parse.quote(cql) + "&limit=5"
-    st, data = api("GET", url, auth)
-    if st == 200 and isinstance(data, dict) and data.get("results"):
-        return data["results"][0]["id"]
-    return None
-
-
 def _find_direct_child(base_url, auth, parent, title):
-    """在 parent 的直接子项中按精确标题查找（区别于 find_page 的 ancestor 递归查找）。
+    """在 parent 的直接子项中按精确标题查找（ancestor 递归的更精确替代）。
 
     先查 v1 /child/page（page 类型子页）；再用 v2 /folders/{id}/direct-children 兜底，
     以识别新版「Folder」类型的同名子项（v1 child/page 不含 folder）。父级本身可为
@@ -714,15 +813,13 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--md", required=True)
     ap.add_argument("--space", required=True)
-    ap.add_argument("--parent", default=None,
-                    help="直接指定父页 ID（旧模式）。与 --root/--epic/--kind 二选一。")
-    ap.add_argument("--root", default=None,
+    ap.add_argument("--root", required=True,
                     help="根目录页 ID（profile 的 parent_pages.root）。与 --epic/--kind 配套。")
-    ap.add_argument("--epic", default=None, help="epic 文件夹名，取 Jira Epic key（如 CNAPP-5661），不用功能名或中文 slug。")
+    ap.add_argument("--epic", required=True, help="epic 文件夹名，取 Jira Epic key（如 CNAPP-5661），不用功能名或中文 slug。")
     ap.add_argument("--epic-parent", dest="epic_parent", default=None,
                     help="Epic 父项 key，作为 epic 之上一级的归档文件夹（如 PORT-1301）。"
                          "省略时查询 Jira 取直接父项；值为 none 时强制无父项，退回三级结构。")
-    ap.add_argument("--kind", default=None, choices=["prd", "tech_solution"],
+    ap.add_argument("--kind", required=True, choices=["prd", "tech_solution"],
                     help="决定叶子文件夹后缀：prd→{epic}-PRD，tech_solution→{epic}-Tech Solution。")
     ap.add_argument("--title", required=True)
     ap.add_argument("--mcp", default=None)
@@ -735,14 +832,6 @@ def main():
                     help="仅环境预检：检查凭证与（文档含 mermaid 时）Node.js/npx 是否就绪，"
                          "报告结果后退出，不发布。缺失时打印按操作系统的安装指引。")
     args = ap.parse_args()
-
-    use_folder = bool(args.root or args.epic or args.kind)
-    if use_folder:
-        missing = [k for k, v in (("--root", args.root), ("--epic", args.epic), ("--kind", args.kind)) if not v]
-        if missing:
-            raise SystemExit(f"文件夹模式需同时提供 --root/--epic/--kind，缺少：{', '.join(missing)}")
-    elif not args.parent:
-        raise SystemExit("需提供 --parent（旧模式）或 --root/--epic/--kind（文件夹模式）之一")
 
     here = os.path.dirname(os.path.abspath(__file__))
     mcp_path = args.mcp or os.path.abspath(os.path.join(here, "..", "..", "..", "mcp.json"))
@@ -757,7 +846,7 @@ def main():
 
     # 环境预检：只报告不发布，供 skill 在正式发布前提前暴露"本机能否出图"。
     if args.check_env:
-        has_npx = bool(shutil.which("npx"))
+        has_npx = _npx_available()
         need_mermaid = bool(mermaid_blocks)
         ready = (not need_mermaid) or has_npx or args.allow_degraded_diagrams
         report = {"check_env": True, "mermaid_in_doc": need_mermaid,
@@ -774,36 +863,32 @@ def main():
 
     # 解析 epic 父项以确定归档层级：--epic-parent 显式指定优先，值为 none 时强制无父项；
     # 未指定则查询 Jira 取直接父项。有父项时在归档路径插入一级 {epic_parent} 文件夹，否则维持三级。
-    epic_parent = None
-    if use_folder:
-        if args.epic_parent:
-            epic_parent = None if args.epic_parent.strip().lower() == "none" else args.epic_parent.strip()
-        else:
-            epic_parent = get_jira_parent(base_url, auth, args.epic)
+    if args.epic_parent:
+        epic_parent = None if args.epic_parent.strip().lower() == "none" else args.epic_parent.strip()
+    else:
+        epic_parent = get_jira_parent(base_url, auth, args.epic)
 
     result = {"title": args.title, "stats": stats, "base_url": base_url}
 
     if args.dry_run:
         result.update({"dry_run": True, "storage_chars": len(body),
-                       "target": ({"mode": "folder", "root": args.root, "epic_parent": epic_parent,
-                                   "epic": args.epic, "kind": args.kind}
-                                  if use_folder else {"mode": "parent", "parent": args.parent})})
+                       "target": {"mode": "folder", "root": args.root, "epic_parent": epic_parent,
+                                  "epic": args.epic, "kind": args.kind}})
         print(json.dumps(result, ensure_ascii=False, indent=2)); return 0
 
-    if use_folder:
-        parent, ensured = resolve_parent(base_url, auth, args.space, args.root, args.epic, args.kind, epic_parent)
-        result["folders"] = ensured
-        # 文件夹模式下 PRD 页是三级夹的直接子页，用直接子级精确匹配查重
-        # （比 CQL ancestor 更可靠，且父级可能是 folder 类型）
-        existing = _find_direct_child(base_url, auth, parent, args.title)
-    else:
-        parent = args.parent
-        existing = find_page(base_url, auth, args.space, parent, args.title)
+    parent, ensured = resolve_parent(base_url, auth, args.space, args.root, args.epic, args.kind, epic_parent)
+    result["folders"] = ensured
+    # PRD 页是三级夹的直接子页，用直接子级精确匹配查重（比 CQL ancestor 更可靠，父级可能是 folder 类型）
+    existing = _find_direct_child(base_url, auth, parent, args.title)
 
     if existing:
         page_id = existing; result["action"] = "update"
     else:
-        st, data = create_page(base_url, auth, args.space, parent, args.title, body)
+        # 首发先建页拿 page_id（图片/mermaid 作附件必须挂在已存在的页上）；
+        # 建页 body 先把占位符替换为提示文字，避免 update 若失败时页面残留裸 [[MERMAID_n]]/[[IMAGE_n]]。
+        seed = re.sub(r"\[\[(?:MERMAID|IMAGE)_\d+\]\]",
+                      "<blockquote><p>（内容渲染中…）</p></blockquote>", body)
+        st, data = create_page(base_url, auth, args.space, parent, args.title, seed)
         if st not in (200, 201):
             result["error"] = f"create failed: {st} {data}"
             print(json.dumps(result, ensure_ascii=False, indent=2)); return 1
