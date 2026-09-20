@@ -1,9 +1,9 @@
-"""跨平台路径辅助(profile-select)。
+"""Cross-platform path helpers (profile-select).
 
-本机配置目录优先级:
-  1. 环境变量 PROFILE_SELECT_HOME(任意平台)
+Local config directory priority:
+  1. Environment variable PROFILE_SELECT_HOME (any platform)
   2. Windows: %APPDATA%\\ai-sdlc-profile-select
-  3. macOS / Linux: $XDG_CONFIG_HOME/ai-sdlc-profile-select 或 ~/.config/ai-sdlc-profile-select
+  3. macOS / Linux: $XDG_CONFIG_HOME/ai-sdlc-profile-select or ~/.config/ai-sdlc-profile-select
 """
 import os
 import sys
@@ -20,7 +20,7 @@ def platform_label() -> str:
 
 
 def default_config_dir() -> str:
-    """返回本机 profile-select 配置目录(不含 selection.json)。"""
+    """Return the local profile-select config directory (excluding selection.json)."""
     override = os.environ.get("PROFILE_SELECT_HOME")
     if override:
         return override
@@ -38,9 +38,9 @@ def default_config_dir() -> str:
 
 
 def default_config_dir_hint() -> str:
-    """用于文档展示的配置目录说明。"""
+    """Config directory description for display in docs."""
     if sys.platform == "win32":
         return r"%APPDATA%\ai-sdlc-profile-select"
     if sys.platform == "darwin":
         return "~/.config/ai-sdlc-profile-select"
-    return "$XDG_CONFIG_HOME/ai-sdlc-profile-select 或 ~/.config/ai-sdlc-profile-select"
+    return "$XDG_CONFIG_HOME/ai-sdlc-profile-select or ~/.config/ai-sdlc-profile-select"

@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""sensitive-data-guard 自动化测试运行器(仅标准库)。
+"""sensitive-data-guard automated test runner (standard library only).
 
-从 tests/cases.json 读取用例,通过子进程调用 scripts/scan.py 做集成测试,
-并可选测试 scripts/config.py 的白名单选择流程。
+Reads cases from tests/cases.json, calls scripts/scan.py via subprocess for integration
+tests, and optionally tests the whitelist selection flow in scripts/config.py.
 
-用法(在 skill 根目录或任意目录):
+Usage (from the skill root or any directory):
   python3 tests/run_tests.py
-  python3 tests/run_tests.py --case block-password   # 只跑单个用例
+  python3 tests/run_tests.py --case block-password   # run a single case
   python3 tests/run_tests.py --verbose
 """
 from __future__ import annotations
@@ -35,14 +35,14 @@ def run_scan(
     no_whitelist: bool = False,
     env: dict[str, str] | None = None,
 ) -> tuple[int, dict]:
-    """调用 scan.py,返回 (exit_code, json_report)。"""
+    """Call scan.py, returning (exit_code, json_report)."""
     cmd = [sys.executable, str(SCAN_PY), "--json"]
     if fixture is not None:
         cmd += ["--file", str(fixture)]
     elif inline_text is not None:
         cmd += ["--text", inline_text]
     else:
-        raise ValueError("fixture 或 inline_text 必须提供其一")
+        raise ValueError("either fixture or inline_text must be provided")
 
     if no_whitelist:
         cmd.append("--no-whitelist")
@@ -76,12 +76,12 @@ def check_case(case: dict, verbose: bool) -> tuple[bool, str]:
     if fixture_name:
         path = FIXTURES_DIR / fixture_name
         if not path.is_file():
-            return False, f"fixture 不存在:{path}"
+            return False, f"fixture does not exist: {path}"
     else:
         path = None
 
     env = os.environ.copy()
-    # 隔离本机白名单选择,避免受用户环境干扰
+    # isolate the local whitelist selection to avoid interference from the user's environment
     env["SENSITIVE_DATA_GUARD_HOME"] = env.get(
         "SENSITIVE_DATA_GUARD_HOME",
         os.path.join(tempfile.gettempdir(), "sensitive-data-guard-test-home"),
@@ -100,34 +100,34 @@ def check_case(case: dict, verbose: bool) -> tuple[bool, str]:
 
     expect_exit = case["expect_exit"]
     if exit_code != expect_exit:
-        errors.append(f"退出码期望 {expect_exit},实际 {exit_code}")
+        errors.append(f"exit code expected {expect_exit}, got {exit_code}")
 
     for rule in case.get("expect_rules", []):
         if rule not in found_rules:
-            errors.append(f"缺少预期规则:{rule}(实际:{sorted(found_rules)})")
+            errors.append(f"missing expected rule: {rule} (got: {sorted(found_rules)})")
 
     for rule in case.get("forbid_rules", []):
         if rule in found_rules:
-            errors.append(f"不应命中规则:{rule}")
+            errors.append(f"rule should not match: {rule}")
 
     min_f = case.get("min_findings")
     if min_f is not None and len(findings) < min_f:
-        errors.append(f"命中数期望 >= {min_f},实际 {len(findings)}")
+        errors.append(f"findings expected >= {min_f}, got {len(findings)}")
 
     max_f = case.get("max_findings")
     if max_f is not None and len(findings) > max_f:
-        errors.append(f"命中数期望 <= {max_f},实际 {len(findings)}")
+        errors.append(f"findings expected <= {max_f}, got {len(findings)}")
 
     if verbose and not errors:
-        print(f"    规则:{sorted(found_rules)} 命中数:{len(findings)}")
+        print(f"    rules: {sorted(found_rules)} findings: {len(findings)}")
 
     if errors:
         return False, "; ".join(errors)
-    return True, "通过"
+    return True, "PASS"
 
 
 def run_config_tests(verbose: bool) -> list[tuple[str, bool, str]]:
-    """测试 config.py 的 list / use / show 流程。"""
+    """Test the list / use / show flow of config.py."""
     results: list[tuple[str, bool, str]] = []
     with tempfile.TemporaryDirectory(prefix="sensitive-data-guard-config-") as tmp:
         env = os.environ.copy()
@@ -150,21 +150,21 @@ def run_config_tests(verbose: bool) -> list[tuple[str, bool, str]]:
         # use + show
         p = cfg("use", "default")
         ok = p.returncode == 0
-        results.append(("config-use", ok, "已设置 default" if ok else p.stderr))
+        results.append(("config-use", ok, "set to default" if ok else p.stderr))
 
         p = cfg("show")
         ok = (
             p.returncode == 0
             and "default" in p.stdout
-            and "平台:" in p.stdout
-            and "选择文件:" in p.stdout
+            and "Platform:" in p.stdout
+            and "Selection file:" in p.stdout
         )
         results.append(("config-show", ok, p.stdout.strip() if ok else p.stderr))
 
-        # 带本机选择时 scan 应自动套用 default(干净样例)
+        # with a local selection, scan should auto-apply default (clean sample)
         sel_file = Path(tmp) / "selection.json"
         ok = sel_file.is_file()
-        results.append(("config-persist", ok, str(sel_file) if ok else "选择文件未生成"))
+        results.append(("config-persist", ok, str(sel_file) if ok else "selection file was not created"))
 
         if ok:
             exit_code, report = run_scan(
@@ -187,7 +187,7 @@ def run_config_tests(verbose: bool) -> list[tuple[str, bool, str]]:
 
 
 def run_platform_tests(verbose: bool) -> list[tuple[str, bool, str]]:
-    """验证跨平台配置目录逻辑。"""
+    """Verify the cross-platform config directory logic."""
     results: list[tuple[str, bool, str]] = []
     sys.path.insert(0, str(SKILL_DIR / "scripts"))
     import platform_paths  # noqa: E402
@@ -219,11 +219,11 @@ def run_platform_tests(verbose: bool) -> list[tuple[str, bool, str]]:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="运行 sensitive-data-guard 测试用例")
-    ap.add_argument("--case", help="只运行指定 id 的用例")
+    ap = argparse.ArgumentParser(description="Run the sensitive-data-guard test cases")
+    ap.add_argument("--case", help="run only the case with this id")
     ap.add_argument("--verbose", "-v", action="store_true")
-    ap.add_argument("--skip-config", action="store_true", help="跳过 config.py 测试")
-    ap.add_argument("--skip-platform", action="store_true", help="跳过跨平台路径测试")
+    ap.add_argument("--skip-config", action="store_true", help="skip the config.py tests")
+    ap.add_argument("--skip-platform", action="store_true", help="skip the cross-platform path tests")
     args = ap.parse_args()
 
     data = json.loads(CASES_JSON.read_text(encoding="utf-8"))
@@ -231,10 +231,10 @@ def main() -> int:
     if args.case:
         cases = [c for c in cases if c["id"] == args.case]
         if not cases:
-            print(f"未找到用例 id:{args.case}", file=sys.stderr)
+            print(f"No case found with id: {args.case}", file=sys.stderr)
             return 1
 
-    print(f"sensitive-data-guard 测试 — {len(cases)} 个扫描用例\n")
+    print(f"sensitive-data-guard tests — {len(cases)} scan case(s)\n")
 
     passed = failed = 0
     for case in cases:
@@ -249,7 +249,7 @@ def main() -> int:
         failed += int(not ok)
 
     if not args.skip_config:
-        print("\nconfig.py 流程测试:\n")
+        print("\nconfig.py flow tests:\n")
         for name, ok, detail in run_config_tests(args.verbose):
             status = "PASS" if ok else "FAIL"
             print(f"  [{status}] {name}")
@@ -259,7 +259,7 @@ def main() -> int:
             failed += int(not ok)
 
     if not args.skip_platform:
-        print("\n跨平台路径测试:\n")
+        print("\nCross-platform path tests:\n")
         for name, ok, detail in run_platform_tests(args.verbose):
             status = "PASS" if ok else "FAIL"
             print(f"  [{status}] {name}")
@@ -269,7 +269,7 @@ def main() -> int:
             failed += int(not ok)
 
     total = passed + failed
-    print(f"\n结果:{passed}/{total} 通过")
+    print(f"\nResult: {passed}/{total} passed")
     return 0 if failed == 0 else 1
 
 

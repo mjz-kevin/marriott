@@ -1,24 +1,25 @@
 #!/usr/bin/env python3
-"""sensitive-data-guard 白名单选择管理器。
+"""sensitive-data-guard whitelist selection manager.
 
-白名单本身放在 skill 内(whitelists/*.json),便于共享和版本管理。而"使用哪些
-白名单"的选择是每台机器各自的,保存在用户本机(不在 skill 内),因此只需询问一次。
+The whitelists themselves live inside the skill (whitelists/*.json) for easy sharing and
+version control. The choice of "which whitelists to use" is per machine, saved locally on the
+user's machine (not inside the skill), so it only needs to be asked once.
 
-本机选择文件:
-  $SENSITIVE_DATA_GUARD_HOME/selection.json                    (若设置了 SENSITIVE_DATA_GUARD_HOME)
-  否则  %APPDATA%\\sensitive-data-guard\\selection.json         (Windows 默认)
-  否则  ~/.config/sensitive-data-guard/selection.json           (macOS / Linux 默认)
+Local selection file:
+  $SENSITIVE_DATA_GUARD_HOME/selection.json                    (if SENSITIVE_DATA_GUARD_HOME is set)
+  else  %APPDATA%\\sensitive-data-guard\\selection.json         (Windows default)
+  else  ~/.config/sensitive-data-guard/selection.json           (macOS / Linux default)
 
-selection.json 格式:
+selection.json format:
   {"selected": ["default", "team-marriott"]}
 
-用法:
-  python3 config.py list                 # 列出 skill 内可用的白名单
-  python3 config.py show                 # 显示当前本机选择
-  python3 config.py use 名称 [名称 ...]   # 设置选择(替换)
-  python3 config.py add 名称              # 向选择中追加一份
-  python3 config.py create 名称           # 在 skill 内生成新的白名单
-  python3 config.py path                 # 打印选择文件路径
+Usage:
+  python3 config.py list                 # list the whitelists available in the skill
+  python3 config.py show                 # show the current local selection
+  python3 config.py use <name> [<name> ...]  # set the selection (replace)
+  python3 config.py add <name>           # append one to the selection
+  python3 config.py create <name>        # generate a new whitelist in the skill
+  python3 config.py path                 # print the selection file path
 """
 import json
 import os
@@ -49,7 +50,7 @@ def available_whitelists():
 
 
 def get_selected_whitelists():
-    """返回已选择的白名单名称列表;若尚未选择则返回 []。"""
+    """Return the list of selected whitelist names; returns [] if nothing is selected yet."""
     path = selection_path()
     if not os.path.isfile(path):
         return []
@@ -77,17 +78,17 @@ def create_whitelist(name):
     os.makedirs(WHITELIST_DIR, exist_ok=True)
     path = os.path.join(WHITELIST_DIR, name + ".json")
     if os.path.isfile(path):
-        print(f"[sensitive-data-guard] 白名单 '{name}' 已存在(路径 {path})")
+        print(f"[sensitive-data-guard] Whitelist '{name}' already exists (path {path})")
         return path
     template = {
         "name": name,
-        "description": "即使命中检测器也可安全写入的值。",
+        "description": "Values that are safe to write even if they trigger a detector.",
         "literals": [],
         "patterns": [],
     }
     with open(path, "w", encoding="utf-8") as f:
         json.dump(template, f, ensure_ascii=False, indent=2)
-    print(f"[sensitive-data-guard] 已创建白名单 '{name}'(路径 {path})")
+    print(f"[sensitive-data-guard] Created whitelist '{name}' (path {path})")
     return path
 
 
@@ -100,34 +101,34 @@ def main():
 
     if cmd == "list":
         wl = available_whitelists()
-        print("skill 内可用的白名单:")
+        print("Whitelists available in the skill:")
         for w in wl:
             print(f"  - {w}")
         if not wl:
-            print("  (无)")
+            print("  (none)")
     elif cmd == "show":
         sel = get_selected_whitelists()
-        print(f"平台:{platform_paths.platform_label()}")
-        print(f"配置目录说明:{platform_paths.default_config_dir_hint()}")
-        print(f"选择文件:{selection_path()}")
-        print(f"已选择:{'、'.join(sel) if sel else '(尚未选择)'}")
+        print(f"Platform: {platform_paths.platform_label()}")
+        print(f"Config directory: {platform_paths.default_config_dir_hint()}")
+        print(f"Selection file: {selection_path()}")
+        print(f"Selected: {', '.join(sel) if sel else '(none selected yet)'}")
     elif cmd == "use":
         if not args:
-            print("用法:config.py use 名称 [名称 ...]")
+            print("Usage: config.py use <name> [<name> ...]")
             sys.exit(1)
         set_selection(args)
-        print(f"[sensitive-data-guard] 已将选择设置为:{'、'.join(args)}")
+        print(f"[sensitive-data-guard] Selection set to: {', '.join(args)}")
     elif cmd == "add":
         if len(args) != 1:
-            print("用法:config.py add 名称")
+            print("Usage: config.py add <name>")
             sys.exit(1)
         sel = get_selected_whitelists()
         sel.append(args[0])
         set_selection(sel)
-        print(f"[sensitive-data-guard] 当前选择:{'、'.join(get_selected_whitelists())}")
+        print(f"[sensitive-data-guard] Current selection: {', '.join(get_selected_whitelists())}")
     elif cmd == "create":
         if len(args) != 1:
-            print("用法:config.py create 名称")
+            print("Usage: config.py create <name>")
             sys.exit(1)
         create_whitelist(args[0])
     elif cmd == "path":

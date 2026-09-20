@@ -1,6 +1,6 @@
 {
   "name": "default",
-  "description": "基础安全值:常见占位符、测试/示例数据,绝不代表真实的机密或个人信息。",
+  "description": "Baseline safe values: common placeholders and test/sample data that never represent real secrets or personal information.",
   "literals": [
     "password",
     "your-password-here",

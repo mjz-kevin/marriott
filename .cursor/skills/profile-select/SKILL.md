@@ -1,116 +1,121 @@
 ---
 name: profile-select
 description: >-
-  选择并在本机记住当前 AI SDLC 团队 profile(.cursor/profiles/*.yaml)。
-  首次使用时列出可用 profile 让用户选择,选定后保存在用户本机(按仓库区分),
-  之后各 Agent 与 Skill 都从这里读取当前 profile,不再重复询问;仅当用户明确
-  要求切换时才重新选择。任何需要读取 profile 配置(Confluence 落点、Jira 项目、
-  命名模板、模板路径等)的流程,先用本 skill 拿到当前 profile 的路径。
-  兼容 macOS 与 Windows。
+  Select and locally remember the current AI SDLC team profile (.cursor/profiles/*.yaml).
+  On first use it lists the available profiles for the user to choose from, saves the
+  choice locally (per repository), and afterward every Agent and Skill reads the current
+  profile from here without asking again; it re-selects only when the user explicitly asks
+  to switch. Any workflow that needs to read profile config (Confluence destination, Jira
+  project, naming templates, template paths, etc.) should first use this skill to get the
+  current profile's path. Works on both macOS and Windows.
 ---
 
-# profile-select(团队 profile 的选择与记忆)
+# profile-select (selecting and remembering the team profile)
 
-统一管理"当前用哪个团队 profile"。profile 文件放在仓库内 `.cursor/profiles/*.yaml`
-(共享、版本化);**选择本身**保存在用户本机(不进仓库),按仓库根路径分别记忆,
-所以**每台机器 + 每个仓库只问一次**。
+Centrally manages "which team profile is current." Profile files live in the repo at
+`.cursor/profiles/*.yaml` (shared and versioned); **the selection itself** is saved locally
+on the user's machine (not committed) and remembered per repo root path, so **each machine +
+each repo is asked only once**.
 
-| 维度 | 说明 |
-|------|------|
-| 定位 | 首次询问并记住 profile;之后无声返回已记住的 profile |
-| 输入 | 用户对可用 profile 的选择(仅首次或显式切换时) |
-| 产出 | 当前 profile 名称与其绝对路径(供其他 Skill 读取配置) |
-| 边界 | 不解析业务配置语义、不写业务文件;只负责"选哪个 + 记住 + 解析路径" |
+| Dimension | Description |
+|-----------|-------------|
+| Purpose | Ask for and remember the profile the first time; afterward return the remembered profile silently |
+| Input | The user's choice among the available profiles (only on first use or an explicit switch) |
+| Output | The current profile's name and absolute path (for other Skills to read config from) |
+| Scope | Doesn't interpret business-config semantics or write business files; only "which one + remember + resolve path" |
 
-## 跨平台说明(macOS / Windows)
+## Cross-platform notes (macOS / Windows)
 
-- 脚本仅依赖 **Python 3 标准库**。调用时优先 `python`,不可用再试 `python3` 或 `py -3`。
-- 记忆文件位置(可用 `PROFILE_SELECT_HOME` 覆盖):
+- The scripts depend only on the **Python 3 standard library**. Prefer `python`; if unavailable, try `python3` or `py -3`.
+- Location of the memory file (can be overridden with `PROFILE_SELECT_HOME`):
   - **Windows:** `%APPDATA%\ai-sdlc-profile-select\selection.json`
   - **macOS / Linux:** `~/.config/ai-sdlc-profile-select/selection.json`
-- 记忆按**仓库根路径**分桶,不同仓库互不影响。
+- The memory is bucketed by **repo root path**, so different repos don't affect each other.
 
-以下命令以 skill 根目录 `.cursor/skills/profile-select` 为工作目录;脚本会自动向上
-定位仓库内的 `.cursor/profiles`,与当前工作目录无关。
+The commands below assume the skill root `.cursor/skills/profile-select` as the working
+directory; the scripts walk up to locate the repo's `.cursor/profiles`, independent of the
+current working directory.
 
-## 何时使用
+## When to use
 
-任何需要读取 profile 配置的 Agent / Skill,在读取配置**之前**先调用本 skill 拿到
-当前 profile:
+Any Agent / Skill that needs to read profile config should call this skill **before** reading
+config to get the current profile:
 
-- Agent(eval / tech-solution / userstory)初始化时确定 profile。
-- 发布 / 撰写类 Skill 需要 `mcp.confluence.*` / `mcp.jira.*` / `artifacts.*` 等配置时。
+- When an Agent (eval / tech-solution / userstory) initializes and determines the profile.
+- When a publishing / authoring Skill needs config such as `mcp.confluence.*` / `mcp.jira.*` / `artifacts.*`.
 
-只读取、只展示,不需要写入的场景,也应先解析出 profile 再读对应 yaml。
+Read-only, display-only scenarios that don't need to write should also resolve the profile first
+and then read the corresponding yaml.
 
-## 使用方式(供调用方遵循)
+## How to use (for callers to follow)
 
-### 第 1 步 — 是否已记住?
+### Step 1 — Is one remembered?
 
 ```bash
 python scripts/profile.py show
 ```
 
-- **退出码 0**(打印出 profile 名)→ 已记住,**直接进第 3 步**,不要再询问用户。
-- **退出码 2**(尚未选择 / 记住的 profile 已不存在)→ 进第 2 步询问用户。
+- **Exit code 0** (prints the profile name) -> remembered, **go straight to step 3**, don't ask the user again.
+- **Exit code 2** (nothing selected yet / the remembered profile no longer exists) -> go to step 2 and ask the user.
 
-### 第 2 步 — 首次选择(仅当未记住时)
+### Step 2 — First-time selection (only when nothing is remembered)
 
-列出可用 profile 及关键字段(team / 名称 / Confluence space / Jira 项目)供用户辨认:
+List the available profiles with their key fields (team / name / Confluence space / Jira project) so the user can recognize them:
 
 ```bash
 python scripts/profile.py list
 ```
 
-用 `AskQuestion` 把这些选项给用户选一个(**必须由用户明确选定,不自行推断**),
-然后记住:
+Use `AskQuestion` to have the user pick one of these options (**the user must choose explicitly; don't infer**),
+then remember it:
 
 ```bash
-python scripts/profile.py use <名称>     # 名称即文件名去掉 .yaml,如 app-prod
+python scripts/profile.py use <name>     # the name is the file name without .yaml, e.g. app-prod
 ```
 
-`list` 无任何 profile,或用户所选文件不存在 → 阻断,报告后停止,不猜测。
+If `list` finds no profiles, or the file the user chose doesn't exist -> block, report, and stop; don't guess.
 
-### 第 3 步 — 解析路径,交给下游
+### Step 3 — Resolve the path and hand it downstream
 
 ```bash
-python scripts/profile.py resolve        # 打印当前 profile 的绝对路径
+python scripts/profile.py resolve        # print the current profile's absolute path
 ```
 
-把该路径(或其名称)传给需要配置的 Skill;下游按既有的键(如
-`mcp.confluence.space`)从这个 yaml 读取。resolve 退出码 2 → 回到第 2 步。
+Pass that path (or its name) to the Skill that needs config; downstream reads from this yaml by the
+existing keys (such as `mcp.confluence.space`). If resolve returns exit code 2 -> go back to step 2.
 
-## 切换 profile(仅当用户明确要求)
+## Switching the profile (only when the user explicitly asks)
 
-用户明确说"切换到 X / 换成测试环境 / 用 cms"等时,才重新选择:
+Only re-select when the user explicitly says something like "switch to X / change to the test environment / use cms":
 
 ```bash
-python scripts/profile.py list           # 可选,展示可选项
-python scripts/profile.py use <新名称>    # 覆盖记忆
+python scripts/profile.py list           # optional, show the options
+python scripts/profile.py use <new-name>  # overwrite the memory
 ```
 
-清除当前仓库记忆(下次会重新询问):
+Clear the current repo's memory (it will ask again next time):
 
 ```bash
 python scripts/profile.py clear
 ```
 
-**除非用户明确要求切换,否则不得重新询问,也不得更改已记住的 profile。**
+**Unless the user explicitly asks to switch, do not ask again and do not change the remembered profile.**
 
-## 命令速查
+## Command reference
 
-| 命令 | 作用 | 关键退出码 |
-|------|------|-----------|
-| `profile.py show` | 显示当前仓库已记住的 profile | 0 已记住 / 2 未记住 |
-| `profile.py list` | 列出可用 profile 及关键字段 | 0 / 2 无 profile |
-| `profile.py use <名称>` | 记住选择(覆盖) | 0 / 2 名称不存在 |
-| `profile.py resolve` | 打印当前 profile 绝对路径 | 0 / 2 未记住 |
-| `profile.py clear` | 清除当前仓库记忆 | 0 |
-| `profile.py path` | 打印记忆文件位置 | 0 |
+| Command | Purpose | Key exit codes |
+|---------|---------|----------------|
+| `profile.py show` | Show the profile remembered for the current repo | 0 remembered / 2 not remembered |
+| `profile.py list` | List the available profiles with key fields | 0 / 2 no profiles |
+| `profile.py use <name>` | Remember the choice (overwrite) | 0 / 2 name doesn't exist |
+| `profile.py resolve` | Print the current profile's absolute path | 0 / 2 not remembered |
+| `profile.py clear` | Clear the current repo's memory | 0 |
+| `profile.py path` | Print the memory file's location | 0 |
 
-## 注意事项
+## Notes
 
-- 记忆按仓库区分,换仓库会重新询问一次,属正常。
-- 记住的 profile 若在仓库中被删除或改名,`show` / `resolve` 会返回退出码 2,
-  提示重新选择,不静默回退到其他 profile。
-- 本 skill 不修改 profile 内容,也不校验业务配置是否完整(那由各下游 Skill 负责)。
+- The memory is per repo, so switching repos will ask once again—this is expected.
+- If a remembered profile is deleted or renamed in the repo, `show` / `resolve` returns exit code 2
+  and prompts for re-selection; it does not silently fall back to another profile.
+- This skill does not modify profile content or validate whether the business config is complete
+  (that's each downstream Skill's job).

@@ -1,126 +1,128 @@
-# sensitive-data-guard 参考文档
+# sensitive-data-guard reference
 
-详细的检测规则与配置格式。`SKILL.md` 讲工作流;当你需要理解某条命中、调整检测规则,
-或编辑白名单时,再看本文档。
+Detailed detection rules and config format. `SKILL.md` covers the workflow; read this document when
+you need to understand a hit, adjust a detection rule, or edit a whitelist.
 
-## 文件结构
+## File structure
 
 ```
 skills/sensitive-data-guard/
-├── SKILL.md                 # 工作流(从这里开始)
-├── reference.md             # 本文件
+├── SKILL.md                 # workflow (start here)
+├── reference.md             # this file
 ├── scripts/
-│   ├── scan.py              # 扫描内容、套用白名单、按退出码 0/2/3 返回
-│   ├── config.py            # 管理本机白名单选择
-│   └── patterns.py          # 检测规则(调整规则改这里)
+│   ├── scan.py              # scan content, apply whitelists, return exit code 0/2/3
+│   ├── config.py            # manage the local whitelist selection
+│   └── patterns.py          # detection rules (adjust rules here)
 └── whitelists/
-    ├── default.json         # 基础安全占位符/样例
-    └── example-team.json    # 团队白名单模板
+    ├── default.json         # baseline safe placeholders/samples
+    └── example-team.json    # team whitelist template
 ```
 
-本机选择保存在 skill 之外(可用 `SENSITIVE_DATA_GUARD_HOME` 覆盖):
+The local selection is saved outside the skill (can be overridden with `SENSITIVE_DATA_GUARD_HOME`):
 
-| 平台 | 默认路径 |
-|------|----------|
+| Platform | Default path |
+|----------|--------------|
 | Windows | `%APPDATA%\sensitive-data-guard\selection.json` |
 | macOS / Linux | `~/.config/sensitive-data-guard/selection.json` |
 
-查看本机实际路径:`python scripts/config.py path`
+To see the actual local path: `python scripts/config.py path`
 
-## 检测规则
+## Detection rules
 
-定义在 `scripts/patterns.py`。每条命中会报告 `rule`、`category`
-(`secret`/`pii`)、`severity`(`high`/`medium`)、行号,以及脱敏后的匹配值。
+Defined in `scripts/patterns.py`. Each hit reports `rule`, `category`
+(`secret`/`pii`), `severity` (`high`/`medium`), line number, and the redacted matched value.
 
-### 机密信息(category = secret)
+### Secrets (category = secret)
 
-| 规则 id | 检测内容 |
+| Rule id | Detects |
 |---|---|
-| `aws_access_key_id` | AWS Access Key ID(`AKIA...`、`ASIA...`) |
-| `aws_secret_access_key` | 靠近 aws/secret 关键字的 40 位 AWS secret |
-| `generic_ak_sk_pair` | `access_key=` / `secret_key=` / `ak=` / `sk=` 赋值 |
-| `password_assignment` | `password`/`passwd`/`pwd` = 值 |
-| `token_assignment` | `token`/`api_key`/`access_token`/`secret` = 值 |
+| `aws_access_key_id` | AWS Access Key ID (`AKIA...`, `ASIA...`) |
+| `aws_secret_access_key` | a 40-char AWS secret near an aws/secret keyword |
+| `generic_ak_sk_pair` | `access_key=` / `secret_key=` / `ak=` / `sk=` assignments |
+| `password_assignment` | `password`/`passwd`/`pwd` = value |
+| `token_assignment` | `token`/`api_key`/`access_token`/`secret` = value |
 | `bearer_token` | `Bearer <token>` / `Authorization:` |
-| `jwt` | JSON Web Token(`eyJ....eyJ....签名`) |
+| `jwt` | JSON Web Token (`eyJ....eyJ....signature`) |
 | `private_key_block` | PEM `-----BEGIN ... PRIVATE KEY-----` |
-| `github_token` | `ghp_`/`gho_`/`github_pat_` …… |
-| `slack_token` | `xoxb-`/`xoxp-` …… |
+| `github_token` | `ghp_`/`gho_`/`github_pat_` … |
+| `slack_token` | `xoxb-`/`xoxp-` … |
 | `google_api_key` | `AIza...` |
-| `aliyun_ak` | 阿里云 `LTAI...` |
+| `aliyun_ak` | Alibaba Cloud `LTAI...` |
 
-"用户名"是隐式覆盖的:单独出现的用户名本身不算敏感,但用户名与密码/token 成对出现时
-会被上面的凭据规则捕获。若有需要,可把明确的用户名字段加入白名单或自定义规则。
+"Username" is covered implicitly: a username on its own isn't sensitive, but when it appears paired
+with a password/token it's caught by the credential rules above. If needed, add explicit username
+fields to a whitelist or a custom rule.
 
-### 个人敏感信息(category = pii)
+### Personally identifiable information (category = pii)
 
-| 规则 id | 检测内容 |
+| Rule id | Detects |
 |---|---|
-| `cn_mobile_phone` | 国内手机号(`1[3-9]xxxxxxxxx`) |
-| `intl_phone` | 国际号码 `+区号 ...` |
-| `email_address` | 邮箱地址 |
-| `cn_id_card` | 中国居民身份证号(18 位,含日期校验) |
-| `bank_card` | 13–19 位银行卡/信用卡号(通过 Luhn 模 10 校验) |
-| `member_name_field` | `member_name` / `会员名` / `姓名` = 值 |
-| `address_field` | `address` / `地址` = 值 |
-| `cn_address_text` | 中文街道地址(省/市/区 + 路/号/室/栋……) |
+| `cn_mobile_phone` | China mainland mobile number (`1[3-9]xxxxxxxxx`) |
+| `intl_phone` | international number `+country code ...` |
+| `email_address` | email address |
+| `cn_id_card` | China resident ID card number (18 digits, with date validation) |
+| `bank_card` | 13-19 digit bank/credit card number (passes Luhn mod-10) |
+| `member_name_field` | `member_name` / `会员名` / `姓名` = value |
+| `address_field` | `address` / `地址` = value |
+| `cn_address_text` | Chinese street address (province/city/district + road/number/room/building…) |
 
-## 白名单文件格式
+## Whitelist file format
 
-`whitelists/<名称>.json`:
+`whitelists/<name>.json`:
 
 ```json
 {
   "name": "team-x",
-  "description": "说明这些值为何安全",
-  "literals": ["精确的安全字符串", "AKIAIOSFODNN7EXAMPLE"],
+  "description": "explain why these values are safe",
+  "literals": ["an exact safe string", "AKIAIOSFODNN7EXAMPLE"],
   "patterns": ["(?i)^SAMPLE_[A-Z0-9_]+$", "@example\\.com"]
 }
 ```
 
-- `literals`:安全的精确字符串。若某条命中的匹配文本(去除首尾空白后)等于某个 literal,
-  则丢弃该命中。
-- `patterns`:Python 正则。若任一 pattern 在匹配文本内命中,则丢弃该命中。适合占位符
-  家族、环境变量引用、示例域名。
+- `literals`: safe, exact strings. If a hit's matched text (after trimming whitespace) equals a literal,
+  the hit is discarded.
+- `patterns`: Python regexes. If any pattern matches within the matched text, the hit is discarded. Good
+  for placeholder families, environment-variable references, and sample domains.
 
-只要在**任意**已选白名单中命中,该值即被放行。
+If a value matches in **any** selected whitelist, it is allowed through.
 
-## config.py 命令
-
-```bash
-python scripts/config.py list                # 列出 skill 内附带的白名单
-python scripts/config.py show                # 显示平台、本机选择 + 路径
-python scripts/config.py use 名称 [名称...]   # 设置选择(替换)
-python scripts/config.py add 名称             # 向选择中追加一份
-python scripts/config.py create 名称          # 生成 whitelists/名称.json
-python scripts/config.py path                # 打印选择文件路径
-```
-
-Windows 上若 `python` 不可用,可改用 `py -3` 或 `python3`。
-
-## scan.py 选项
+## config.py commands
 
 ```bash
---file 路径        # 扫描文件(推荐,跨平台)
---text 字符串       # 扫描字面字符串(推荐,跨平台)
---stdin            # 扫描 stdin(macOS/Linux;Windows 建议用 --file/--text)
---whitelist 名称   # 覆盖已保存的选择(可重复)
---no-whitelist     # 不套用任何白名单
---json             # 向 stderr 输出机器可读的 JSON 报告
+python scripts/config.py list                # list the whitelists shipped with the skill
+python scripts/config.py show                # show the platform, local selection + path
+python scripts/config.py use <name> [<name>...]  # set the selection (replace)
+python scripts/config.py add <name>          # append one to the selection
+python scripts/config.py create <name>       # generate whitelists/<name>.json
+python scripts/config.py path                # print the selection file path
 ```
 
-退出码:`0` 干净,`2` 仍有命中(不要写入),`3` 用法/IO 错误。
+On Windows, if `python` is unavailable, use `py -3` or `python3`.
 
-## 跨平台注意
+## scan.py options
 
-- 优先 `--file` / `--text`,不要依赖 `printf`/`cat` 等 shell 管道。
-- 路径分隔符在 Python 中用 `/` 即可,Windows 同样有效。
-- 自定义配置目录(任意平台):设置环境变量 `SENSITIVE_DATA_GUARD_HOME` 后运行 `config.py use ...`。
+```bash
+--file <path>      # scan a file (recommended, cross-platform)
+--text <string>    # scan a literal string (recommended, cross-platform)
+--stdin            # scan stdin (macOS/Linux; on Windows prefer --file/--text)
+--whitelist <name> # override the saved selection (repeatable)
+--no-whitelist     # apply no whitelist
+--json             # emit a machine-readable JSON report to stderr
+```
 
-## 调整
+Exit codes: `0` clean, `2` hits remain (do not write), `3` usage/IO error.
 
-- 减少误报:把安全的值/正则加入白名单,或在 `patterns.py` 里放宽某条规则。
-- 精化检测:为规则添加可选的 `validate(matched) -> bool` 函数,匹配文本还需通过该函数
-  才算命中(例如 `bank_card` 用 `luhn_valid` 做 Luhn 模 10 校验)。仅依赖标准库。
-- 新增检测器:在 `patterns.py` 的 `SECRET_RULES` 或 `PII_RULES` 里追加一条规则字典,
-  包含 `id`、`category`、`severity`、`desc`、`regex`(可选 `validate`)。
+## Cross-platform notes
+
+- Prefer `--file` / `--text`; don't rely on shell pipes like `printf`/`cat`.
+- Use `/` as the path separator in Python; it works on Windows too.
+- Custom config directory (any platform): set the environment variable `SENSITIVE_DATA_GUARD_HOME`, then run `config.py use ...`.
+
+## Tuning
+
+- Reduce false positives: add safe values/regexes to a whitelist, or loosen a rule in `patterns.py`.
+- Refine detection: add an optional `validate(matched) -> bool` function to a rule so the matched text
+  must also pass it to count as a hit (e.g. `bank_card` uses `luhn_valid` for the Luhn mod-10 check).
+  Standard library only.
+- Add a detector: append a rule dict to `SECRET_RULES` or `PII_RULES` in `patterns.py`, with
+  `id`, `category`, `severity`, `desc`, `regex` (and optionally `validate`).

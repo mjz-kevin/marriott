@@ -1,191 +1,197 @@
 ---
 name: sensitive-data-guard
 description: >-
-  在把内容写入任何持久化或外部目的地之前,先扫描其中是否包含机密信息(用户名、密码、
-  token、API key、AK/SK、私钥、JWT)和个人敏感信息(会员名/客户姓名、手机号、地址、
-  身份证、银行卡、邮箱),不安全则阻止写入。支持维护多份白名单,并在本机记住已选择的
-  白名单。在写入本地文件、Jira、Confluence、源代码、commit,或任何外部系统之前使用。
-  兼容 macOS 与 Windows。
+  Before writing content to any persistent or external destination, scan it for secrets
+  (username, password, token, API key, AK/SK, private key, JWT) and personally sensitive
+  information (member/customer name, phone number, address, ID card, bank card, email),
+  and block the write if it isn't safe. Supports maintaining multiple whitelists and
+  remembers the selected whitelist locally. Use before writing to local files, Jira,
+  Confluence, source code, a commit, or any external system. Works on both macOS and Windows.
 ---
 
 # sensitive-data-guard
 
-防止敏感数据泄露。在内容被写入**持久化或外部目的地**之前先做扫描;若套用白名单后仍有
-机密或个人敏感信息,则**不要写入**——先报告,再脱敏/删除,或(仅当确实安全时)将该值
-加入白名单。
+Prevents leaking sensitive data. Scan content before it is written to a **persistent or external
+destination**; if secrets or personally sensitive information remain after applying the whitelists,
+**do not write it**—report first, then redact/remove, or (only when it's truly safe) add the value
+to a whitelist.
 
-## 跨平台说明(macOS / Windows)
+## Cross-platform notes (macOS / Windows)
 
-- 脚本仅依赖 **Python 3 标准库**,macOS 与 Windows 均可运行。
-- 调用脚本时优先用 `python`;若不可用再试 `python3` 或 `py -3`(Windows)。
-- **优先使用 `--file` 或 `--text` 扫描**,避免依赖 shell 管道(Windows cmd/PowerShell
-  对管道支持不一致)。
-- 路径在 Python 中可用正斜杠 `/`,Windows 上也有效。
-- 本机白名单选择保存位置(可用 `SENSITIVE_DATA_GUARD_HOME` 覆盖):
+- The scripts depend only on the **Python 3 standard library** and run on both macOS and Windows.
+- When calling the scripts, prefer `python`; if unavailable, try `python3` or `py -3` (Windows).
+- **Prefer `--file` or `--text` for scanning** to avoid relying on shell pipes (Windows cmd/PowerShell
+  handle pipes inconsistently).
+- Paths can use forward slashes `/` in Python, which also work on Windows.
+- Location of the local whitelist selection (can be overridden with `SENSITIVE_DATA_GUARD_HOME`):
   - **Windows:** `%APPDATA%\sensitive-data-guard\selection.json`
   - **macOS / Linux:** `~/.config/sensitive-data-guard/selection.json`
 
-以下示例以 skill 根目录 `.cursor/skills/sensitive-data-guard` 为工作目录,命令写成 `python`;
-Agent 执行时按当前系统选择可用的 Python 命令。
+The examples below assume the skill root `.cursor/skills/sensitive-data-guard` as the working directory
+and write the command as `python`; when the Agent runs, it picks the available Python command for the current system.
 
-## 何时启用
+## When to enable
 
-在以下任一写入动作之前先扫描:
+Scan before any of these write actions:
 
-- 写入/追加到**本地文件**(配置、日志、文档、`.env`、笔记……)
-- 创建/更新 **Jira** 问题、评论或字段
-- 创建/更新 **Confluence** 页面或评论
-- 写入/修改**源代码**,或 **git commit / PR 描述**
-- 将内容发送到任何**外部系统 / API / 粘贴板**
+- Writing/appending to a **local file** (config, logs, docs, `.env`, notes…)
+- Creating/updating a **Jira** issue, comment, or field
+- Creating/updating a **Confluence** page or comment
+- Writing/modifying **source code**, or a **git commit / PR description**
+- Sending content to any **external system / API / clipboard**
 
-如果只是读取、搜索,或仅在对话中展示给用户,则无需扫描。
+If you're only reading, searching, or just displaying to the user in the conversation, no scan is needed.
 
-## 检测内容
+## What it detects
 
-- **机密信息:** password/passwd/pwd、token / api_key / access_token、AK/SK
-  (access key + secret key)、AWS 密钥、GitHub/Slack/Google/阿里云密钥、Bearer
-  token、JWT、PEM 私钥。
-- **个人敏感信息(PII):** 会员名/客户姓名字段、手机号(国内手机 + 国际号码)、邮箱、
-  身份证号、银行卡/信用卡号、地址字段与中文街道地址。
+- **Secrets:** password/passwd/pwd, token / api_key / access_token, AK/SK
+  (access key + secret key), AWS keys, GitHub/Slack/Google/Alibaba Cloud keys, Bearer
+  tokens, JWTs, PEM private keys.
+- **Personally identifiable information (PII):** member/customer name fields, phone numbers (China mobile +
+  international numbers), emails, ID card numbers, bank/credit card numbers, address fields and Chinese street addresses.
 
-完整规则清单与配置格式见 [reference.md](reference.md)。
+For the full rule list and config format, see [reference.md](reference.md).
 
-## 首次配置(选择白名单)——每台机器只需一次
+## First-time setup (choose whitelists) — only once per machine
 
-扫描器需要知道套用哪些白名单。这个**选择会保存在用户本机**,所以只问一次。
+The scanner needs to know which whitelists to apply. This **choice is saved locally on the user's machine**,
+so it's asked only once.
 
 ```
-配置清单:
-- [ ] 1. 检查本机是否已保存选择
-- [ ] 2. 若没有:展示可用白名单,让用户选择或新建
-- [ ] 3. 保存选择
+Setup checklist:
+- [ ] 1. Check whether a selection is already saved locally
+- [ ] 2. If not: show the available whitelists and let the user choose or create one
+- [ ] 3. Save the choice
 ```
 
-**第 1 步 — 本机是否已保存选择?**
+**Step 1 — Is a selection already saved locally?**
 
 ```bash
 python scripts/config.py show
 ```
 
-如果打印出已选择的白名单名称 → 配置已完成,**直接跳到"使用"**。不要再次询问。
+If it prints the selected whitelist names -> setup is complete, **skip straight to "Usage."** Don't ask again.
 
-**第 2 步 — 尚无选择。** 列出随 skill 附带的白名单,询问用户使用哪些(可多选),
-或是否新建一份:
+**Step 2 — No selection yet.** List the whitelists shipped with the skill, ask which ones to use (multiple allowed),
+or whether to create a new one:
 
 ```bash
 python scripts/config.py list
 ```
 
-用 `AskQuestion` 让用户选择已有白名单,或新建:
+Use `AskQuestion` to have the user choose existing whitelists, or create one:
 
 ```bash
-python scripts/config.py create <名称>   # 生成 whitelists/<名称>.json
+python scripts/config.py create <name>   # generates whitelists/<name>.json
 ```
 
-**第 3 步 — 保存选择**(会替换之前的选择):
+**Step 3 — Save the choice** (replaces any prior selection):
 
 ```bash
-python scripts/config.py use <名称> [<名称> ...]
+python scripts/config.py use <name> [<name> ...]
 ```
 
-选择保存在本机配置目录(见上方"跨平台说明")。它**不属于** skill 内容,因此只留在本机。
+The choice is saved in the local config directory (see "Cross-platform notes" above). It's **not** part
+of the skill content, so it stays local only.
 
-仅当**用户明确要求修改**所用白名单时才重新配置——此时再运行
-`config.py use ...`(或 `add`)。
+Reconfigure only when the **user explicitly asks to change** which whitelists are used—then run
+`config.py use ...` (or `add`) again.
 
-## 使用 —— 每次写入前先扫描
+## Usage — scan before every write
 
-扫描你**即将写入的原始内容**。优先用 `--file` 或 `--text`;已保存的白名单选择会
-自动套用(除非要临时覆盖,否则不要传 `--whitelist`)。
+Scan the **raw content you're about to write**. Prefer `--file` or `--text`; the saved whitelist selection is
+applied automatically (don't pass `--whitelist` unless you want to override it temporarily).
 
 ```bash
-# 扫描即将 commit/上传的文件(推荐)
-python scripts/scan.py --file 路径/内容文件
+# scan the file you're about to commit/upload (recommended)
+python scripts/scan.py --file path/to/content-file
 
-# 扫描短文本(无需临时文件)
-python scripts/scan.py --text "待写入的字符串"
+# scan short text (no temp file needed)
+python scripts/scan.py --text "the string to be written"
 ```
 
-macOS/Linux 也可用 stdin(Windows 上优先 `--file` / `--text`):
+On macOS/Linux you can also use stdin (on Windows prefer `--file` / `--text`):
 
 ```bash
-python scripts/scan.py --stdin < 路径/内容文件
+python scripts/scan.py --stdin < path/to/content-file
 ```
 
-按退出码处理:
+Handle by exit code:
 
-- **退出码 0 → 干净(CLEAN)**:可以写入。
-- **退出码 2 → 已拦截(BLOCKED)**:仍有敏感项。**不要写入。** 对每一项:
-  1. 删除它,或替换为占位符 / 环境变量引用 / 掩码。
-  2. 或者,仅当该值确实不敏感(占位符、公开样例、有公开记录的公共账号)时,
-     将其加入白名单后重新扫描:
+- **Exit code 0 -> CLEAN**: safe to write.
+- **Exit code 2 -> BLOCKED**: sensitive items remain. **Do not write.** For each item:
+  1. Remove it, or replace it with a placeholder / environment-variable reference / mask.
+  2. Or, only if the value is truly not sensitive (a placeholder, a public sample, a public account
+     with a public record), add it to a whitelist and rescan:
      ```bash
-     # 编辑 whitelists/<名称>.json → 加到 "literals" 或 "patterns"
+     # edit whitelists/<name>.json -> add to "literals" or "patterns"
      ```
-  3. 反复扫描直到显示 CLEAN,再写入。
-- **退出码 3 → 出错**:修正调用方式(路径/参数错误)后重试。
+  3. Rescan repeatedly until it shows CLEAN, then write.
+- **Exit code 3 -> error**: fix the call (wrong path/arguments) and retry.
 
-命中项都会**脱敏**显示(如 `S3c*****`),因此报告本身不会泄露该值。
+Every hit is shown **redacted** (e.g. `S3c*****`), so the report itself won't leak the value.
 
-## 审计日志(自动记录)——每次扫描都会写
+## Audit log (recorded automatically) — written on every scan
 
-每次运行 `scan.py`(除非加 `--no-log`)**只在被拦截(BLOCKED)时**把结果**追加**到仓库内的审计日志:
+Every run of `scan.py` (unless `--no-log`) **appends** the result to the repo's audit log **only when BLOCKED**:
 
 ```
-<仓库根>/.ai-sdlc/sensitive-data-guard/scan-log.jsonl
+<repo root>/.ai-sdlc/sensitive-data-guard/scan-log.jsonl
 ```
 
-- 采用 **JSONL**(每行一条 JSON),便于追加与统计。
-- **命中(BLOCKED)**:为每一条触发的规则各写一行,记录 **时间、被扫描的文件、
-  触发的规则(rule/desc)、行号、脱敏后的命中值** 与所用白名单。
-- **干净(CLEAN)**:不写日志。
-- 日志里**只保留脱敏值**,不会落地真实敏感数据。
-- 需要临时不记录时加 `--no-log`;需要改路径时设环境变量 `SENSITIVE_DATA_GUARD_LOG`
-  (指向具体的日志文件,主要用于测试)。
+- Uses **JSONL** (one JSON per line) for easy appending and aggregation.
+- **BLOCKED**: write one line per triggered rule, recording the **time, scanned file,
+  triggered rule (rule/desc), line number, redacted hit value** and the whitelists used.
+- **CLEAN**: no log written.
+- The log keeps **only redacted values**, so no real sensitive data is stored.
+- Add `--no-log` to skip logging for one run; to change the path, set the environment variable
+  `SENSITIVE_DATA_GUARD_LOG` (pointing at a specific log file, mainly for testing).
 
-每行示例(已脱敏):
+Example line (redacted):
 
 ```json
-{"time":"2026-09-16T20:37:10+08:00","file":"path/to/file","triggered":true,"rule":"cn_mobile_phone","category":"pii","severity":"high","desc":"中国大陆手机号","line":4,"match_redacted":"139********","whitelists":["default"]}
+{"time":"2026-09-16T20:37:10+08:00","file":"path/to/file","triggered":true,"rule":"cn_mobile_phone","category":"pii","severity":"high","desc":"China mainland mobile phone number","line":4,"match_redacted":"139********","whitelists":["default"]}
 ```
 
-## 统计触发次数
+## Count trigger frequency
 
-用 `stats.py` 汇总审计日志,查看总共触发了多少次,以及按规则 / 类别 / 日期 / 文件的分布:
+Use `stats.py` to aggregate the audit log and see how many times things triggered in total, and the
+distribution by rule / category / date / file:
 
 ```bash
-# 打印统计摘要(默认读取仓库根 .ai-sdlc 下的 scan-log.jsonl)
+# print the statistics summary (reads scan-log.jsonl under the repo root's .ai-sdlc by default)
 python scripts/stats.py
 
-# 额外按文件展开
+# also break down by file
 python scripts/stats.py --by-file
 
-# 以 JSON 输出(便于二次处理)
+# output as JSON (for further processing)
 python scripts/stats.py --json
 
-# 指定日志文件
-python scripts/stats.py --log 路径/scan-log.jsonl
+# specify the log file
+python scripts/stats.py --log path/scan-log.jsonl
 ```
 
-输出包含:被拦截的扫描次数(去重)、触发规则总次数,以及按规则、按类别、
-按日期(和可选的按文件)的分布。
+The output includes: the number of blocked scans (deduped), the total rule triggers, and the distribution
+by rule, by category, by date (and optionally by file).
 
-## 工作流(在持久化/外部写入之前)
+## Workflow (before a persistent/external write)
 
 ```
-- [ ] 确认已有白名单选择(首次配置,仅一次)
-- [ ] 扫描即将写入的原始内容(scan.py --file 或 --text)
-- [ ] 退出码 0 → 写入
-- [ ] 退出码 2 → 对每项脱敏/删除/加白名单,重新扫描,再写入
+- [ ] Confirm a whitelist selection exists (first-time setup, only once)
+- [ ] Scan the raw content you're about to write (scan.py --file or --text)
+- [ ] Exit code 0 -> write
+- [ ] Exit code 2 -> redact/remove/whitelist each item, rescan, then write
 ```
 
-## 注意事项
+## Notes
 
-- 不要在未告知用户的情况下,靠悄悄删除用户的真实数据来"解决"命中;应报告发现了什么
-  (脱敏后)以及如何处理。
-- 白名单只用于**确实安全**的值(占位符、公开样例)。绝不能为了绕过拦截而把真实凭据
-  加入白名单。
-- 脚本仅依赖 Python 3 标准库,无需安装。
-- 审计日志(`.ai-sdlc/sensitive-data-guard/scan-log.jsonl`)是运行时产物,只含脱敏值;
-  如不希望纳入版本管理,可在仓库 `.gitignore` 中忽略 `.ai-sdlc/sensitive-data-guard/`。
-- 测试方法见 [tests/TESTING.md](tests/TESTING.md)。
+- Don't "resolve" a hit by quietly deleting the user's real data without telling them; report what was
+  found (redacted) and how to handle it.
+- Whitelists are only for values that are **truly safe** (placeholders, public samples). Never add real
+  credentials to a whitelist just to bypass the block.
+- The scripts depend only on the Python 3 standard library—no install needed.
+- The audit log (`.ai-sdlc/sensitive-data-guard/scan-log.jsonl`) is a runtime artifact containing only
+  redacted values; if you don't want it under version control, ignore `.ai-sdlc/sensitive-data-guard/`
+  in the repo's `.gitignore`.
+- For how to test, see [tests/TESTING.md](tests/TESTING.md).

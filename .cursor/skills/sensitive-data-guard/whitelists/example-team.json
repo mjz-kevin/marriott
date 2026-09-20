@@ -1,6 +1,6 @@
 {
   "name": "example-team",
-  "description": "示例团队白名单。复制此文件、重命名,并加入团队明确批准可安全写入的值(例如有公开记录的共享服务账号、非机密的示例 token)。",
+  "description": "Example team whitelist. Copy this file, rename it, and add values the team has explicitly approved as safe to write (e.g. shared service accounts with a public record, non-secret sample tokens).",
   "literals": [
     "svc-public-docs@example.com"
   ],

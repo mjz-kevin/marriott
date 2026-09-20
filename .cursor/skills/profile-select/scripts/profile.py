@@ -1,29 +1,29 @@
 #!/usr/bin/env python3
-"""profile-select:AI SDLC 团队 profile 的选择与本机记忆。
+"""profile-select: selection and local memory of the AI SDLC team profile.
 
-profile 文件放在仓库内 `.cursor/profiles/*.yaml`,便于共享与版本管理。
-而"当前用哪个 profile"的选择是每台机器 + 每个仓库各自的,保存在用户本机
-(不在仓库内),因此只需询问一次;之后各 Agent / Skill 都从这里读取,
-除非用户明确要求切换。
+Profile files live in the repo at `.cursor/profiles/*.yaml` for easy sharing and version control.
+The choice of "which profile is current" is per machine + per repo, saved locally on the user's
+machine (not in the repo), so it only needs to be asked once; afterward every Agent / Skill reads
+it from here, unless the user explicitly asks to switch.
 
-本机选择文件:
-  $PROFILE_SELECT_HOME/selection.json                          (若设置了 PROFILE_SELECT_HOME)
-  否则  %APPDATA%\\ai-sdlc-profile-select\\selection.json        (Windows 默认)
-  否则  ~/.config/ai-sdlc-profile-select/selection.json         (macOS / Linux 默认)
+Local selection file:
+  $PROFILE_SELECT_HOME/selection.json                          (if PROFILE_SELECT_HOME is set)
+  else  %APPDATA%\\ai-sdlc-profile-select\\selection.json        (Windows default)
+  else  ~/.config/ai-sdlc-profile-select/selection.json         (macOS / Linux default)
 
-selection.json 按仓库根路径分别记忆:
+selection.json remembers per repo root path:
   {"selections": {"/abs/repo/root": "app-prod"}}
 
-用法:
-  python profile.py list                 # 列出仓库内可用的 profile 及其关键字段
-  python profile.py show                 # 显示当前仓库本机已记住的 profile
-  python profile.py use <名称>            # 记住选择(替换),名称为文件名去掉 .yaml
-  python profile.py resolve              # 打印当前 profile 的绝对路径(供其他 Skill 读取)
-  python profile.py clear                # 清除当前仓库的记忆
-  python profile.py path                 # 打印选择文件路径
+Usage:
+  python profile.py list                 # list the profiles available in the repo with their key fields
+  python profile.py show                 # show the profile remembered locally for the current repo
+  python profile.py use <name>           # remember the choice (replace); name is the file name without .yaml
+  python profile.py resolve              # print the current profile's absolute path (for other Skills to read)
+  python profile.py clear                # clear the current repo's memory
+  python profile.py path                 # print the selection file path
 
-退出码:
-  0 成功;2 未记住选择 / profile 不存在(需要询问用户);3 用法或环境错误。
+Exit codes:
+  0 success; 2 no selection remembered / profile doesn't exist (need to ask the user); 3 usage or environment error.
 """
 import json
 import os
@@ -34,11 +34,11 @@ import platform_paths  # noqa: E402
 
 
 def find_profiles_dir():
-    """从脚本位置向上查找包含 .cursor/profiles 的仓库根。
+    """Walk up from the script location to find the repo root containing .cursor/profiles.
 
-    返回 (repo_root, profiles_dir);找不到返回 (None, None)。
-    优先用脚本自身所在路径(skill 在 <root>/.cursor/skills/profile-select/scripts),
-    再回退到当前工作目录向上查找。
+    Returns (repo_root, profiles_dir); returns (None, None) if not found.
+    Prefer the script's own location (the skill lives at <root>/.cursor/skills/profile-select/scripts),
+    then fall back to walking up from the current working directory.
     """
     candidates = [os.path.abspath(os.path.dirname(__file__)), os.path.abspath(os.getcwd())]
     for start in candidates:
@@ -73,9 +73,9 @@ def profile_path(profiles_dir, name):
 
 
 def summarize(path):
-    """轻量提取用于辨认的关键字段,不依赖第三方库。
+    """Lightly extract the key fields used for recognition, without third-party libraries.
 
-    返回 dict:team / display_name / confluence_space / jira_project_key。
+    Returns a dict: team / display_name / confluence_space / jira_project_key.
     """
     info = {"team": "", "display_name": "", "confluence_space": "", "jira_project_key": ""}
     try:
@@ -87,21 +87,21 @@ def summarize(path):
     def indent(s):
         return len(s) - len(s.lstrip(" "))
 
-    section = []  # 当前缩进层级下的键路径(仅按缩进跟踪 mcp/confluence/jira)
+    section = []  # the key path at the current indent level (tracks only mcp/confluence/jira by indent)
     for raw in lines:
         line = raw.rstrip("\n")
         if not line.strip() or line.lstrip().startswith("#"):
             continue
         stripped = line.strip()
         ind = indent(line)
-        # 维护简单的段落栈
+        # maintain a simple section stack
         while section and ind <= section[-1][1]:
             section.pop()
         if ":" not in stripped:
             continue
         key = stripped.split(":", 1)[0].strip()
         val = stripped.split(":", 1)[1].strip()
-        # 去掉行内注释与引号
+        # strip inline comments and quotes
         if val:
             val = val.split(" #", 1)[0].strip().strip('"').strip("'")
         path_keys = [k for k, _ in section]
@@ -113,7 +113,7 @@ def summarize(path):
             info["confluence_space"] = val
         elif path_keys == ["mcp", "jira"] and key == "project_key":
             info["jira_project_key"] = val
-        # 无值 → 视为进入子段落
+        # no value -> treat as entering a sub-section
         if val == "":
             section.append((key, ind))
     return info
@@ -178,13 +178,13 @@ def main():
 
     if cmd == "list":
         if not profiles_dir:
-            print("[profile-select] 未找到 .cursor/profiles 目录")
+            print("[profile-select] Could not find the .cursor/profiles directory")
             sys.exit(3)
         names = available_profiles(profiles_dir)
         if not names:
-            print("[profile-select] .cursor/profiles 下没有 profile 文件")
+            print("[profile-select] No profile files under .cursor/profiles")
             sys.exit(2)
-        print("可用 profile:")
+        print("Available profiles:")
         for n in names:
             s = summarize(profile_path(profiles_dir, n))
             desc = " / ".join(
@@ -200,48 +200,48 @@ def main():
 
     if cmd == "show":
         sel = get_selected(repo_root)
-        print(f"平台:{platform_paths.platform_label()}")
-        print(f"仓库根:{repo_root or '(未找到)'}")
-        print(f"选择文件:{selection_path()}")
-        print(f"当前记住的 profile:{sel or '(尚未选择)'}")
+        print(f"Platform: {platform_paths.platform_label()}")
+        print(f"Repo root: {repo_root or '(not found)'}")
+        print(f"Selection file: {selection_path()}")
+        print(f"Currently remembered profile: {sel or '(none selected yet)'}")
         if sel and profiles_dir and not profile_path(profiles_dir, sel):
-            print(f"警告:记住的 profile '{sel}' 在当前仓库不存在,请重新选择。")
+            print(f"Warning: the remembered profile '{sel}' doesn't exist in the current repo; please re-select.")
             sys.exit(2)
         sys.exit(0 if sel else 2)
 
     if cmd == "use":
         if len(args) != 1:
-            print("用法:profile.py use <名称>")
+            print("Usage: profile.py use <name>")
             sys.exit(3)
         if not profiles_dir:
-            print("[profile-select] 未找到 .cursor/profiles 目录")
+            print("[profile-select] Could not find the .cursor/profiles directory")
             sys.exit(3)
         name = os.path.splitext(args[0])[0]
         if not profile_path(profiles_dir, name):
-            print(f"[profile-select] profile '{name}' 不存在。可用:{'、'.join(available_profiles(profiles_dir)) or '(无)'}")
+            print(f"[profile-select] profile '{name}' doesn't exist. Available: {', '.join(available_profiles(profiles_dir)) or '(none)'}")
             sys.exit(2)
         set_selected(repo_root, name)
-        print(f"[profile-select] 已记住 profile:{name}(仓库 {repo_root})")
+        print(f"[profile-select] Remembered profile: {name} (repo {repo_root})")
         sys.exit(0)
 
     if cmd == "resolve":
         sel = get_selected(repo_root)
         if not sel:
-            print("[profile-select] 尚未记住 profile,请先询问用户并 use。", file=sys.stderr)
+            print("[profile-select] No profile remembered yet; ask the user first, then use.", file=sys.stderr)
             sys.exit(2)
         if not profiles_dir:
-            print("[profile-select] 未找到 .cursor/profiles 目录", file=sys.stderr)
+            print("[profile-select] Could not find the .cursor/profiles directory", file=sys.stderr)
             sys.exit(3)
         p = profile_path(profiles_dir, sel)
         if not p:
-            print(f"[profile-select] 记住的 profile '{sel}' 已不存在,请重新选择。", file=sys.stderr)
+            print(f"[profile-select] The remembered profile '{sel}' no longer exists; please re-select.", file=sys.stderr)
             sys.exit(2)
         print(p)
         sys.exit(0)
 
     if cmd == "clear":
         ok = clear_selected(repo_root)
-        print("[profile-select] 已清除记忆。" if ok else "[profile-select] 当前仓库没有记忆。")
+        print("[profile-select] Memory cleared." if ok else "[profile-select] No memory for the current repo.")
         sys.exit(0)
 
     print(__doc__)

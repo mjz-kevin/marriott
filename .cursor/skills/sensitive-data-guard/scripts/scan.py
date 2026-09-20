@@ -1,30 +1,31 @@
 #!/usr/bin/env python3
-"""sensitive-data-guard 扫描器。
+"""sensitive-data-guard scanner.
 
-在把内容写入任何持久化/外部目的地之前,扫描其中的机密信息(用户名/密码/token/
-AK-SK……)与个人敏感信息(会员名 / 手机号 / 地址 / 身份证 / 银行卡……),
-然后过滤掉被已选白名单覆盖的项。
+Before writing content to any persistent/external destination, scan it for secrets
+(username/password/token/AK-SK…) and personally identifiable information (member name /
+phone number / address / ID card / bank card…), then filter out anything covered by the
+selected whitelists.
 
-仅依赖标准库。退出码:
-  0  干净(套用白名单后无命中)
-  2  仍有命中 -> 不要写入该内容
-  3  用法 / IO 错误
+Standard library only. Exit codes:
+  0  clean (no hits after applying whitelists)
+  2  hits remain -> do not write this content
+  3  usage / IO error
 
-用法(跨平台,优先 --file / --text):
-  # 扫描文件(推荐,macOS / Windows 均适用)
-  python scripts/scan.py --file 路径/内容文件
+Usage (cross-platform, prefer --file / --text):
+  # scan a file (recommended, works on macOS / Windows)
+  python scripts/scan.py --file path/to/content-file
 
-  # 扫描字面字符串(适合短内容)
-  python scripts/scan.py --text "一些内容"
+  # scan a literal string (good for short content)
+  python scripts/scan.py --text "some content"
 
-  # 扫描 stdin(macOS/Linux 可用管道;Windows 建议改用 --file 或 --text)
+  # scan stdin (pipes work on macOS/Linux; on Windows prefer --file or --text)
   python scripts/scan.py --stdin
 
-白名单选择:
-  默认使用本机选择文件中记录的白名单(见 config.py)。可用 --whitelist 名称
-  覆盖(可重复),或用 --no-whitelist 表示不套用任何白名单。
+Whitelist selection:
+  Uses the whitelists recorded in the local selection file by default (see config.py).
+  Override with --whitelist <name> (repeatable), or use --no-whitelist to apply none.
 
-输出:人类可读的报告;传入 --json 时,额外向 stderr 输出机器可读的 JSON。
+Output: a human-readable report; when --json is passed, also emit a machine-readable JSON to stderr.
 """
 import argparse
 import datetime
@@ -42,10 +43,10 @@ WHITELIST_DIR = os.path.join(SKILL_DIR, "whitelists")
 
 
 def load_whitelist(names):
-    """合并给定白名单名称的所有条目。
+    """Merge all entries from the given whitelist names.
 
-    返回 (literals:set[str], regexes:list[re.Pattern])。
-    每个白名单文件为 JSON:{"literals": [...], "patterns": [...]}。
+    Returns (literals:set[str], regexes:list[re.Pattern]).
+    Each whitelist file is JSON: {"literals": [...], "patterns": [...]}.
     """
     import re
     literals = set()
@@ -53,13 +54,13 @@ def load_whitelist(names):
     for name in names:
         path = os.path.join(WHITELIST_DIR, name + ".json")
         if not os.path.isfile(path):
-            print(f"[sensitive-data-guard] 警告:未找到白名单 '{name}'(路径 {path})", file=sys.stderr)
+            print(f"[sensitive-data-guard] Warning: whitelist '{name}' not found (path {path})", file=sys.stderr)
             continue
         try:
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
         except Exception as e:
-            print(f"[sensitive-data-guard] 警告:无法解析白名单 '{name}':{e}", file=sys.stderr)
+            print(f"[sensitive-data-guard] Warning: could not parse whitelist '{name}': {e}", file=sys.stderr)
             continue
         for lit in data.get("literals", []):
             if isinstance(lit, str) and lit:
@@ -68,7 +69,7 @@ def load_whitelist(names):
             try:
                 regexes.append(re.compile(pat))
             except re.error as e:
-                print(f"[sensitive-data-guard] 警告:'{name}' 中的正则有误:{pat}({e})", file=sys.stderr)
+                print(f"[sensitive-data-guard] Warning: invalid regex in '{name}': {pat} ({e})", file=sys.stderr)
     return literals, regexes
 
 
@@ -99,7 +100,7 @@ def scan(text, literals, regexes):
         validate = rule.get("validate")
         for m in rule["regex"].finditer(text):
             matched = m.group(0)
-            # 可选的规则级校验(如银行卡 Luhn):未通过则不算命中
+            # optional rule-level validation (e.g. Luhn for bank cards): skip if it fails
             if validate is not None and not validate(matched):
                 continue
             if is_whitelisted(matched, literals, regexes):
@@ -115,7 +116,7 @@ def scan(text, literals, regexes):
                     "match_raw": matched,
                 }
             )
-    # 对同一 (行号, 原文, 规则) 的重叠命中去重
+    # dedup overlapping hits for the same (line, raw text, rule)
     seen = set()
     unique = []
     for f in findings:
@@ -129,12 +130,12 @@ def scan(text, literals, regexes):
 
 
 def write_audit_log(source_label, findings, whitelists):
-    """把**被拦截**的扫描结果追加到审计日志(JSONL,每行一条)。
+    """Append **blocked** scan results to the audit log (JSONL, one record per line).
 
-    只在命中(BLOCKED)时记录:为每一条触发的规则各写一行,记录时间/文件/规则/
-    行号/脱敏值。干净(CLEAN)的扫描不写日志。
+    Only records on a hit (BLOCKED): write one line per triggered rule, recording
+    time/file/rule/line/redacted value. Clean (CLEAN) scans write no log.
 
-    写日志失败绝不影响扫描结果,只在 stderr 给出提示。
+    A logging failure must never affect the scan result; it only prints a note to stderr.
     """
     if not findings:
         return
@@ -160,20 +161,20 @@ def write_audit_log(source_label, findings, whitelists):
             for r in rows:
                 fh.write(json.dumps(r, ensure_ascii=False) + "\n")
     except Exception as e:  # noqa: BLE001
-        print(f"[sensitive-data-guard] 警告:写入审计日志失败:{e}", file=sys.stderr)
+        print(f"[sensitive-data-guard] Warning: failed to write audit log: {e}", file=sys.stderr)
 
 
 def main():
-    ap = argparse.ArgumentParser(description="sensitive-data-guard 内容扫描器")
+    ap = argparse.ArgumentParser(description="sensitive-data-guard content scanner")
     src = ap.add_mutually_exclusive_group(required=True)
-    src.add_argument("--file", help="扫描文件")
-    src.add_argument("--stdin", action="store_true", help="扫描 stdin")
-    src.add_argument("--text", help="扫描字面字符串")
+    src.add_argument("--file", help="scan a file")
+    src.add_argument("--stdin", action="store_true", help="scan stdin")
+    src.add_argument("--text", help="scan a literal string")
     ap.add_argument("--whitelist", action="append", default=None,
-                    help="要使用的白名单名称(可重复);覆盖已保存的选择")
-    ap.add_argument("--no-whitelist", action="store_true", help="不套用任何白名单")
-    ap.add_argument("--no-log", action="store_true", help="本次扫描不写入审计日志")
-    ap.add_argument("--json", action="store_true", help="额外向 stderr 输出 JSON 报告")
+                    help="whitelist name(s) to use (repeatable); overrides the saved selection")
+    ap.add_argument("--no-whitelist", action="store_true", help="apply no whitelist")
+    ap.add_argument("--no-log", action="store_true", help="don't write the audit log for this scan")
+    ap.add_argument("--json", action="store_true", help="also emit a JSON report to stderr")
     args = ap.parse_args()
 
     if args.file:
@@ -182,7 +183,7 @@ def main():
             with open(args.file, "r", encoding="utf-8", errors="replace") as f:
                 text = f.read()
         except Exception as e:
-            print(f"[sensitive-data-guard] 读取文件出错:{e}", file=sys.stderr)
+            print(f"[sensitive-data-guard] Error reading file: {e}", file=sys.stderr)
             sys.exit(3)
     elif args.stdin:
         source_label = "<stdin>"
@@ -204,22 +205,22 @@ def main():
     if not args.no_log:
         write_audit_log(source_label, findings, names)
 
-    wl_label = "、".join(names) if names else "无"
+    wl_label = ", ".join(names) if names else "none"
 
     if args.json:
         print(json.dumps({"findings": findings, "whitelists": names}, ensure_ascii=False),
               file=sys.stderr)
 
     if not findings:
-        print(f"[sensitive-data-guard] 干净(CLEAN)—— 未检测到敏感内容(白名单:{wl_label})。")
+        print(f"[sensitive-data-guard] CLEAN — no sensitive content detected (whitelists: {wl_label}).")
         sys.exit(0)
 
-    print(f"[sensitive-data-guard] 已拦截(BLOCKED)—— 检测到 {len(findings)} 项敏感内容"
-          f"(白名单:{wl_label}):\n")
+    print(f"[sensitive-data-guard] BLOCKED — detected {len(findings)} sensitive item(s)"
+          f" (whitelists: {wl_label}):\n")
     for f in findings:
-        tag = "机密" if f["category"] == "secret" else "隐私"
-        print(f"  L{f['line']:<4} [{tag}/{f['severity']}] {f['desc']}:{f['match_redacted']}")
-    print("\n在移除、脱敏,或(仅当确实安全时)将每一项加入白名单之前,不要写入该内容。")
+        tag = "secret" if f["category"] == "secret" else "pii"
+        print(f"  L{f['line']:<4} [{tag}/{f['severity']}] {f['desc']}: {f['match_redacted']}")
+    print("\nDo not write this content until each item is removed, redacted, or (only if truly safe) added to a whitelist.")
     sys.exit(2)
 
 

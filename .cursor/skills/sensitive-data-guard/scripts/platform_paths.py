@@ -1,9 +1,9 @@
-"""跨平台路径辅助(sensitive-data-guard)。
+"""Cross-platform path helpers (sensitive-data-guard).
 
-本机配置目录优先级:
-  1. 环境变量 SENSITIVE_DATA_GUARD_HOME(任意平台)
+Local config directory priority:
+  1. Environment variable SENSITIVE_DATA_GUARD_HOME (any platform)
   2. Windows: %APPDATA%\\sensitive-data-guard
-  3. macOS / Linux: $XDG_CONFIG_HOME/sensitive-data-guard 或 ~/.config/sensitive-data-guard
+  3. macOS / Linux: $XDG_CONFIG_HOME/sensitive-data-guard or ~/.config/sensitive-data-guard
 """
 import os
 import sys
@@ -18,7 +18,7 @@ def platform_label() -> str:
 
 
 def default_config_dir() -> str:
-    """返回本机 sensitive-data-guard 配置目录(不含 selection.json)。"""
+    """Return the local sensitive-data-guard config directory (excluding selection.json)."""
     override = os.environ.get("SENSITIVE_DATA_GUARD_HOME")
     if override:
         return override
@@ -36,19 +36,19 @@ def default_config_dir() -> str:
 
 
 def default_config_dir_hint() -> str:
-    """用于文档展示的配置目录说明。"""
+    """Config directory description for display in docs."""
     if sys.platform == "win32":
         return r"%APPDATA%\sensitive-data-guard"
     if sys.platform == "darwin":
         return "~/.config/sensitive-data-guard"
-    return "$XDG_CONFIG_HOME/sensitive-data-guard 或 ~/.config/sensitive-data-guard"
+    return "$XDG_CONFIG_HOME/sensitive-data-guard or ~/.config/sensitive-data-guard"
 
 
 def repo_root() -> str:
-    """从 skill 目录向上定位仓库根(含 .git 的目录);找不到则回退到工作目录的当前盘。
+    """Locate the repo root (the directory containing .git) by walking up from the skill directory; fall back to the current drive of the working directory if not found.
 
-    skill 位于 <repo>/.cursor/skills/sensitive-data-guard/scripts/,因此从这里
-    逐级向上查找 .git 目录即可得到仓库根。
+    The skill lives at <repo>/.cursor/skills/sensitive-data-guard/scripts/, so walking up
+    from here to find the .git directory yields the repo root.
     """
     here = os.path.dirname(os.path.abspath(__file__))
     cur = here
@@ -59,17 +59,17 @@ def repo_root() -> str:
         if parent == cur:
             break
         cur = parent
-    # 回退:skill 目录固定为 <repo>/.cursor/skills/sensitive-data-guard/scripts
-    # 向上四级即仓库根。
+    # Fallback: the skill directory is fixed at <repo>/.cursor/skills/sensitive-data-guard/scripts,
+    # so four levels up is the repo root.
     return os.path.abspath(os.path.join(here, os.pardir, os.pardir, os.pardir, os.pardir))
 
 
 def audit_log_path() -> str:
-    """返回敏感数据扫描审计日志(scan-log.jsonl)的绝对路径。
+    """Return the absolute path of the sensitive-data scan audit log (scan-log.jsonl).
 
-    优先级:
-      1. 环境变量 SENSITIVE_DATA_GUARD_LOG(直接指向日志文件,便于测试)
-      2. <仓库根>/.ai-sdlc/sensitive-data-guard/scan-log.jsonl
+    Priority:
+      1. Environment variable SENSITIVE_DATA_GUARD_LOG (points directly at the log file, handy for tests)
+      2. <repo root>/.ai-sdlc/sensitive-data-guard/scan-log.jsonl
     """
     override = os.environ.get("SENSITIVE_DATA_GUARD_LOG")
     if override:

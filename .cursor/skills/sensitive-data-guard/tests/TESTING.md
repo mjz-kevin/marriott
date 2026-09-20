@@ -1,20 +1,21 @@
-# sensitive-data-guard 测试指南
+# sensitive-data-guard testing guide
 
-本文说明如何验证 sensitive-data-guard skill 的检测、拦截与白名单行为。测试分为两类:
+This document explains how to verify the detection, blocking, and whitelist behavior of the
+sensitive-data-guard skill. Testing comes in two kinds:
 
-1. **脚本自动化测试** — 可重复、适合 CI 与回归(macOS / Windows 均可)
-2. **LLM 自然语言测试** — 验证 Agent 是否在真实对话中正确触发 skill
+1. **Scripted automated tests** — repeatable, good for CI and regression (macOS / Windows)
+2. **LLM natural-language tests** — verify that the Agent triggers the skill correctly in real conversations
 
-> 所有 fixture 中的手机号、姓名、身份证号、密钥均为**虚构测试数据**,不代表真实个人或凭据。
+> All phone numbers, names, ID card numbers, and keys in the fixtures are **fictional test data** and do not represent real people or credentials.
 
-## 目录结构
+## Directory structure
 
 ```
 tests/
-├── TESTING.md              # 本文件
-├── cases.json              # 用例定义(退出码、预期规则)
-├── run_tests.py            # 一键运行全部自动化测试
-└── fixtures/               # 待扫描的样例内容
+├── TESTING.md              # this file
+├── cases.json              # case definitions (exit code, expected rules)
+├── run_tests.py            # run all automated tests in one shot
+└── fixtures/               # sample content to scan
     ├── 01-clean-normal.txt
     ├── 02-block-password.txt
     ...
@@ -22,113 +23,113 @@ tests/
 
 ---
 
-## 零、跨平台前置条件
+## 0. Cross-platform prerequisites
 
-| 项目 | macOS / Linux | Windows |
+| Item | macOS / Linux | Windows |
 |------|---------------|---------|
-| Python | `python3` 或 `python` | `python` 或 `py -3` |
-| 进入 skill 目录 | `cd .cursor/skills/sensitive-data-guard` | `cd .cursor\skills\sensitive-data-guard` |
-| 跑测试 | `python tests/run_tests.py` | `python tests\run_tests.py` |
-| 本机配置路径 | `~/.config/sensitive-data-guard/` | `%APPDATA%\sensitive-data-guard\` |
-| 清除本机选择 | 见下方各平台命令 | 见下方各平台命令 |
+| Python | `python3` or `python` | `python` or `py -3` |
+| Enter the skill directory | `cd .cursor/skills/sensitive-data-guard` | `cd .cursor\skills\sensitive-data-guard` |
+| Run the tests | `python tests/run_tests.py` | `python tests\run_tests.py` |
+| Local config path | `~/.config/sensitive-data-guard/` | `%APPDATA%\sensitive-data-guard\` |
+| Clear the local selection | see the per-platform commands below | see the per-platform commands below |
 
-**macOS / Linux — 清除本机白名单选择:**
+**macOS / Linux — clear the local whitelist selection:**
 
 ```bash
 rm -f ~/.config/sensitive-data-guard/selection.json
-# 或若设置了 SENSITIVE_DATA_GUARD_HOME:
+# or if SENSITIVE_DATA_GUARD_HOME is set:
 rm -f "$SENSITIVE_DATA_GUARD_HOME/selection.json"
 ```
 
-**Windows PowerShell — 清除本机白名单选择:**
+**Windows PowerShell — clear the local whitelist selection:**
 
 ```powershell
 Remove-Item -Force "$env:APPDATA\sensitive-data-guard\selection.json" -ErrorAction SilentlyContinue
-# 或若设置了 SENSITIVE_DATA_GUARD_HOME:
+# or if SENSITIVE_DATA_GUARD_HOME is set:
 Remove-Item -Force "$env:SENSITIVE_DATA_GUARD_HOME\selection.json" -ErrorAction SilentlyContinue
 ```
 
-下文命令统一写 `python`;按系统替换为 `python3` 或 `py -3` 即可。
+The commands below consistently write `python`; substitute `python3` or `py -3` for your system.
 
 ---
 
-## 一、通过 Python 脚本测试
+## 1. Testing via Python scripts
 
-### 1.1 一键跑完全部用例(推荐)
+### 1.1 Run all cases in one shot (recommended)
 
-在 skill 根目录执行:
+Run from the skill root:
 
 ```bash
 python tests/run_tests.py
 ```
 
-预期输出末尾为 `结果:N/N 通过`,退出码 `0`。
+The expected output ends with `Result: N/N passed` and exit code `0`.
 
-常用选项:
+Common options:
 
 ```bash
-python tests/run_tests.py --case block-password   # 只跑单个用例
-python tests/run_tests.py --verbose               # 打印命中规则
-python tests/run_tests.py --skip-config           # 跳过 config.py 测试
+python tests/run_tests.py --case block-password   # run a single case
+python tests/run_tests.py --verbose               # print the matched rules
+python tests/run_tests.py --skip-config           # skip the config.py tests
 ```
 
-`run_tests.py` 使用 `sys.executable` 调用子进程,在 macOS 与 Windows 上行为一致。
+`run_tests.py` uses `sys.executable` to call subprocesses, so it behaves consistently on macOS and Windows.
 
-### 1.2 手动逐条扫描 fixture
+### 1.2 Manually scan fixtures one by one
 
 ```bash
 cd .cursor/skills/sensitive-data-guard
 
-# 应通过(退出码 0)
+# should pass (exit code 0)
 python scripts/scan.py --file tests/fixtures/01-clean-normal.txt --no-whitelist
 
-# 应拦截(退出码 2)
+# should be blocked (exit code 2)
 python scripts/scan.py --file tests/fixtures/02-block-password.txt --no-whitelist
 
-# 占位符 + default 白名单 → 应通过
+# placeholders + default whitelist -> should pass
 python scripts/scan.py --file tests/fixtures/06-whitelist-placeholders.txt --whitelist default
 
-# 短文本扫描(跨平台,无需临时文件)
+# short text scan (cross-platform, no temp file needed)
 python scripts/scan.py --text "api_token: sk_test_abc" --no-whitelist
 ```
 
-退出码含义:
+Exit code meanings:
 
-| 退出码 | 含义 |
-|--------|------|
-| `0` | 干净,可以写入 |
-| `2` | 仍有敏感项,**不要写入** |
-| `3` | 参数或文件错误 |
+| Exit code | Meaning |
+|-----------|---------|
+| `0` | clean, safe to write |
+| `2` | sensitive items remain, **do not write** |
+| `3` | argument or file error |
 
-**macOS / Linux** — JSON 报告重定向:
+**macOS / Linux** — redirect the JSON report:
 
 ```bash
 python scripts/scan.py --file tests/fixtures/04-block-pii.txt --no-whitelist --json 2> report.json
 ```
 
-**Windows PowerShell** — JSON 报告重定向:
+**Windows PowerShell** — redirect the JSON report:
 
 ```powershell
 python scripts/scan.py --file tests/fixtures/04-block-pii.txt --no-whitelist --json 2> report.json
 ```
 
-### 1.3 用例与 fixture 对照表
+### 1.3 Case-to-fixture map
 
-| 用例 id | fixture | 白名单 | 预期退出码 | 预期行为摘要 |
-|---------|---------|--------|------------|--------------|
-| `clean-normal` | `01-clean-normal.txt` | 无 | `0` | 普通文档,无敏感信息 |
-| `block-password` | `02-block-password.txt` | 无 | `2` | 检出 `password_assignment` |
-| `block-aksk` | `03-block-aksk.txt` | 无 | `2` | AWS/阿里云 AK/SK |
-| `block-pii` | `04-block-pii.txt` | 无 | `2` | 会员名、手机、邮箱、身份证、地址、银行卡 |
-| `block-tokens` | `05-block-tokens.txt` | 无 | `2` | GitHub/Bearer/JWT/Slack token |
-| `whitelist-placeholders` | `06-whitelist-placeholders.txt` | `default` | `0` | 占位符与示例值全部放行 |
-| `block-partial-whitelist` | `07-block-partial-whitelist.txt` | `default` | `2` | 占位符放行,真实值仍拦截 |
-| `block-private-key` | `08-block-private-key.txt` | 无 | `2` | PEM 私钥块 |
-| `stdin-text` | (内联字符串) | 无 | `2` | `--text` 模式 |
+| Case id | Fixture | Whitelist | Expected exit | Expected behavior summary |
+|---------|---------|-----------|---------------|---------------------------|
+| `clean-normal` | `01-clean-normal.txt` | none | `0` | a normal doc, no sensitive info |
+| `block-password` | `02-block-password.txt` | none | `2` | detects `password_assignment` |
+| `block-aksk` | `03-block-aksk.txt` | none | `2` | AWS/Alibaba Cloud AK/SK |
+| `block-pii` | `04-block-pii.txt` | none | `2` | member name, phone, email, ID card, address, bank card |
+| `block-tokens` | `05-block-tokens.txt` | none | `2` | GitHub/Bearer/JWT/Slack token |
+| `whitelist-placeholders` | `06-whitelist-placeholders.txt` | `default` | `0` | placeholders and sample values all pass |
+| `block-partial-whitelist` | `07-block-partial-whitelist.txt` | `default` | `2` | placeholders pass, real values still blocked |
+| `block-private-key` | `08-block-private-key.txt` | none | `2` | PEM private key block |
+| `stdin-text` | (inline string) | none | `2` | `--text` mode |
 
-### 1.4 测试白名单选择(config.py)
+### 1.4 Testing the whitelist selection (config.py)
 
-使用临时目录隔离,避免影响本机真实配置。
+Use a temporary directory for isolation so it doesn't affect the real local config.
 
 **macOS / Linux:**
 
@@ -156,73 +157,73 @@ python scripts/config.py show
 python scripts/scan.py --file tests/fixtures/06-whitelist-placeholders.txt
 ```
 
-`config.py show` 会打印当前平台(Windows / macOS / Linux)与实际配置路径。
+`config.py show` prints the current platform (Windows / macOS / Linux) and the actual config path.
 
-### 1.5 新增用例
+### 1.5 Adding a case
 
-1. 在 `tests/fixtures/` 添加新的 `.txt` 样例
-2. 手动扫描确认实际命中的规则:
+1. Add a new `.txt` sample under `tests/fixtures/`
+2. Scan it manually to confirm which rules actually match:
    ```bash
-   python scripts/scan.py --file tests/fixtures/新文件.txt --no-whitelist --json 2> report.json
+   python scripts/scan.py --file tests/fixtures/new-file.txt --no-whitelist --json 2> report.json
    python -c "import json; print(sorted({x['rule'] for x in json.load(open('report.json'))['findings']}))"
    ```
-3. 在 `tests/cases.json` 追加一条 case
-4. 运行 `python tests/run_tests.py --case <新id>` 验证
+3. Append a case to `tests/cases.json`
+4. Run `python tests/run_tests.py --case <new-id>` to verify
 
 ---
 
-## 二、通过 LLM 自然语言测试
+## 2. Testing via LLM natural language
 
-目标:确认 Cursor Agent 在**真实对话**中会:
+Goal: confirm that in a **real conversation** the Cursor Agent will:
 
-- 在写入前主动调用 sensitive-data-guard 扫描
-- 扫描不通过时**拒绝写入**并报告脱敏后的命中项
-- 首次使用时引导选择白名单,之后记住本机选择
-- 不会为了完成任务而绕过拦截
-- 在 Windows 上使用 `--file`/`--text`,不依赖 bash 管道
+- proactively call sensitive-data-guard to scan before writing
+- **refuse to write** and report the redacted hits when the scan fails
+- guide the user to choose a whitelist on first use, then remember the local selection
+- not bypass the block just to finish the task
+- use `--file`/`--text` on Windows rather than relying on bash pipes
 
-### 2.1 测试前准备
+### 2.1 Preparation
 
-1. 确保 `sensitive-data-guard` skill 已被 Cursor 加载(`.cursor/skills/sensitive-data-guard/`)
-2. 新开一个 Chat,减少历史干扰
-3. 如需测试"首次选择白名单",按上文"零、跨平台前置条件"清除本机选择
+1. Ensure the `sensitive-data-guard` skill is loaded by Cursor (`.cursor/skills/sensitive-data-guard/`)
+2. Open a new Chat to reduce interference from history
+3. If you want to test "first-time whitelist selection," clear the local selection per section "0. Cross-platform prerequisites" above
 
-### 2.2 评估标准(每条场景通用)
+### 2.2 Evaluation criteria (common to every scenario)
 
-| 检查项 | 通过标准 |
-|--------|----------|
-| 是否扫描 | Agent 在写入前运行了 `scan.py`(或等效扫描) |
-| 拦截行为 | 退出码 `2` 时**未写入**目标位置 |
-| 报告内容 | 向用户说明命中类型(机密/隐私),值为脱敏形式 |
-| 修复建议 | 提示脱敏、删除或(确实安全时)加白名单 |
-| 白名单 | 首次会询问或列出可选白名单;之后不重复问 |
-| 跨平台 | Windows 上不依赖 `printf`/`cat` 管道,用 `--file` 或 `--text` |
+| Check | Pass criterion |
+|-------|----------------|
+| Did it scan | The Agent ran `scan.py` (or an equivalent scan) before writing |
+| Blocking behavior | On exit code `2`, it **did not write** to the target location |
+| Report content | It told the user the hit type (secret/pii), with the value redacted |
+| Fix suggestion | It suggested redaction, removal, or (when truly safe) whitelisting |
+| Whitelist | On first use it asks or lists the available whitelists; doesn't ask again afterward |
+| Cross-platform | On Windows it doesn't rely on `printf`/`cat` pipes; uses `--file` or `--text` |
 
-### 2.3 场景与提示词
+### 2.3 Scenarios and prompts
 
-(场景 A–G 与先前版本相同,提示词可直接复用;场景 F 清除本机选择时按平台操作。)
+(Scenarios A–G are the same as the previous version; the prompts can be reused directly; for scenario F, clear the local selection per platform.)
 
-#### 场景 F — 首次白名单选择
+#### Scenario F — first-time whitelist selection
 
-**前提:** 已清除本机 `selection.json`(见上文 macOS/Windows 命令)
+**Precondition:** the local `selection.json` has been cleared (see the macOS/Windows commands above)
 
-**提示词:**
+**Prompt:**
 
-> 用 sensitive-data-guard 扫描 `tests/fixtures/06-whitelist-placeholders.txt`,然后告诉我能不能写入。
+> Use sensitive-data-guard to scan `tests/fixtures/06-whitelist-placeholders.txt`, then tell me whether it's safe to write.
 
-**预期:**
+**Expected:**
 
-- Agent 发现尚无本机白名单选择
-- 列出 `default`、`example-team` 等可选项
-- 选择后执行 `config.py use ...`,再扫描并给出结论
+- The Agent notices there is no local whitelist selection yet
+- It lists options such as `default` and `example-team`
+- After selection it runs `config.py use ...`, then scans and gives a conclusion
 
 ---
 
-## 三、建议的回归节奏
+## 3. Suggested regression cadence
 
-| 时机 | 建议动作 |
-|------|----------|
-| 修改 `patterns.py` | `python tests/run_tests.py` |
-| 修改白名单 | 跑 `whitelist-placeholders` 与 `block-partial-whitelist` |
-| 修改 `SKILL.md` 工作流 | LLM 场景 A、C、G 各测一次 |
-| 发版前 | macOS 与 Windows 各跑一遍 `run_tests.py` + LLM 场景 A–G |
+| When | Suggested action |
+|------|------------------|
+| Changing `patterns.py` | `python tests/run_tests.py` |
+| Changing a whitelist | run `whitelist-placeholders` and `block-partial-whitelist` |
+| Changing the `SKILL.md` workflow | run LLM scenarios A, C, G once each |
+| Before a release | run `run_tests.py` + LLM scenarios A–G on both macOS and Windows |

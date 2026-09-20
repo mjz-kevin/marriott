@@ -1,10 +1,10 @@
 {
   "version": 1,
-  "description": "sensitive-data-guard 自动化测试用例定义。fixture 路径相对于 tests/fixtures/。",
+  "description": "Automated test case definitions for sensitive-data-guard. Fixture paths are relative to tests/fixtures/.",
   "cases": [
     {
       "id": "clean-normal",
-      "name": "普通技术文档应通过",
+      "name": "A normal technical doc should pass",
       "fixture": "01-clean-normal.txt",
       "whitelist": [],
       "no_whitelist": true,
@@ -15,7 +15,7 @@
     },
     {
       "id": "block-password",
-      "name": "密码赋值应被拦截",
+      "name": "A password assignment should be blocked",
       "fixture": "02-block-password.txt",
       "no_whitelist": true,
       "expect_exit": 2,
@@ -24,7 +24,7 @@
     },
     {
       "id": "block-aksk",
-      "name": "AK/SK 与云密钥应被拦截",
+      "name": "AK/SK and cloud keys should be blocked",
       "fixture": "03-block-aksk.txt",
       "no_whitelist": true,
       "expect_exit": 2,
@@ -38,7 +38,7 @@
     },
     {
       "id": "block-pii",
-      "name": "个人敏感信息应被拦截",
+      "name": "Personally identifiable information should be blocked",
       "fixture": "04-block-pii.txt",
       "no_whitelist": true,
       "expect_exit": 2,
@@ -55,7 +55,7 @@
     },
     {
       "id": "block-tokens",
-      "name": "各类 token 应被拦截",
+      "name": "Various tokens should be blocked",
       "fixture": "05-block-tokens.txt",
       "no_whitelist": true,
       "expect_exit": 2,
@@ -70,7 +70,7 @@
     },
     {
       "id": "whitelist-placeholders",
-      "name": "占位符与示例值套用 default 白名单后应通过",
+      "name": "Placeholders and sample values should pass after applying the default whitelist",
       "fixture": "06-whitelist-placeholders.txt",
       "whitelist": ["default"],
       "expect_exit": 0,
@@ -79,7 +79,7 @@
     },
     {
       "id": "block-partial-whitelist",
-      "name": "混合内容:占位符放行、真实敏感值仍拦截",
+      "name": "Mixed content: placeholders pass, real sensitive values are still blocked",
       "fixture": "07-block-partial-whitelist.txt",
       "whitelist": ["default"],
       "expect_exit": 2,
@@ -93,7 +93,7 @@
     },
     {
       "id": "block-private-key",
-      "name": "PEM 私钥块应被拦截",
+      "name": "A PEM private key block should be blocked",
       "fixture": "08-block-private-key.txt",
       "no_whitelist": true,
       "expect_exit": 2,
@@ -102,7 +102,7 @@
     },
     {
       "id": "stdin-text",
-      "name": "--text 模式应能拦截内联敏感字符串",
+      "name": "--text mode should block an inline sensitive string",
       "inline_text": "api_token: sk_test_abcdefghijklmnopqrstuvwxyz",
       "no_whitelist": true,
       "expect_exit": 2,
@@ -111,7 +111,7 @@
     },
     {
       "id": "bank-card-luhn-valid",
-      "name": "通过 Luhn 校验的银行卡号应被拦截",
+      "name": "A bank card number that passes the Luhn check should be blocked",
       "inline_text": "test card 4111 1111 1111 1111",
       "no_whitelist": true,
       "expect_exit": 2,
@@ -120,7 +120,7 @@
     },
     {
       "id": "bank-card-luhn-invalid",
-      "name": "未通过 Luhn 校验的 16 位数字不应命中 bank_card",
+      "name": "A 16-digit number that fails the Luhn check should not match bank_card",
       "inline_text": "order id 4111 1111 1111 1112",
       "no_whitelist": true,
       "expect_exit": 0,
