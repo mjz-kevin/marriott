@@ -33,16 +33,16 @@ mcp:
     space: DBU4
     parent_pages:
       # 文件夹模式（当前）：一级根目录「AI SDLC Poilt Test」folder 页 ID。
-      # 发布脚本在此根下自动建/找 二级 {initiative} → 三级 {epic} → 四级 {epic}-PRD / {epic}-Tech Solution。
-      # {initiative} 取 Epic 的父级 Jira key（Initiative/计划，如 PORT-352）；{epic} 取 Jira Epic key（如 CNAPP-5661）。
+      # 发布脚本在此根下自动建/找 二级 {epic_parent} → 三级 {epic} → 四级 {epic}-PRD / {epic}-Tech Solution。
+      # {epic_parent} 取 Epic 的父级 Jira key（Initiative/计划，如 PORT-352）；{epic} 取 Jira Epic key（如 CNAPP-5661）。
       # 一律用 Jira key，不用功能名或中文 slug，保证归档夹稳定可检索。
       root: "4205314140"             # 一级根目录页 ID（AI SDLC Poilt Test，test/DBU4，folder 类型）
       # 旧模式回退（直接父页，仅当未走文件夹模式时使用）：
       prd: "4147151138"
       tech_solution: "4198531132"
-    folder_layout:                   # 文件夹层级约定（供 skill 说明用；实际由脚本 --root/--initiative/--epic/--kind 落地）
+    folder_layout:                   # 文件夹层级约定（供 skill 说明用；实际由脚本 --root/--epic-parent/--epic/--kind 落地）
       level1: "AI SDLC Poilt Test"                  # 一级：固定根目录（即 parent_pages.root）
-      level2: "{initiative}"                        # 二级：Epic 的父级 Jira key（Initiative/计划，如 PORT-352）
+      level2: "{epic_parent}"                       # 二级：Epic 的父级 Jira key（Initiative/计划，如 PORT-352）
       level3: "{epic}"                              # 三级：Jira Epic key（如 CNAPP-5661）
       level4_prd: "{epic}-PRD"                      # 四级：PRD 归档夹
       level4_tech_solution: "{epic}-Tech Solution"  # 四级：技术方案归档夹
