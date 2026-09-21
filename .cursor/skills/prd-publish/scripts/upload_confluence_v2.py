@@ -42,7 +42,7 @@ from collections import deque
 #   2) 系统 PATH
 #   3) 自动扫描固定运行时目录 C:/AI-SDLC/runtime（可用环境变量 AI_SDLC_RUNTIME 覆盖）下的 node-*
 #   4) 默认名 "npx"
-# 详细的多工具自检见 env-setup skill 的 scripts/env-setup.py。
+# 本段解析逻辑自包含，无需外部自检工具。
 _DEFAULT_RUNTIME_ROOT = "C:/AI-SDLC/runtime"
 
 

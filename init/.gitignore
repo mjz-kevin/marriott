@@ -1,0 +1,9 @@
+# 构建产物（含大体积运行时，不提交）
+dist/
+
+# Windows 绿色运行时包（体积大，另行分发，不提交）
+res/AI-SDLC.zip
+
+# Python 缓存
+**/__pycache__/
+*.pyc

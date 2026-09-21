@@ -49,7 +49,7 @@ Remove-Item -Force "$env:APPDATA\sensitive-data-guard\selection.json" -ErrorActi
 Remove-Item -Force "$env:SENSITIVE_DATA_GUARD_HOME\selection.json" -ErrorAction SilentlyContinue
 ```
 
-The commands below consistently write `python`; substitute `python3` on macOS/Linux, or the interpreter path from the env-setup self-check output on Windows when Python isn't on `PATH`.
+The commands below consistently write `python`; substitute `python3` on macOS/Linux, or `C:/AI-SDLC/runtime/python-*/python.exe` on Windows when Python isn't on `PATH`.
 
 ---
 
