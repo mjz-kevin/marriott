@@ -1,102 +1,102 @@
-# 详细技术方案模板
+# Detailed Technical Solution Template
 
-## 文档信息
+## Document Information
 
-| 项目          | 内容                   |
+| Item | Content |
 | ------------- | ---------------------- |
-| 产品/功能名称 | [填写名称]             |
-| 版本          | v1.0                   |
-| 作者          | [XXXXX]                |
-| 日期          | YYYY-MM-DD             |
-| 状态          | 草稿 / 评审中 / 已确认 |
+| Product / Feature Name | [Enter name] |
+| Version | v1.0 |
+| Author | [XXXXX] |
+| Date | YYYY-MM-DD |
+| Status | Draft / In Review / Approved |
 
-## 版本变更记录
+## Change Log
 
-| Version | Update Date    | 变更类型 | 改版说明 Description | 作者 Author | 评审 Reviewer  |
+| Version | Update Date | Change Type | Description | Author | Reviewer |
 | ------- | -------------- | -------- | -------------------- | ----------- | -------------- |
-| V1.0.0  | 【YYYY/MM/DD】 | A        | 新建初版             | 【姓名】    | 【评审员姓名】 |
+| V1.0.0 | [YYYY/MM/DD] | A | Initial draft | [Name] | [Reviewer Name] |
 
-> Type 说明：A = Add（新增）｜M = Modification（修改）｜D = Deletion（删除）
+> Type legend: A = Add | M = Modification | D = Deletion
 
-## 1. 业务背景
+## 1. Business Background
 
-简要描述业务场景。
+Briefly describe the business scenario.
 
-## 2. 流程图
+## 2. Flow Diagram
 
-主流程图：页面入口、请求时机、数据加载、业务异常，页面状态切换、关键操作后的跳转。
+Main flow diagram: page entry, request timing, data loading, business exceptions, page state transitions, and navigation after key actions.
 
-## 3. 依赖项
+## 3. Dependencies
 
-### 3.1 接口 / 数据契约
+### 3.1 Interface / Data Contract
 
-| 项 | 内容 |
-|------|------|
-| 请求/触发时机 | 进页/刷新/登录态变化 |
-| 关键字段 | `字段名`：含义、类型 |
-| 空值 / 失败兜底 | 字段为空→？；请求失败→兜底策略，不静默失败 |
-| 前置/Safelisting | 接口 safelist |
+| Item | Content |
+|------|---------|
+| Request / Trigger Timing | On enter / refresh / login-state change |
+| Key Fields | `field_name`: meaning, type |
+| Null / Failure Fallback | Field empty → ?; request failure → fallback strategy; do not fail silently |
+| Prerequisite / Safelisting | Interface safelist |
 
-### 3.2 Feature Flag / 其他配置
+### 3.2 Feature Flag / Other Configuration
 
-| Key        | 含义 | 默认值 | 读取失败时         | 备注                             |
+| Key | Meaning | Default | On Read Failure | Notes |
 | :--------- | :--- | :----- | :----------------- | :------------------------------- |
-| `flag_key` |      | 关     | 默认关，不阻塞进页 | 两端读同一 key，不本地写死默认开 |
+| `flag_key` | | Off | Default off; do not block page entry | Both platforms read the same key; do not hardcode default on locally |
 
-### 3.3 设计 / 规格来源
+### 3.3 Design / Spec Source
 
-[Figma / 内容模板 / 页面结构规范 链接]
+[Figma / content template / page structure spec link]
 
-## 4.任务拆解
+## 4. Task Breakdown
 
-| 项   | 技术任务 | 其他 Comments |
+| Item | Technical Task | Other Comments |
 | ---- | -------- | ------------- |
-|      |          |               |
+| | | |
 
-## 5. 关键对齐项
+## 5. Key Alignment Items
 
-| 项 | 关注点 | 对齐方式 | 其他 Comments |
-|------|--------|---------|--------------|
+| Item | Focus | Alignment Method | Other Comments |
+|------|-------|------------------|----------------|
 | | | | |
 
-## 6. 风险项
+## 6. Risk Items
 
-| 风险缘由 | 会导致的情况 | Comment |
-|---------|-------------|---------|
+| Root Cause | Resulting Situation | Comment |
+|------------|---------------------|---------|
 | | | |
 
-## 7. 可复用组件
+## 7. Reusable Components
 
-| 组件名 | 端/实现方 | 在本需求的使用处 |
-|--------|----------|----------------|
+| Component Name | Platform / Implementer | Usage in This Requirement |
+|----------------|------------------------|---------------------------|
 | | | |
 
-## 8. 双端差异
+## 8. Platform Differences (iOS / Android)
 
-| 需求点 | **iOS** | **Android** |
-|--------|----------------------|--------------------------|
+| Requirement Point | **iOS** | **Android** |
+|-------------------|---------|-------------|
 | | | |
 
-## 9. 建议 QA 测试路径
+## 9. Suggested QA Test Paths
 
-| 需求点 | 建议测试路径 |
-|--------|-------------|
+| Requirement Point | Suggested Test Path |
+|-------------------|---------------------|
 | | |
 
-## 10. 上线后监控方式
+## 10. Post-Launch Monitoring
 
-| 需求点 | 监控方式 |
-|--------|---------|
-| | 如 embrace / 发布成功率 / 日志 |
+| Requirement Point | Monitoring Method |
+|-------------------|-------------------|
+| | e.g., Embrace / release success rate / logs |
 
-## 11. 其他 Comments（状态页 / 边界）
+## 11. Other Comments (State Pages / Edge Cases)
 
-| 类型 | 说明 |
-|------|------|
-| 状态页 | Loading / Empty / Error |
+| Type | Description |
+|------|-------------|
+| State Pages | Loading / Empty / Error |
 
-## 12. 评审结论
+## 12. Review Conclusion
 
-| 结论 | 待办项 | Owner | 截止时间 |
+| Conclusion | Action Item | Owner | Due Date |
 | ---- | ------ | ----- | -------- |
-|      |        |       |          |
+| | | | |

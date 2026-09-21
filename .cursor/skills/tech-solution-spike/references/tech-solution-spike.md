@@ -1,108 +1,108 @@
-# 调研类技术方案模板（可选）
+# Research (Spike) Technical Solution Template (optional)
 
-## 文档信息
+## Document Information
 
-| 项目          | 内容                   |
+| Item | Content |
 | ------------- | ---------------------- |
-| 产品/功能名称 | [填写名称]             |
-| 版本          | v1.0                   |
-| 作者          | [XXXXX]                |
-| 日期          | YYYY-MM-DD             |
-| 状态          | 草稿 / 评审中 / 已确认 |
+| Product / Feature Name | [Enter name] |
+| Version | v1.0 |
+| Author | [XXXXX] |
+| Date | YYYY-MM-DD |
+| Status | Draft / In Review / Approved |
 
-## 版本变更记录
+## Change Log
 
-| Version | Update Date    | 变更类型 | 改版说明 Description | 作者 Author | 评审 Reviewer  |
+| Version | Update Date | Change Type | Description | Author | Reviewer |
 | ------- | -------------- | -------- | -------------------- | ----------- | -------------- |
-| V1.0.0  | 【YYYY/MM/DD】 | A        | 新建初版             | 【姓名】    | 【评审员姓名】 |
+| V1.0.0 | [YYYY/MM/DD] | A | Initial draft | [Name] | [Reviewer Name] |
 
-> Type 说明：A = Add（新增）｜M = Modification（修改）｜D = Deletion（删除）
+> Type legend: A = Add | M = Modification | D = Deletion
 
-## 1. 背景与调研目标
+## 1. Background and Research Goals
 
-- 要解决的技术问题 / 不确定点
-- 调研目标（要回答的关键问题）
-- 约束条件（性能、兼容、时间、依赖）
+- Technical problem to solve / uncertainties
+- Research goals (key questions to answer)
+- Constraints (performance, compatibility, timeline, dependencies)
 
-## 2. 评估维度
+## 2. Evaluation Dimensions
 
-| 维度 | 说明 |
-|------|------|
-| 实现复杂度 | 工作量、难度 |
-| 多端/多实现一致性(不同平台差异性对比) | 各端能否得到一致业务结果 |
-| 性能 | 是否卡顿、cpu&mem占用、占用响应、资源占用等 |
-| 可维护性 / 可扩展性 | 后续演进成本 |
-| 依赖与风险 | 对接口/SDK/三方/平台的依赖 |
-| 复用性 | 是否可复用公共能力 |
+| Dimension | Description |
+|-----------|-------------|
+| Implementation Complexity | Effort, difficulty |
+| Multi-Platform / Multi-Implementation Consistency (cross-platform difference comparison) | Whether each platform yields consistent business results |
+| Performance | Whether it causes jank; CPU & memory usage; responsiveness; resource consumption, etc. |
+| Maintainability / Extensibility | Cost of future evolution |
+| Dependencies and Risks | Dependencies on interfaces / SDKs / third parties / platforms |
+| Reusability | Whether shared capabilities can be reused |
 
-## 3. 方案对比
+## 3. Solution Comparison
 
-### 方案 A：[名称]
+### Option A: [Name]
 
-- 思路概述 / 架构（附图）
-- 关键实现点
-- 优点 / 缺点
-- 多端一致性影响
-- 依赖与风险
-- 复用性
+- Approach overview / architecture (attach diagram)
+- Key implementation points
+- Pros / Cons
+- Impact on multi-platform consistency
+- Dependencies and risks
+- Reusability
 
-### 方案 B：[名称]
+### Option B: [Name]
 
-- 思路概述 / 架构（附图）
-- 关键实现点
-- 优点 / 缺点
-- 多端一致性影响
-- 依赖与风险
-- 复用性
+- Approach overview / architecture (attach diagram)
+- Key implementation points
+- Pros / Cons
+- Impact on multi-platform consistency
+- Dependencies and risks
+- Reusability
 
-### 方案 C：[名称]
+### Option C: [Name]
 
-- 思路概述 / 架构（附图）
-- 关键实现点
-- 优点 / 缺点
-- 多端一致性影响
-- 依赖与风险
-- 复用性
+- Approach overview / architecture (attach diagram)
+- Key implementation points
+- Pros / Cons
+- Impact on multi-platform consistency
+- Dependencies and risks
+- Reusability
 
-### 对比矩阵（可选 对方方案大于一个）
+### Comparison Matrix (optional, when there is more than one option)
 
-| 维度 | 方案 A | 方案 B | 方案 C |
-|------|--------|--------|--------|
-| 实现复杂度 | | | |
-| 多端一致性(不同平台差异性对比) | | | |
-| 性能 | | | |
-| 可维护性 | | | |
-| 依赖/风险 | | | |
-| 复用性 | | | |
+| Dimension | Option A | Option B | Option C |
+|-----------|----------|----------|----------|
+| Implementation Complexity | | | |
+| Multi-Platform Consistency (cross-platform difference comparison) | | | |
+| Performance | | | |
+| Maintainability | | | |
+| Dependencies / Risks | | | |
+| Reusability | | | |
 
-## 4. 验证过程（如有 PoC）多种方案  
+## 4. Validation Process (if a PoC exists) — Multiple Options
 
-### 方案 一：[名称]
+### Option 1: [Name]
 
-- 验证方法 
-- Demo / 数据
-- 关键结论
+- Validation method
+- Demo / data
+- Key conclusions
 
-### 方案 二：[名称]
+### Option 2: [Name]
 
-- 验证方法 
-- Demo / 数据
-- 关键结论
+- Validation method
+- Demo / data
+- Key conclusions
 
-## 5. 选型结论与建议
+## 5. Selection Conclusion and Recommendation
 
-- **推荐方案：** [A/B/C] + 核心理由
-- 被否决方案的原因
-- 对估点 / 排期的影响
+- **Recommended Option:** [A/B/C] + core rationale
+- Reasons the rejected options were declined
+- Impact on estimation / schedule
 
-## 6. 未决项与风险(可选)
+## 6. Open Items and Risks (optional)
 
-| 未决项/风险 | 影响 | Owner | 截止时间 |
-|------------|------|-------|---------|
+| Open Item / Risk | Impact | Owner | Due Date |
+|------------------|--------|-------|----------|
 | | | | |
 
-## 7. 评审结论
+## 7. Review Conclusion
 
-| 结论 | Action Item | Owner | 截止时间 |
-|------|------------|-------|---------|
+| Conclusion | Action Item | Owner | Due Date |
+|------------|-------------|-------|----------|
 | | | | |

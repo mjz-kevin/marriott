@@ -4,7 +4,7 @@ description: >-
   Write a PRD-level tech solution following the PRD template: scope, end-to-end architecture,
   key flows, an interface and data contract overview, dependencies with STB/ARB trigger decisions,
   delivery and non-functional requirements, risks, and a review conclusion. This tier does no task
-  breakdown. The tech stack, code repos, review-trigger conditions, and content-model requirements
+  breakdown. The tech stack, code repos, and review-trigger conditions
   all follow the team config. Use when the user asks for a PRD-level tech solution, a high-level
   design, or an architecture solution for a feature;
   triggers: PRD 技术方案 / 高层设计 / 架构方案 / HLD / prd tech solution.
@@ -14,7 +14,7 @@ metadata:
 
 # Tech Solution — PRD level
 
-The PRD-level high-level tech solution, produced during requirement gathering and design based on the PRD, used to decide the implementation direction, architecture, and boundaries, for TL review, and synced back into the PRD's tech-solution chapter.
+The PRD-level high-level tech solution, produced during requirement gathering and design based on the PRD, used to decide the implementation direction, architecture, and boundaries, for TL review, and synced back to the PRD's tech-solution link in the appendix.
 
 | Dimension | Description |
 | --- | ------------------------------------------------------------------ |
@@ -33,7 +33,6 @@ Template: [tech-solution-prd.md](references/tech-solution-prd.md)
 | Purpose | Key |
 | -------- | ------------------------------------------------------- |
 | Diagram language | Default mermaid |
-| Whether a content model is needed | `profiles/{profile}.yaml` → `content_model.required` |
 
 ## 1. Prerequisites
 
@@ -49,16 +48,15 @@ Template: [tech-solution-prd.md](references/tech-solution-prd.md)
 > Before writing, first clarify open questions in the conversation and understand the PRD and code context, then write per the template.
 
 ```
-- S1 文档信息 + version-history table (A/M/D)
+- S1 Document Information + version-history table (A/M/D)
 - S2 Chapter 1 Background and business goals (continuing from the PRD, state "why now")
 - S3 Chapter 2 Scope (In Scope / key scenarios / constraints)
 - S4 Chapter 3 Core tech solution (architecture diagram + main flow + contract overview)
-- S5 [conditional] Content-model overview, only when the team requires a content model
-- S6 Chapter 4 Dependencies (including the STB/ARB trigger-decision row)
-- S7 Chapter 5 Delivery and non-functional requirements (including post-launch monitoring, version-compat strategy)
-- S8 Chapter 6 Risks and open items
-- S9 Chapter 7 Review conclusion (leave only the header row blank, filled in manually by reviewers)
-- S10 Self-check + hand to TL for confirmation
+- S5 Chapter 4 Dependencies (including the STB/ARB trigger-decision row)
+- S6 Chapter 5 Delivery and non-functional requirements (including post-launch monitoring, version-compat strategy)
+- S7 Chapter 6 Risks and open items
+- S8 Chapter 7 Review conclusion (leave only the header row blank, filled in manually by reviewers)
+- S9 Self-check + hand to TL for confirmation
 ```
 
 ### S3 Scope
@@ -75,16 +73,11 @@ Template: [tech-solution-prd.md](references/tech-solution-prd.md)
 | Key flow / sequence | End-to-end main flow + a whole-feature sequence diagram (optional) |
 | Interface and data contracts | Only set boundaries (interface / method / purpose / upstream-downstream); field-level is left to the Story-level detailed solution |
 | Backend tech solution | Optional |
-| Fallbacks for key use cases | Optional but recommended; this is a frequent review focus |
+| Fallbacks for key use cases | Optional |
 
 When referencing code facts, give real paths (repos per the team's actual codebase); when nothing is found, write "no existing implementation found," don't fabricate search results.
 
-### S5 Content-model overview (only when the team requires a content model)
-
-Give the content-modeling direction, the main content types and fields, the draft / version strategy, the multilingual strategy, and the impact on historical content. Field-level design and migration scripts belong to the Story-level detailed solution.
-When the team requires the content model as a standalone item, note here the suggestion to split it into a standalone Story.
-
-### S6 Dependencies (STB/ARB decision required)
+### S5 Dependencies (STB/ARB decision required)
 
 Fill the table in the template's chapter 4 row by row; the STB/ARB trigger-decision row must give a conclusion.
 Go through the review-trigger conditions item by item; an empty item means that change item doesn't apply.
@@ -92,7 +85,7 @@ Go through the review-trigger conditions item by item; an empty item means that 
 When unsure, treat as "triggered" (conservative); an item judged as triggered must reserve review time in the release plan.
 Undecidable technical points are logged as a spike ticket for research (state the problem, verification method, time box, decision criteria).
 
-### S7 Delivery and non-functional requirements
+### S6 Delivery and non-functional requirements
 
 | Row | Point |
 | ---------- | -------------------------------- |
@@ -112,26 +105,26 @@ Undecidable technical points are logged as a spike ticket for research (state th
 | Reference real code paths | Actually search before referencing |
 | Don't estimate | Only give impact scope and suggested split direction; points are set by DEV/QA/PO |
 | Don't write business rules | Business rules belong to the PRD; the solution only writes the technical implementation |
-| Don't delete sections | Write "本期不涉及" for anything not involved and explain why |
-| Faithful to the template | The body starts from "## 文档信息"; fill only the template's existing sections and fields, don't add explanatory sentences, lead-ins, comments, or subsections not defined by the template; the template file's title and author notes are not part of the product |
+| Don't delete sections | For an optional item/section not involved, keep the heading and write `—` (a checklist trace meaning "assessed, not needed this cycle"); when a full sentence is needed use "Not applicable this cycle"; don't delete the section |
+| No fabricated optional content | Don't proactively generate content for an optional item without a requirement/clarification basis; write it only when the requirement, clarification conclusion, or user explicitly calls for it, otherwise write `—` |
+| Faithful to the template | The body starts from "## Document Information"; fill only the template's existing sections and fields, don't add explanatory sentences, lead-ins, comments, or subsections not defined by the template; the template file's title and author notes are not part of the product |
 
 ## 4. Quality gates
 
 - All 7 chapters complete, no empty sections
-- The body starts from "## 文档信息," with no explanatory sentences, lead-ins, or subsections added beyond the template
-- No `[填写]` / `【姓名】` / `TODO` residue
+- The body starts from "## Document Information," with no explanatory sentences, lead-ins, or subsections added beyond the template
+- No `[Enter ...]` / `[Name]` / `TODO` residue
 - An architecture diagram exists (mermaid or a Confluence reference)
 - The STB/ARB trigger-decision row has a clear conclusion (if unsure, treat as triggered)
 - Post-launch monitoring and version-compat strategy are written
 - Risks and open items have an Owner and a due date
 - The review-conclusion table keeps only the header and blank rows, not pre-filled before review (content is filled in manually by reviewers at review time)
 - No real secrets / internal domains / real member IDs
-- When the team requires a content model: the content-model overview exists and gives the impact on historical content
 
 ## 5. Output
 
 Named per the team's title format.
-After handoff, stop and wait for TL confirmation (writing into the PRD's solution chapter also needs PO confirmation). Once confirmed, **you must** lay out the next step as two parallel options, presented equally—don't mention only publishing and don't weaken "convert to PDF" into a footnote or omit it:
+After handoff, stop and wait for TL confirmation (write-back to the PRD appendix link is done directly after TL confirmation; no PO sign-off). Once confirmed, **you must** lay out the next step as two parallel options, presented equally—don't mention only publishing and don't weaken "convert to PDF" into a footnote or omit it:
 
 - Publish: enter the tech-solution publishing step (prd mode).
 - Local convert to PDF: convert the finalized local `.md` offline into a readable, well-formatted PDF for local review, archiving, or sending to people who don't use Confluence; doesn't modify the source or publish.

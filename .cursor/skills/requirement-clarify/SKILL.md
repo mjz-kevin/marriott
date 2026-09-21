@@ -133,7 +133,7 @@ What's clarified is the **technical disagreement points that decide the solution
 | Evaluation dimensions and candidate solutions | Spike | Evaluation dimensions decided, at least 2 candidate solutions with clear boundaries | Only one solution, or missing dimensions making comparison impossible |
 | Task-breakdown boundaries | Story detail | Can split into independently acceptable tasks, granularity and acceptance metric clear | One big task that can't be accepted |
 | Fallbacks and non-functional | Story detail | Failure/null fallbacks, performance/cache/auth, Feature Flag read-failure behavior decided | Only the success path, no fallback or degradation |
-| Compatibility and migration | All | New/old version coexistence strategy, data migration and rollback decided (with content migration when the team requires a content model) | Doesn't consider existing data and rollback |
+| Compatibility and migration | All | New/old version coexistence strategy, data migration and rollback decided | Doesn't consider existing data and rollback |
 
 ### 2. Detect conflicts
 
@@ -175,7 +175,9 @@ Each question carries four elements, sent per the skeleton below (actually prese
 
 Forbidden: giving only a default without asking (equivalent to turning a decision item into a fill-in item), asking no-information questions like "anything else to add," and packaging a non-blocking question as P0 to force the user to answer.
 
-**Question list (machine-readable handoff format)**: the sub-agent outputs the JSON block below (inside the return body; the main agent pops up each question accordingly). Fields: `round` this round's number; `questions[]` each with `id`, `level` (`P0`/`非阻塞`), `dimension`, `prompt`, `why`, `allow_multiple` (multi-select), `options[]` (the first is the recommended default, `recommended:true`), `open_input` (`true` when the prompt can't be enumerated, with the expected format stated in `prompt`). The main agent maps each question to dialog options and auto-appends "other (custom)"; `options` need not include "other."
+**Referenced-entity labeling (hard constraint)**: whenever a prompt or option refers to a resolvable entity (Confluence page, Jira issue, Figma node, PR, code file), it **must not** show only a bare ID like `pages/4222354215`. Resolve it first via the corresponding MCP (Confluence / Jira / Figma / GitHub) and carry its human-readable title, then append the openable link; if resolution fails, still write "无法解析（<原始 ID>）" so the user knows it's unresolved instead of guessing. Format the label as `<title>（<link>）`, e.g. `以 Confluence 参考方案《契约字段对照表》(https://…/pages/4222354215) 已写字段为准`. This applies equally to the dialog options the main agent pops up and the `options[].label` / `prompt` in the machine-readable handoff.
+
+**Question list (machine-readable handoff format)**: the sub-agent outputs the JSON block below (inside the return body; the main agent pops up each question accordingly). Fields: `round` this round's number; `questions[]` each with `id`, `level` (`P0`/`非阻塞`), `dimension`, `prompt`, `why`, `allow_multiple` (multi-select), `options[]` (the first is the recommended default, `recommended:true`), `open_input` (`true` when the prompt can't be enumerated, with the expected format stated in `prompt`). The main agent maps each question to dialog options and auto-appends "other (custom)"; `options` need not include "other." Any entity referenced in `prompt` or `options[].label` must be resolved to its human-readable title with an openable link per "Referenced-entity labeling"—never emit a bare ID.
 
 ```json
 {
@@ -191,7 +193,8 @@ Forbidden: giving only a default without asking (equivalent to turning a decisio
       "open_input": false,
       "options": [
         { "id": "perf", "label": "首屏渲染性能达标", "recommended": true },
-        { "id": "conv", "label": "落地页→预订转化率提升（需给当前值/目标值）" }
+        { "id": "conv", "label": "落地页→预订转化率提升（需给当前值/目标值）" },
+        { "id": "ref", "label": "以 Confluence 参考方案《契约字段对照表》(https://your-domain.atlassian.net/wiki/spaces/XX/pages/4222354215) 已写字段为准" }
       ]
     }
   ]

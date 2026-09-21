@@ -44,7 +44,8 @@ Create tickets in Jira from the confirmed Story list, fill fields, establish bac
 | 2 | No real secrets, internal domains, real member IDs, or real phone numbers anywhere |
 | 3 | **The PO has confirmed** the Story list (there must be explicit confirmation before batch creation) |
 | 4 | The target Jira project can be determined: each Story has a resolvable Parent Epic key (deriving the project), or `mcp.jira.project_key` is configured as an override; if neither, stop and require it to be completed |
-| 5 | Jira auth is available (stop if `mcp_auth` fails) |
+| 5 | **Labels resolve completely per `mcp.jira.labels`**: every `mandatory` category has a value (`business_domain` decided against the official domain definitions on `labels.source`; when `filter_gate` true a miss stops), and each ticket's Component and `platform` label are consistent (Component=`iOS` ⇒ `iOS` label). A gap here stops creation, don't guess |
+| 6 | Jira auth is available (stop if `mcp_auth` fails) |
 
 ## 2. Workflow
 
@@ -77,6 +78,16 @@ project = "{project}" AND summary ~ "{summary}" AND parent = "{Epic key}"
 
 ### S3/S4 Fields
 
+**Submission channel (hard constraint)**: create and edit tickets only via the Atlassian MCP (`createJiraIssue` / `editJiraIssue`). REST API, temporary scripts, and shell subagents are forbidden. On an MCP error, only fix the arguments and retry—don't fall back to another channel.
+
+**Field submission format**:
+
+| Field | Format |
+|------|------|
+| `description` | Submit with `contentFormat: "markdown"` (Jira converts to ADF); don't submit `**xxx**` or `[title](url)` as plain text |
+| Acceptance Criteria field | Submit Markdown; if the field rejects it (ADF-only), submit an ADF `doc` object instead |
+| Parent | Set at creation; change the parent via `editJiraIssue` |
+
 Write per the Story template's field table:
 
 | Field | Handling |
@@ -84,17 +95,27 @@ Write per the Story template's field table:
 | Type | Take `mcp.jira.issue_type` |
 | Parent | Must fill the Epic |
 | Agile Team | Per `mcp.jira.agile_team`: fill if it has a value, leave empty for manual entry if empty |
-| Component | Per `mcp.jira.components.platform_rule`; teams without `components` configured don't handle it |
+| Component | Per `mcp.jira.components.platform_rule`; teams without `components` configured don't handle it. When Component resolves to `iOS`, set the `iOS` label in `labels.platform` in tandem (keep Component ↔ platform label consistent) |
 | Priority | Don't fill |
-| Labels | Per `mcp.jira.labels` (the valid enum, `case_sensitive`, `auto_fill` categories, the `business_domain` gate, and the `ai_provenance` provenance label are all defined by this config key). **Mandatory at creation time**: categories with `auto_apply: always` (like `ai_provenance` → `AIGenerated`) are applied unconditionally, marking tickets created/synced by the agent; when `business_domain.filter_gate` is true, a missing category stops creation; hitting a label outside the enum stops, align per `labels.source` |
+| Labels | Per `mcp.jira.labels` (the valid enum, `case_sensitive`, `auto_fill` categories, the `business_domain` gate, the `platform` label, and the `ai_provenance` provenance label are all defined by this config key). **Mandatory at creation time**: categories with `auto_apply: always` (like `ai_provenance` → `AIGenerated`) are applied unconditionally; every category with `mandatory: true` must resolve to a value—`business_domain` is decided by the Story's functional nature against the official domain definitions on `labels.source` (not the literal title wording), and when `business_domain.filter_gate` is true a missing/unresolved one **stops creation**; the `platform` label follows `platform.platform_binding`—**a ticket whose Component is `iOS` MUST also carry the `iOS` platform label**. Hitting a label outside the enum stops; align per `labels.source` |
 | Acceptance Criteria | Supports Markdown; write the AC text as given in the Story list (three elements: precondition/action/observable result) |
 | Description | When the team requires self-contained descriptions, it must carry full background; see the layout spec below |
 | Estimation fields / Release fields | Don't fill (back-filled by the release flow) |
 
 **Description layout spec**:
 
-- The user-story sentence keywords (`As a` / `When` (or `For`) / `I will be able to` / `So that`) and each subsection heading (like `【背景】`/`【范围】`/`【数据契约（概览）】`/`【性能】`/`【链接的工作项 / 参考文档】`) are all bold.
+- The user-story sentence keywords (`As a` / `When` (or `For`) / `I will be able to` / `So that`) and each subsection heading are bold. Heading language follows `doc.body_language`: use `Linked Work Items / Reference Documents` for `en-US`, `链接的工作项 / 参考文档` for `zh-CN`.
 - Submission method: the Jira description is ADF, and `**` in plain text won't render as bold. Use `editJiraIssue` / `createJiraIssue` with `contentFormat: "markdown"` (Jira auto-converts to ADF), or construct the ADF `strong` mark directly; don't submit `**xxx**` as plain text.
+
+**Back-link subsection template** (fill the team-configured link set; heading language per `doc.body_language`):
+
+```markdown
+**Linked Work Items / Reference Documents**
+
+* PRD: [{PRD title}]({PRD URL})
+* Figma: [{design title}]({design URL})
+* Tech Solution: [{solution title}]({solution URL})
+```
 
 ### S5 Establish links
 
@@ -111,14 +132,14 @@ First establish the Parent (Epic, hierarchy), then go through the team-configure
 **Back-link landing spec** (`prd` / `figma` / `tech_solution` point to a Confluence page or an external URL, not a Jira issue):
 
 - **Parent (Epic)**: use the hierarchy parent-child relation (the `parent` field, issue<->issue), established normally.
-- **URL back-links**: write into the "链接的工作项 / 参考文档" subsection of the target ticket description (in the body, persisted with the ticket); the `tech_solution` back-link is written the same way for detail (into the Story) and spike (into the spike ticket), both in the description subsection. **Must be a clickable hyperlink**: for markdown submission write `[display text](URL)`, or construct ADF with a `link` mark; bare URLs are forbidden (relying only on frontend autolink, they degrade to non-clickable text on export / API read). If MCP supports writing Jira Web remote links, you may also add one in the Links area.
+- **URL back-links**: write into the back-link subsection of the target ticket description (heading language per `doc.body_language`; template above). Persisted in the body. The `tech_solution` back-link is written the same way for detail (into the Story) and spike (into the spike ticket). **Must be a clickable hyperlink**: for markdown submission write `[display text](URL)`, or construct ADF with a `link` mark; bare URLs are forbidden (relying only on frontend autolink, they degrade to non-clickable text on export / API read). If MCP supports writing Jira Web remote links, you may also add one in the Links area.
 - **Don't stuff into comments**: comments aren't a proper back-link spot and are easily buried; the spike conclusion back-link is likewise written in the description subsection, not a comment; only when the description can't be written should you fall back to a comment and note it in the report.
 - If a category has no corresponding link, write the placeholder "未提供（待补充）"; don't leave it empty, don't fabricate.
 
 ### S6 Write back
 
 1. **Requirements-doc appendix Jira link**: write this PRD's **Epic key** back to the Jira link field in the requirements-doc appendix (that field holds only the Epic, not Story keys). Each Story's own back-link is already attached to it in S5 and isn't back-fed into the PRD appendix.
-2. **Tech-solution back-links**: execute the "pending write-back content" left by the tech-solution publishing step; spike and detail are written the same way—both into the "链接的工作项 / 参考文档" subsection of the corresponding ticket **description** (a clickable hyperlink, see the S5 back-link landing spec):
+2. **Tech-solution back-links**: execute the "pending write-back content" left by the tech-solution publishing step; spike and detail are written the same way—both into the back-link subsection of the corresponding ticket **description** (a clickable hyperlink, see the S5 back-link landing spec):
    - (detail case) Story -> Tech Solution link, into that Story's description back-link subsection
    - (spike case) Spike -> Tech Solution link, into the spike ticket's description back-link subsection
 
@@ -133,6 +154,7 @@ Don't auto-transition forward; the schedule is a PO decision.
 
 | Rule | Description |
 |------|------|
+| MCP-only channel | Create/edit tickets only via MCP `createJiraIssue` / `editJiraIssue`; REST API, temporary scripts, and shell subagents are forbidden |
 | Batch creation needs PO confirmation | Don't execute without confirmation |
 | Don't delete or restructure fields | Only fill values, establish links, add comments; don't change field structure |
 | Skip if it exists | Don't overwrite manual edits |
@@ -164,6 +186,7 @@ Created {n} Stories (skipped {m} duplicates)
 | Creation fails due to a missing required field | Stop, list the missing fields, don't guess values |
 | Network timeout | Report the created and uncreated lists, don't create duplicates |
 | Link type doesn't exist | Warn and skip that link, don't block ticket creation |
+| Back-link renders as plain text (`[title](url)` or escaped `\[`) | Rewrite the whole description via `editJiraIssue` with `contentFormat: "markdown"` |
 | Missing team constant | Stop, state the missing item and the corresponding owner to complete it |
 
 ## 6. Related
