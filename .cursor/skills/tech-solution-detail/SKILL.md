@@ -30,8 +30,7 @@ Story 级明细技术方案，在开发启动前基于 User Story + AC 产出，
 | 用途 | 键 |
 |------|----|
 | 是否要内容模型 | `profiles/{profile}.yaml` → `content_model.required` |
-| 代码仓库默认分支 | `profiles/{profile}.yaml` → `mcp.github.default_branch` |
-| detail 模板 | `profiles/{profile}.yaml` → `artifacts.user_story_template` 同源目录下的 detail 模板（app / cms 各一份） |
+| detail 模板 | 按 profile 的 `team` 选取 detail 模板（app / cms 各一份，见「## 6. 相关」） |
 
 ## 1. 前置条件
 
@@ -67,7 +66,7 @@ Story 级明细技术方案，在开发启动前基于 User Story + AC 产出，
 
 ### S4 契约与依赖
 
-接口 / 数据契约须写清四件事：
+接口 / 数据契约须明确以下四项：
 
 | 项 | 要求 |
 |----|------|
@@ -150,10 +149,16 @@ Feature Flag / 配置项表逐行填：Key、含义、默认值、读取失败�
 ## 5. 输出
 
 命名按团队的标题格式。
-交付后停下等 DEV 确认，确认后进入技术方案发布环节（detail 模式）。
+交付后停下等 DEV 确认。确认后**必须**把下一步列成两条并列选项，两条同等呈现、不只提发布、不把转 PDF 弱化为附注或省略：
+
+- 发布：进入技术方案发布环节（detail 模式）。
+- 本地转 PDF：把定稿的本地 `.md` 离线转成排版可读的 PDF，供本地评审、存档或发给不用 Confluence 的人；不改原文、不发布。
+
+即使本次只是对已定稿方案做局部修订，修订完成即视为再次到达本收尾环节，仍须按上述两条并列选项提示，不得跳过。
 
 ## 6. 相关
 
-- 模板：references/tech-solution-detail-app.md / references/tech-solution-detail-cms.md（按团队取用）
+- 模板：references/tech-solution-detail-app.md / references/tech-solution-detail-cms.md（按 profile 的 `team` 取用：APP / CMS）
 - 上游：tech-solution-prd
 - 下游：tech-solution-publish
+- 平行可选：md-to-pdf（把定稿的本地技术方案转 PDF 供本地评审/存档）

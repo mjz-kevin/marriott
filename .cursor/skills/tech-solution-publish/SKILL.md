@@ -16,17 +16,19 @@ metadata:
 
 **发布方式**：正文体量常超 MCP 单次写入上限，统一用本目录 `scripts/upload_confluence_v2.py` 经 Confluence REST 一次性提交完整正文（幂等查重、升版本、mermaid 转图、完整性统计）。
 
-**归档位置**：与 PRD 同处一个 `{epic}` 夹，脚本自动查 epic 在 Jira 的父项决定是否含 `{epic_parent}` 层，缺失夹自动建：
+**归档位置**：与 PRD 同处一个 `{epic}` 夹，脚本自动查 epic 在 Jira 的父项确定是否含 `{initiative}` 层，缺失夹自动创建：
 
 ```
-{folder_layout.level1}          一级根（parent_pages.root）
-└── {epic_parent}               父项 key（无父项时省略此层）
-    └── {epic}                  Jira Epic key，如 CNAPP-5661
-        ├── {epic}-PRD          → PRD 文档
-        └── {epic}-Tech Solution → prd / spike / detail 三档文档
+{folder_layout.level1}              一级根（parent_pages.root）
+└── {initiative}                    Initiative 夹，标题为「Jira key-摘要」（无父项时省略此层）
+    └── {epic}                      Epic 夹，标题为「Jira key-摘要」，如 CNAPP-5661-会员权益重构
+        ├── {epic}-PRD              → PRD 文档
+        └── {epic}-Tech Solution    → prd / spike / detail 三档文档
 ```
 
-`{epic}` 取 Jira Epic key（非功能名/slug）。三档仅标题不同，落点同为 `{epic}-Tech Solution` 夹。父项可 `--epic-parent <key>` 覆盖、`--epic-parent none` 强制无父项。
+`{epic}` 取 Jira Epic key（非功能名/slug）。三档仅标题不同，落点同为 `{epic}-Tech Solution` 夹。`{initiative}` 与 `{epic}` 夹标题由脚本查 Jira 摘要自动拼为「key-摘要」，幂等查重按 Jira key 前缀匹配、命中后随最新摘要自动改名。Initiative 层可 `--initiative <key>` 覆盖、`--initiative none` 强制无此层。
+
+**唯一性（标题）**：三档页面标题的**唯一键 = 固定前缀 + Jira key**（PRD 级=Epic key，spike=Spike key，detail=Story key），由 `naming.tech_solution_{prd|spike|detail}` 模板给出，如 `APP-TS-Prd-CNAPP-5661`。脚本查 Jira 取摘要，自动把标题补成「前缀-摘要」（如 `APP-TS-Prd-CNAPP-5661-会员权益重构`）：**查重只按前缀匹配**，摘要文案变动不产生新页；命中后若现标题与最新摘要不一致，脚本自动改名（rename），使标题始终最新。**日期、版本不进标题**，只在正文与 `--version-msg` 体现。因此「同一对象只有一页」由固定的「前缀+key」保证，与摘要是否变动无关。
 
 | 维度 | 说明 |
 |------|------|
@@ -53,7 +55,7 @@ metadata:
 | Confluence 站点根 | `profiles/{profile}.yaml` → `mcp.confluence.base_url`（脚本实际从 `.cursor/mcp.json` → `confluenceRest.base_url` 读取，二者应一致） |
 | 目标 space（key） | `profiles/{profile}.yaml` → `mcp.confluence.space`，对应脚本 `--space` |
 | 一级根目录页 ID | `profiles/{profile}.yaml` → `mcp.confluence.parent_pages.root`，对应脚本 `--root`（根目录名见 `folder_layout.level1`；为 `TBD` 即阻断） |
-| 文件夹层级约定 | `profiles/{profile}.yaml` → `mcp.confluence.folder_layout`（一级根 →〔epic 有父项时〕`{epic_parent}` → `{epic}` → `{epic}-Tech Solution`；epic 无父项时省略 `{epic_parent}` 层，三档共用最内层夹） |
+| 文件夹层级约定 | `profiles/{profile}.yaml` → `mcp.confluence.folder_layout`（一级根 →〔epic 有父项时〕`{initiative}` → `{epic}` → `{epic}-Tech Solution`；epic 无父项时省略 `{initiative}` 层，三档共用最内层夹） |
 | 技术方案父目录 ID（旧模式回退） | `profiles/{profile}.yaml` → `mcp.confluence.parent_pages.tech_solution`，仅未配 `root` 的团队用，对应脚本 `--parent` |
 | PRD 父目录 ID（prd 回写用） | `profiles/{profile}.yaml` → `mcp.confluence.parent_pages.prd` |
 | prd 标题模板 | `profiles/{profile}.yaml` → `mcp.confluence.naming.tech_solution_prd` |
@@ -91,39 +93,42 @@ metadata:
 ### S2 落点解析
 
 ```text
-space : mcp.confluence.space
-root  : mcp.confluence.parent_pages.root                （一级根目录页 ID）
-epic  : 所属 Jira Epic key（如 CNAPP-5661）              （二级夹 = {epic}，三级夹 = {epic}-Tech Solution）
-kind  : tech_solution                                    （三档共用同一三级夹）
-title : 按 mode 取 naming.tech_solution_{prd|spike|detail} 渲染
+space     : mcp.confluence.space
+root      : mcp.confluence.parent_pages.root             （一级根目录页 ID）
+epic      : 所属 Jira Epic key（如 CNAPP-5661）            （容器夹 = {epic}，叶子夹 = {epic}-Tech Solution）
+kind      : tech_solution                                 （三档共用同一叶子夹）
+title     : 按 mode 取 naming.tech_solution_{prd|spike|detail} 渲染，仅到「前缀+key」为止（唯一键），不含摘要/日期/版本
+title-key : 标题唯一键对应的 Jira key（PRD 级=Epic key，spike=Spike key，detail=Story key），供脚本查摘要拼可读尾巴
 ```
 
-脚本以 `--root/--epic/--kind tech_solution` 按开头「归档位置」定义的规则自动分层：查该 epic 的直接父项决定四级 / 三级，缺失即建容器页，再把方案页落到最内层 `{epic}-Tech Solution` 夹下。`--epic-parent <key>` 手动指定、`--epic-parent none` 强制无父项。未配 `root` 的团队回退：改传 `--parent <parent_pages.tech_solution>` 直挂。
+脚本以 `--root/--epic/--kind tech_solution` 按开头「归档位置」定义的规则自动分层：查该 epic 的直接父项确定四级 / 三级，`{initiative}` 与 `{epic}` 夹标题拼上 Jira 摘要，缺失即建容器页，再把方案页落到最内层 `{epic}-Tech Solution` 夹下。`--initiative <key>` 手动指定 Initiative 层、`--initiative none` 强制省略该层。未配 `root` 的团队回退：改传 `--parent <parent_pages.tech_solution>` 直挂。
+
+`--title` 只传「前缀+key」（唯一键），`--title-key` 传该 key 用于查摘要：脚本据此把标题补成「前缀-摘要」，查重按前缀匹配、命中随摘要改名。`--title-key` 省略时文件夹模式退回用 `--epic` 的摘要，旧模式退回纯前缀。
 
 ### S3 环境预检
 
 含 mermaid 的方案发布前先跑 `--check-env`（不写 Confluence），确认本机能出图。脚本输出 `ready_to_publish`：为 `true` 则继续；为 `false` 时按其 `hint`（按操作系统给出的 Node.js 安装命令）引导用户安装 Node.js（含 `npx`），装好后重跑本步骤直至 `ready_to_publish` 为 `true`。无 mermaid 的方案此步恒为 `true`。
 
 ```bash
-python .cursor/skills/tech-solution-publish/scripts/upload_confluence_v2.py --md "<技术方案.md 路径>" --space "<space>" --root "<parent_pages.root>" --epic "<Jira Epic key，如 CNAPP-5661>" --kind tech_solution --title "<标题>" --check-env
+python .cursor/skills/tech-solution-publish/scripts/upload_confluence_v2.py --md "<技术方案.md 路径>" --space "<space>" --root "<parent_pages.root>" --epic "<Jira Epic key，如 CNAPP-5661>" --kind tech_solution --title "<前缀+key，如 APP-TS-Prd-CNAPP-5661>" --title-key "<标题 key：PRD 级=Epic key / spike=Spike key / detail=Story key>" --check-env
 ```
 
 ### S4 dry-run 预检
 
-先执行 `--dry-run`，脚本不写入 Confluence，仅输出标题、`stats`（章节 h2 数、Story 数、AC 条数、mermaid 图数）、`storage_chars` 与 `target`（root/epic_parent/epic/kind）。核对 `stats` 与本地确认版一致、`target.epic` 指向预期 epic，并核对 `target.epic_parent`（脚本自动查 Jira 得到的父项，有则四级归档、`null` 则三级）符合预期后再正式上传。
+先执行 `--dry-run`，脚本不写入 Confluence，仅输出标题（`title` 为补全摘要后的完整标题，`title_prefix` 为唯一键前缀）、`stats`（章节 h2 数、Story 数、AC 条数、mermaid 图数）、`storage_chars` 与 `target`（root/initiative/epic/kind）。核对 `title_prefix` 为预期的「前缀+key」、`stats` 与本地确认版一致、`target.epic` 指向预期 epic，并核对 `target.initiative`（脚本自动查 Jira 得到的父项，有则四级归档、`null` 则三级）符合预期后再正式上传。
 
 > **命令写法（跨平台统一）**：命令为单行、不含续行符，可在 Windows PowerShell / CMD、macOS、Linux 直接运行。下文示例中的 `python` 是启动器占位符：macOS / Linux 用 PATH 里的 `python` / `python3`；Windows 绿色版（Python 未加入 PATH）用环境准备环节自检输出的 Python 解释器路径。脚本运行后会自动解析 `npx`（渲染 mermaid 用），无需在命令里指定 Node 路径。若不确定本机解释器/工具路径，先运行 `python .cursor/skills/env-setup/scripts/env-setup.py` 查看解析结果。
 
 ```bash
-python .cursor/skills/tech-solution-publish/scripts/upload_confluence_v2.py --md "<技术方案.md 路径>" --space "<space>" --root "<parent_pages.root>" --epic "<Jira Epic key，如 CNAPP-5661>" --kind tech_solution --title "<按 mode 渲染的标题>" --dry-run
+python .cursor/skills/tech-solution-publish/scripts/upload_confluence_v2.py --md "<技术方案.md 路径>" --space "<space>" --root "<parent_pages.root>" --epic "<Jira Epic key，如 CNAPP-5661>" --kind tech_solution --title "<前缀+key，如 APP-TS-Prd-CNAPP-5661>" --title-key "<标题 key>" --dry-run
 ```
 
 ### S5 脚本上传
 
-脚本按开头「归档位置」定义的规则自动分层建夹并幂等查重：查该 epic 的直接父项确保各级夹存在（返回 JSON 的 `folders` 列出各级夹 id 与是否本次新建），再在最内层 `{epic}-Tech Solution` 夹下按 `--title` 查重，命中则 `update` 并升版本、写入 `--version-msg`，未命中则 `create`。移除 `--dry-run` 并加 `--version-msg` 后正式发布：
+脚本按开头「归档位置」定义的规则自动分层建夹并幂等查重：查该 epic 的直接父项确保各级夹存在（返回 JSON 的 `folders` 列出各级夹 id 与是否本次新建），再在最内层 `{epic}-Tech Solution` 夹下**按标题前缀（前缀+key）查重**：命中则 `update` 并升版本、写入 `--version-msg`，且若现标题与最新摘要不一致先自动改名（结果 JSON 的 `renamed_from` 记录原标题）；未命中则以「前缀-摘要」完整标题 `create`。移除 `--dry-run` 并加 `--version-msg` 后正式发布：
 
 ```bash
-python .cursor/skills/tech-solution-publish/scripts/upload_confluence_v2.py --md "<技术方案.md 路径>" --space "<space>" --root "<parent_pages.root>" --epic "<Jira Epic key，如 CNAPP-5661>" --kind tech_solution --title "<标题>" --version-msg "<mode> 技术方案发布：<变更说明>"
+python .cursor/skills/tech-solution-publish/scripts/upload_confluence_v2.py --md "<技术方案.md 路径>" --space "<space>" --root "<parent_pages.root>" --epic "<Jira Epic key，如 CNAPP-5661>" --kind tech_solution --title "<前缀+key>" --title-key "<标题 key>" --version-msg "<mode> 技术方案发布：<变更说明>"
 ```
 
 - **正文完整、禁止 MCP 写页面（硬约束）**：脚本一次性提交整篇 storage，不受 MCP 体量限制。发布/更新一律走本脚本 REST；禁止手工摘要、删减章节，禁止用 Atlassian MCP 的 `updateConfluencePage`/`createConfluencePage` 写页面（单次写入受限会截断正文、丢图、破坏 storage）。脚本报错只修入参或凭证后重跑，不得改用 MCP 兜底。允许的差异仅限 mermaid 转图、markdown 转 storage HTML；MCP 只读查询不受此限。**唯一例外**见 S6：无本地源时对 PRD「技术方案链接」项做局部回写，须带写后完整性校验，仅限此场景。
@@ -136,7 +141,7 @@ python .cursor/skills/tech-solution-publish/scripts/upload_confluence_v2.py --md
 prd 档的方案摘要 + 链接需回写到 PRD 的「技术方案链接」章节。写方案的人未必持有 PRD 本地 `.md` 源，按是否拿得到本地源分两条路径。回写遵循附录统一链接约定：填了 URL 就写成可点击超链接并去掉「（可选）」，空项才保留占位。
 
 - **持有本地源**：在本地 PRD 的「技术方案链接」项写入 `[方案标题](URL)`，去掉「（可选）」，再用发布脚本对 PRD 整篇 `update`（走脚本 REST，不用 MCP）。
-- **只有链接、无本地源**（常态）：用 MCP `getConfluencePage` 读回整篇 storage，**只在「技术方案链接」项内**写入 `<a href="URL">方案标题</a>` 并去掉「（可选）」（不改其他任何章节），再 `updateConfluencePage` 写回。这是「禁止 MCP 写页面」的**唯一例外**，仅限此局部回写，禁用于新建或整篇发布。写回后**必须**用 MCP 只读复查：storage 长度未明显缩短、关键章节标题仍在、`<ri:attachment>`/`<ac:image>` 数量未减少、新链接以 `<a href>` 存在；任一不过即**回滚写前版本**，改为产出待回写内容交 PO 手动补入。
+- **只有链接、无本地源**（常态）：用 MCP 只读查询按 **PRD 标题前缀** `naming.prd`（前缀+Epic key，如 `APP-PRD-CNAPP-5661`）在 `{epic}-PRD` 夹下定位到那一页 PRD（PRD 标题带 Jira 摘要尾巴，故按前缀匹配、不按全名精确匹配），取其 `pageId`；用 `getConfluencePage` 读回整篇 storage，**只在「技术方案链接」项内**写入 `<a href="URL">方案标题</a>` 并去掉「（可选）」（不改其他任何章节），再 `updateConfluencePage` 写回。这是「禁止 MCP 写页面」的**唯一例外**，仅限此局部回写，禁用于新建或整篇发布。写回后**必须**用 MCP 只读复查：storage 长度未明显缩短、关键章节标题仍在、`<ri:attachment>`/`<ac:image>` 数量未减少、新链接以 `<a href>` 存在；任一不过即**回滚写前版本**，改为产出待回写内容交 PO 手动补入。
 - **无独立 PRD 页**：方案摘要写进 Story 描述的「技术方案」小节（由建单环节执行）。
 
 **spike → spike ticket 回链**（写入 spike ticket 描述的「链接的工作项 / 参考文档」小节，可点击超链接）
@@ -163,14 +168,14 @@ spike 与 detail 的回链写入方式一致：均写进对应工单**描述**�
 |------|---------|-------------|
 | 正文完整性 | `stats`（章节 / Story / AC）与本地确认版一致 | 修正本地 `.md` 后重跑更新 |
 | 图表 | `mermaid_pending` 为空 | 按图号定位（mmdc 不可用 / 网络下载 / 源码语法）修正后重跑 |
-| 标题命中 | 三级夹下 `--title` 唯一命中（更新）或无命中（新建） | 返回多条（≥2）时停止并交用户裁决，不擅自新建重复页 |
+| 标题命中 | 叶子夹（`{epic}-Tech Solution`）下按标题前缀（前缀+key）唯一命中（更新，`action=update`）或无命中（新建，`action=create`）；命中改名时 `renamed_from` 记录原标题 | 前缀匹配返回多条（≥2）时停止并交用户裁决，不擅自新建重复页 |
 | 调用通道 | 全程走脚本 REST | 退出码非 0 或含 `error` 时按 HTTP 状态修正后重跑；禁止改用 MCP `updateConfluencePage` / `createConfluencePage` 兜底 |
 
 ## 3. 规则
 
 - **按源文档正文发布**：逐节对应技术方案模板，不加模板外内容（如顶部 Source/Owner/Status 脚注、「上游 PRD/Jira」信息行）。链接放在模板既有位置（评审结论回写项、PRD 附录回链），不另起段落。
 - 敏感信息命中即阻断，不脱敏后继续。
-- 不删除已有页面；脚本按 `--parent` + `--title` 命中即更新升版本，同一对象迭代沿用同一标题，不新建重复页。
+- 不删除已有页面；脚本在叶子夹下按标题前缀（前缀+key）命中即更新升版本、并随 Jira 摘要自动改名，同一对象迭代沿用同一「前缀+key」以保证只有一页，不新建重复页。
 - 不自动 commit。
 - 默认不越权写 Jira；确需写入时先确认权限矩阵已更新。
 - space / 父页 / 命名一律取自团队配置，禁止写死。

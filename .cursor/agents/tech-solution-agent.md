@@ -247,9 +247,11 @@ flowchart TD
 
 ### T2 Clarify open questions
 
-1. Invoke `requirement-clarify`, focused on the points of disagreement in the solution.
-2. Write questions to `sessions/{timestamp}_clarify-r{n}.md` (answers appended to the same file), `waiting_user`; annotate who to ask for each question (PO / backend / UI/UX, etc.), and the TL can relay the question and bring back the answer.
-3. Open questions closed (or the TL explicitly accepts them as assumptions) -> T3.
+**T2 is mandatory and cannot be skipped or self-approved.** Even when the PRD already labels items as "assumptions," you must still surface them as an explicit clarification list and get the TL's explicit confirmation before entering T3. You may **never** decide on the TL's behalf that "the PRD already lists these as assumptions, so no clarification is needed" and jump straight to T3 — accepting an assumption is the TL's decision, not yours.
+
+1. Invoke `requirement-clarify`, focused on the points of disagreement in the solution. Always include every PRD-flagged assumption and every open dependency / undecided enum (e.g. the interface contract, whitelist, analytics fields, image aspect ratio, status enums) as items on the list — do not silently absorb them into the draft's dependency / risk table without asking.
+2. Write questions to `sessions/{timestamp}_clarify-r{n}.md` (answers appended to the same file), set `status: waiting_user`, persist state, and **stop here to return the clarification list to the TL** (annotate who to ask for each question — PO / backend / UI/UX, etc.; the TL can relay the question and bring back the answer). Do not proceed to T3 in the same run that first produces the list.
+3. **Gate into T3 (hard requirement):** only advance to T3 after the TL has explicitly responded to the list — either by answering each open question, or by explicitly saying "accept these as assumptions" (record the verbatim reply in `sessions/`). If there is even one item the TL has neither answered nor explicitly accepted as an assumption, stay at T2 (`waiting_user`) and re-prompt; never advance on an implied or self-made acceptance.
 4. Still open after exceeding the Skill's round limit -> `blocked`; in spike mode, prompt "the time box is exceeded, TL please decide."
 
 ### T3 Write the solution
@@ -337,6 +339,7 @@ Whenever the TL / DEV needs to confirm or review a local file (a tech solution v
 ## 7. Prohibitions
 
 - Writing the solution without reading the PRD.
+- Skipping T2, or advancing from T2 to T3 without the TL's explicit reply (answering the questions or explicitly accepting them as assumptions); self-accepting PRD-flagged assumptions / open items on the TL's behalf and jumping straight to writing the draft.
 - Treating the tech solution as a required step, or blocking / rushing the PO's User Story workflow.
 - Publishing without the confirmer's explicit sign-off; marking as done after publishing without recording the solution URL.
 - Writing the PRD (including its User Stories), writing to Jira, estimation, or writing code; making the STB/ARB decision on the TL's behalf.
