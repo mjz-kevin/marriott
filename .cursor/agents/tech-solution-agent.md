@@ -25,7 +25,7 @@ The three modes: ① a PRD-level high-level solution; ② a spike-based research
 
 | mode | Typical stage | Required input (read-only) | Optional input | Confirmer |
 |------|---------------|----------------------------|----------------|-----------|
-| `prd` | Requirements gathering & design | **PRD URL** | Figma, code repo, existing API docs | TL (content written back into the PRD also needs the PO) |
+| `prd` | Requirements gathering & design | **PRD URL** | Figma, code repo, existing API docs | TL (write-back into the PRD—links and content alike—is done directly by this Agent, no PO sign-off) |
 | `spike` | Refinement | **PRD URL**, spike ticket | related Story key, constraints, time box, acceptance criteria, existing solution URL | TL |
 | `detail` | Before development starts | **PRD URL**, Story key | existing prd / spike solution URL, Figma, code repo | DEV / TL |
 
@@ -154,8 +154,8 @@ sources:                           # the basis for writing (read-only), used for
   jira: []                         # spike ticket / related or target Story key, e.g. {key, updated}
   solutions: []                    # other solution URLs referenced, e.g. {url, page_version}
   figma: []
-confirmers_required: [TL, PO]
-confirmed: { TL: null, PO: null }  # each value is {by, at}
+confirmers_required: [TL]
+confirmed: { TL: null }            # each value is {by, at}
 current_version: v1.1               # current version (points to an entry in versions)
 versions:                          # append-only
   - version: v1.0
@@ -258,7 +258,7 @@ flowchart TD
 2. By mode, invoke `tech-solution-prd` / `tech-solution-spike` / `tech-solution-detail` with the PRD read in T1 and other materials, plus the **output path and version number**; when revising, also provide the previous version file as the basis.
 3. Append an entry to `versions` (`status: draft`) and update `current_version`; mark the previous unpublished draft as `superseded`.
 4. In prd mode, handle the Skill's determinations: STB / ARB triggered -> prompt the TL to initiate a review and reserve time; points that can't be concluded -> write to `pending_spikes` and prompt the TL to open a spike ticket at the refine meeting (whether to open it is the TL's decision).
-5. `waiting_confirm`, clear `confirmed`, and set `confirmers_required` (prd: TL, plus PO if the Skill writes content back into the PRD; spike: TL; detail: DEV or TL, depending on the user).
+5. `waiting_confirm`, clear `confirmed`, and set `confirmers_required` (prd: TL only—write-back into the PRD, links and content alike, is done directly by this Agent and needs no PO sign-off; spike: TL; detail: DEV or TL, depending on the user).
 
 ### T4 Manual sign-off (👤)
 
@@ -266,7 +266,6 @@ Ask the confirmer to review the current version file (the standard is the corres
 
 - Change comments -> write to `sessions/{timestamp}_review-v{version}.md`, go back to T3 to generate a new version (don't edit the current file).
 - Explicit sign-off -> record it in `confirmed`; **after all required confirmers have signed off**, mark the current version `status: confirmed`, backfill `sha256`, and proceed to T5.
-- When PO sign-off is needed, prompt the TL to send the current version file to the PO, and only invoke again after bringing back the PO's explicit reply.
 
 ### T5 Publish and record the URL
 
