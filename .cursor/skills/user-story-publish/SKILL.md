@@ -111,16 +111,16 @@ project = "{project}" AND summary ~ "{摘要}" AND parent = "{Epic key}"
 **回链落点规范**（`prd` / `figma` / `tech_solution` 指向 Confluence 页或外部 URL，非 Jira issue）：
 
 - **Parent（Epic）**：用层级父子关系（`parent` 字段，issue↔issue），正常建。
-- **URL 回链**：写入 Story 描述的「链接的工作项 / 参考文档」小节（正文内、随 Story 沉淀）。**必须是可点击超链接**：markdown 提交写 `[显示文字](URL)`，或构造带 `link` mark 的 ADF；禁止裸 URL（仅靠前端 autolink，导出 / API 读取时退化为不可点击文本）。若 MCP 支持写 Jira Web 远程链接，可同时在 Links 区域建一条。
-- **禁止塞进评论**：评论不是正规回链落点，易被淹没；仅当描述不可写时才退而用评论并在回报说明。
+- **URL 回链**：写入目标工单描述的「链接的工作项 / 参考文档」小节（正文内、随工单沉淀）；`tech_solution` 回链对 detail（写入 Story）与 spike（写入 spike ticket）写入方式一致，均落在描述小节。**必须是可点击超链接**：markdown 提交写 `[显示文字](URL)`，或构造带 `link` mark 的 ADF；禁止裸 URL（仅靠前端 autolink，导出 / API 读取时退化为不可点击文本）。若 MCP 支持写 Jira Web 远程链接，可同时在 Links 区域建一条。
+- **禁止塞进评论**：评论不是正规回链落点，易被淹没；spike 结论回链同样写描述小节、不写评论；仅当描述不可写时才退而用评论并在回报说明。
 - 某类别无对应链接则写「未提供（待补充）」占位，不留空、不臆造。
 
 ### S6 回写
 
 1. **需求文档附录 Jira link**：把本 PRD 对应的 **Epic key** 写回需求文档附录的 Jira link 字段（该字段仅放 Epic，不写 Story key）。Story 自身的回链在 S5 已挂到各条 Story 上，不反向灌入 PRD 附录。
-2. **技术方案回链**：执行技术方案发布环节留下的「待回写内容」
-   - Story → Tech Solution 链接
-   - （spike 场景）把 spike 结论以评论形式写到 spike ticket
+2. **技术方案回链**：执行技术方案发布环节留下的「待回写内容」，spike 与 detail 写入方式一致——均写进对应工单**描述**的「链接的工作项 / 参考文档」小节（可点击超链接，见 S5 回链落点规范）：
+   - （detail 场景）Story → Tech Solution 链接，写入该 Story 描述的回链小节
+   - （spike 场景）Spike → Tech Solution 链接 + 结论摘要，写入 spike ticket 描述的回链小节
 
 > 回写 Confluence 需要写权限，本环节对 Confluence 为只读（R）：只产出回写内容并提示，由有 Confluence 写权限的环节执行。
 

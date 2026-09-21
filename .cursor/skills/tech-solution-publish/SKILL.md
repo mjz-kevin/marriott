@@ -139,25 +139,21 @@ prd 档的方案摘要 + 链接需回写到 PRD 的「技术方案链接」章�
 - **只有链接、无本地源**（常态）：用 MCP `getConfluencePage` 读回整篇 storage，**只在「技术方案链接」项内**写入 `<a href="URL">方案标题</a>` 并去掉「（可选）」（不改其他任何章节），再 `updateConfluencePage` 写回。这是「禁止 MCP 写页面」的**唯一例外**，仅限此局部回写，禁用于新建或整篇发布。写回后**必须**用 MCP 只读复查：storage 长度未明显缩短、关键章节标题仍在、`<ri:attachment>`/`<ac:image>` 数量未减少、新链接以 `<a href>` 存在；任一不过即**回滚写前版本**，改为产出待回写内容交 PO 手动补入。
 - **无独立 PRD 页**：方案摘要写进 Story 描述的「技术方案」小节（由建单环节执行）。
 
-**spike → Jira ticket**（按权限方案，默认产出内容不直接写）
+**spike → spike ticket 回链**（写入 spike ticket 描述的「链接的工作项 / 参考文档」小节，可点击超链接）
 
 ```markdown
-## Spike 结论（YYYY-MM-DD）
-- 结论：{推荐方案}
-- 依据：{Confluence 链接}
-- 对 {内容模型 | 数据模型} 的影响：{...}
-- 对 Story 拆分的影响：{...}
-- 对估点的影响：{区间建议，最终由 DEV/QA 定}
+需要建立的链接：
+- Spike: {spike ticket key}  →  Tech Solution: {Confluence URL}
 ```
 
-**detail → Jira Story 回链**
+**detail → Jira Story 回链**（写入 Story 描述的「链接的工作项 / 参考文档」小节，可点击超链接）
 
 ```markdown
 需要建立的链接：
 - Story: {key}  →  Tech Solution: {Confluence URL}
 ```
 
-以上两项默认交给有 Jira 写权限的建单环节执行，并在回报中列出。
+spike 与 detail 的回链写入方式一致：均写进对应工单**描述**的「链接的工作项 / 参考文档」小节，只写指向 Confluence 方案页的可点击超链接（禁止裸 URL、不塞进评论、不复制方案正文）；结论要点在 Confluence 方案页内查看。两项默认交给有 Jira 写权限的建单环节执行，并在回报中列出。
 
 ### S6.5 结果校验
 
