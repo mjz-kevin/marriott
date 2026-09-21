@@ -12,7 +12,7 @@ mcp:
     labels:                          # 标签枚举，来源见 source；大小写敏感
       source: "https://marriottcloud.atlassian.net/wiki/spaces/DBU4/pages/3386999508"
       case_sensitive: true
-      auto_fill: [business_domain, ai_provenance]   # 允许自动填充的类别；未列出的仅作合法值校验
+      auto_fill: [business_domain, platform, ai_provenance]   # 允许自动填充的类别；未列出的仅作合法值校验
       ai_provenance:                 # 溯源标签：凡经 agent 创建/同步的 Jira，建单时恒定自动打上
         auto_apply: always           # 无条件添加，不依赖需求内容
         select: unique
@@ -22,6 +22,17 @@ mcp:
         select: unique
         filter_gate: true            # 缺失即被下游过滤：建单前硬门禁，缺一即停
         values: [Commerce, Loyalty, Trips, Platform]   # Content 已并入 Loyalty
+        # 域判定（分层降级，最终以 Story 功能性质校验，不盲从任一信号）：
+        #  1) Epic 自身有 business_domain 标签 → 默认继承为该域（最权威），但单张 Story 功能性质明显不同可偏离
+        #  2) Epic 无标签 → 参考同 Epic 兄弟 Story 的多数域作为推测；与多数不一致时提示为异常待确认（如兄弟均 Commerce 却标 Trips）
+        #  3) 仍不足 → 回到 labels.source 官方页面的域定义，按 Story 功能性质判定
+        # 判定依据不在本地固化域含义；命中多条时取最贴近核心价值的一条，不凭标题字面直觉。
+      platform:                      # 平台标签：与 Component 平台规则联动，iOS 专属票必打 iOS 标签
+        mandatory: true
+        select: unique               # 单端票取该端；跨端票由建单人显式判定
+        filter_gate: false           # 非过滤门禁，但属 iOS 专属票的必填项（见 platform_binding）
+        values: [iOS, Android]
+        platform_binding: components.platform_rule   # 与 Component 规则同源：Component=iOS 的票，platform 标签必为 iOS
       process_labels:                # 过程标签，仅校验、不自动填
         auto_fill: false
         values: [AdhocRequest, UnplannedSprintTicket, CrossSprintTicket, CrossSprintCommitted, DevOnly, QAOnly, Compliance, NoCodeChanges, BugReviewed, Design, VQA, StoryBug, RegressionBug, ProdKnownIssue, ProdIncident, BugPriorityUpdated]
@@ -29,7 +40,7 @@ mcp:
       platform_rule:
         ios_only: iOS                # 仅 iOS 专属的票：Component 选 iOS
         android: none                # Android 票：不选任何 Component
-        note: "只有 iOS 专属票选 Component=iOS；Android 票不选 Component。跨端/无关平台的票按需留空。"
+        note: "只有 iOS 专属票选 Component=iOS；Android 票不选 Component。跨端/无关平台的票按需留空。同时按 labels.platform 规则打上对应平台标签（iOS 专属票必打 iOS 标签）。"
     links: [prd, figma, tech_solution]
 
   confluence:
@@ -57,10 +68,6 @@ mcp:
       tech_solution_spike: "APP-TS-Spike-{spike_key}"
       tech_solution_detail: "APP-TS-Detail-{story_key}"
     content_format: markdown
-
-# ---------------------------------------------------------------- 内容模型
-content_model:
-  required: false
 
 # ---------------------------------------------------------------- 产物语言
 doc:

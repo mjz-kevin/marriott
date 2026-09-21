@@ -32,8 +32,7 @@ Split the requirements doc into a Story list that is deliverable, acceptable, an
 | The set of assets to back-link | `profiles/{profile}.yaml` → `mcp.jira.links` |
 | Agile Team default | `profiles/{profile}.yaml` → `mcp.jira.agile_team` (empty means no default, needs manual entry) |
 | Label enum and auto-fill policy | `profiles/{profile}.yaml` → `mcp.jira.labels` (includes the valid enum, case sensitivity, and the `auto_fill` categories allowed to be auto-filled) |
-| Whether a content model is needed | `profiles/{profile}.yaml` → `content_model.required` |
-| Story template | Pick by the profile's `team`: `APP` → `references/user-story-app.md`; `CMS` → `references/user-story-cms.md` |
+| Story template | `references/user-story.md` (single template; team differences are driven by profile keys such as `mcp.jira.labels`, `mcp.jira.links`) |
 
 ## 1. Prerequisites
 
@@ -73,7 +72,6 @@ Each Story should cut through UI -> logic -> data and have user-perceivable valu
 General: CRUD split / role split / state split / exception-flow split / rollout split
 
 - Add the team's agreed scope-splitting dimensions per the team's agreed splitting dimensions (like end split, site split, language split)
-- When the team requires the content model as a standalone item, a content-model change must be a standalone item
 
 ## 3. Workflow
 
@@ -82,11 +80,10 @@ General: CRUD split / role split / state split / exception-flow split / rollout 
 - S2 Map the user journey, mark the split points
 - S3 Generate the Story list (title + sentence form + description)
 - S4 Write ACs one by one
-- S5 [conditional] Domain-specific checks
-- S6 INVEST self-check
-- S7 Fill Jira field values
-- S8 Establish inter-Story dependencies and priorities
-- S9 Gate check + hand to the PO for confirmation
+- S5 INVEST self-check
+- S6 Fill Jira field values
+- S7 Establish inter-Story dependencies and priorities
+- S8 Gate check + hand to the PO for confirmation
 ```
 
 ### S3 Sentence form and summary
@@ -133,19 +130,7 @@ Anti-pattern -> correct:
 | THEN the page displays normally | THEN the order list renders within 1 second, showing 3 valid orders, sorted by creation time descending |
 | GIVEN the user is logged in | GIVEN the user logs in with an account that has a bound membership card and 1 completed order |
 
-When the team requires a content model, add:
-
-- At least 1 AC covering one of the editing / preview / published state transitions
-- When multilingual is involved, at least 1 AC covering language fallback
-- When a content-model change is involved, at least 1 AC covering the compatibility behavior of historical content
-
-### S5 Domain-specific checks
-
-| Switch | When true, check |
-| ------ | ------------------------------------------------------ |
-| Content-model required | Site scope (whether multi-site is phased), language scope (whether zh/en are both covered and fallback is defined), whether the content-model change is split from the feature implementation |
-
-### S7 Jira fields
+### S6 Jira fields
 
 Fill the Story template's field table item by item.
 
@@ -153,8 +138,8 @@ Fill the Story template's field table item by item.
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Required fields | All required; missing one fails ticket creation |
 | Agile Team | Fill from the `mcp.jira.agile_team` default; an empty key means the team has no default, leave it for manual entry, don't fabricate |
-| Labels | Choose only from the valid enum in `mcp.jira.labels`, with case strictly per `labels.case_sensitive`; auto-fill only the categories listed in `labels.auto_fill`. Categories with `auto_apply: always` (like `ai_provenance` → `AIGenerated`) are applied unconditionally, to mark tickets created/synced by the agent. When `labels.business_domain.filter_gate` is true, that category is a filtering hard-gate: select from `business_domain.values` per the Story's business domain via `business_domain.select`; a missing one is filtered out downstream. Process labels with `process_labels.auto_fill` false are only checked, not auto-filled; don't fabricate labels outside the enum—align with the TL/SM per the `labels.source` guide first. Teams with empty `labels` have no such constraint |
-| Component | Fill per `mcp.jira.components.platform_rule`: platform-specific tickets designated by `ios_only` pick the corresponding Component, platform tickets with `android` = `none` pick no Component, and cross-end/platform-agnostic tickets leave it empty as needed. Teams without `components` configured don't handle it |
+| Labels | Choose only from the valid enum in `mcp.jira.labels`, with case strictly per `labels.case_sensitive`; auto-fill only the categories listed in `labels.auto_fill`. Categories with `auto_apply: always` (like `ai_provenance` → `AIGenerated`) are applied unconditionally, to mark tickets created/synced by the agent. **`business_domain`** (when `filter_gate: true`) is a filtering hard-gate: decide the domain by the Story's functional nature against the official domain definitions on `labels.source` (not by literal wording of the title), on multiple hits take the one closest to the core value; a missing/wrong one is filtered downstream. **`platform`** (when present): keep it consistent with the Component rule via `platform.platform_binding`—any ticket whose Component is `iOS` (per `components.platform_rule.ios_only`) MUST also carry the `iOS` platform label; single-platform tickets take that platform, cross-platform tickets are decided explicitly. Process labels with `process_labels.auto_fill` false are only checked, not auto-filled; don't fabricate labels outside the enum—align with the TL/SM per the `labels.source` guide first. Teams with empty `labels` have no such constraint |
+| Component | Fill per `mcp.jira.components.platform_rule`: platform-specific tickets designated by `ios_only` pick the corresponding Component, platform tickets with `android` = `none` pick no Component, and cross-end/platform-agnostic tickets leave it empty as needed. **When Component is set to `iOS`, the `iOS` platform label in `labels.platform` must be set in tandem** (Component and platform label share the same source, keep them consistent). Teams without `components` configured don't handle it |
 | Priority | Don't fill |
 | Conditionally filled fields | Fill by condition (field names from the team config, like Impacted Systems) |
 | Estimation fields | **Always leave empty** |
@@ -183,8 +168,8 @@ Any failure -> re-split.
 - All back-links listed in the team-configured link set are complete
 - All six INVEST items pass
 - No field requiring human estimation is filled
+- Labels are complete per `mcp.jira.labels`: `ai_provenance` applied; every `mandatory` category has a value (`business_domain` decided against the official domain definitions on `labels.source`, not literal title wording); when a ticket's Component is `iOS`, the `iOS` platform label is present (Component ↔ platform label consistent); no label outside the enum
 - When the team requires self-contained descriptions: each description is self-contained
-- When the team requires a content model: there are state-transition ACs, language-fallback ACs, and historical-content compatibility ACs
 
 ## 6. Output
 
@@ -192,6 +177,6 @@ Don't save intermediate files: the Story list is given in the conversation only 
 
 ## 7. Related
 
-- Templates: references/user-story-app.md / references/user-story-cms.md (pick by the profile's `team`: APP / CMS)
+- Template: references/user-story.md (single template; team differences are driven by profile)
 - Upstream: prd-authoring, tech-solution-prd, tech-solution-detail
 - Downstream: user-story-publish

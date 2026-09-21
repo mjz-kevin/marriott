@@ -28,10 +28,6 @@ Template: [tech-solution-spike.md](references/tech-solution-spike.md)
 
 `{profile}` is the current profile file name (without extension, like `app-prod` / `cms-test`), resolved and passed in by the caller via the `profile-select` skill (`profile.py resolve` gives its absolute path); if it isn't passed in or the file doesn't exist -> block, don't guess.
 
-| Purpose | Key |
-| -------- | ------------------------------------------------------- |
-| Whether a content model is needed | `profiles/{profile}.yaml` → `content_model.required` |
-
 ## 1. Prerequisites
 
 | #   | Condition |
@@ -42,16 +38,15 @@ Template: [tech-solution-spike.md](references/tech-solution-spike.md)
 ## 2. Workflow
 
 ```
-- S1 文档信息 + version-history table
+- S1 Document Information + version-history table
 - S2 Chapter 1 Background and research goals (problem / key questions / constraints)
 - S3 Chapter 2 Evaluation dimensions (6 dimensions, extendable)
 - S4 Chapter 3 Solution comparison (>=2 solutions, 6 elements each + comparison matrix)
 - S5 Chapter 4 Validation process (PoC: method / Demo+data / conclusion)
 - S6 Chapter 5 Selection conclusion and recommendation (recommendation + rejection reasons + impact on estimation/schedule)
-- S7 [conditional] Content model and impact on historical content, only when the team requires a content model
-- S8 Chapter 6 Open items and risks
-- S9 Chapter 7 Review conclusion (leave only the header row blank, filled in manually by reviewers)
-- S10 Self-check + hand to TL for confirmation
+- S7 Chapter 6 Open items and risks
+- S8 Chapter 7 Review conclusion (leave only the header row blank, filled in manually by reviewers)
+- S9 Self-check + hand to TL for confirmation
 ```
 
 ### S2 Background and research goals
@@ -96,19 +91,18 @@ The PoC code lands in the team's actual code repo, and the build command must ru
 | The conclusion must be a single choice | After the comparison you must give a recommendation; when a single choice isn't possible, state that the evaluation dimensions or data are insufficient |
 | Don't estimate | Only give the impact on estimation; points are set by DEV/QA |
 | Example data must be mock | Same as other solution tiers |
-| Faithful to the template | The body starts from "## 文档信息"; fill only the template's existing sections and fields, don't add explanatory sentences, lead-ins, comments, or subsections not defined by the template; the template file's title and author notes are not part of the product |
+| Faithful to the template | The body starts from "## Document Information"; fill only the template's existing sections and fields, don't add explanatory sentences, lead-ins, comments, or subsections not defined by the template; the template file's title and author notes are not part of the product |
 
 ## 4. Quality gates
 
 - All 7 chapters complete, no empty sections
-- The body starts from "## 文档信息," with no explanatory sentences, lead-ins, or subsections added beyond the template
+- The body starts from "## Document Information," with no explanatory sentences, lead-ins, or subsections added beyond the template
 - No placeholder residue
 - >= 2 solutions, each with all 6 elements filled
 - The comparison matrix is filled (when >=2 solutions)
 - The PoC has a validation method and a key conclusion
 - The recommended solution + rejection reasons + impact on estimation/schedule are all present
 - The time box and decision criteria are visible in the text
-- When the team requires a content model: gave the impact on historical content and published pages
 
 ## 5. Output and write-back
 

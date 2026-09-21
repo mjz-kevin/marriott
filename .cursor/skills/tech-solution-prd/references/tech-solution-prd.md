@@ -1,72 +1,72 @@
-# PRD 级技术方案模板
+# PRD-Level Technical Solution Template
 
-## 文档信息
+## Document Information
 
-| 项目 | 内容 |
-|------|------|
-| 产品/功能名称 | [填写名称] |
-| 版本 | v1.0 |
-| 作者 | [XXXXX] |
-| 日期 | YYYY-MM-DD |
-| 状态 | 草稿 / 评审中 / 已确认 |
+| Item | Content |
+|------|---------|
+| Product / Feature Name | [Enter name] |
+| Version | v1.0 |
+| Author | [XXXXX] |
+| Date | YYYY-MM-DD |
+| Status | Draft / In Review / Approved |
 
-## 版本变更记录
+## Change Log
 
-| Version | Update Date | 变更类型 | 改版说明 Description | 作者 Author | 评审 Reviewer |
-|---------|-------------|---------|---------------------|-------------|---------------|
-| V1.0.0 | 【YYYY/MM/DD】 | A | 新建初版 | 【姓名】 | 【评审员姓名】 |
+| Version | Update Date | Change Type | Description | Author | Reviewer |
+|---------|-------------|-------------|-------------|--------|----------|
+| V1.0.0 | [YYYY/MM/DD] | A | Initial draft | [Name] | [Reviewer Name] |
 
-> Type 说明：A = Add（新增）｜M = Modification（修改）｜D = Deletion（删除）
+> Type legend: A = Add | M = Modification | D = Deletion
 
-## 1. 背景与业务目标
+## 1. Background and Business Goals
 
-- 业务背景与要解决的问题（承接 PRD）
+- Business background and the problem to solve (carried over from the PRD)
 
-## 2. 范围（Scope）
+## 2. Scope
 
-| 类型 | 内容 |
-|------|------|
-| In Scope | 本 PRD 覆盖的能力/场景 |
-| 关键场景 | 主要使用场景清单 |
-| 约束 | 性能、平台、时间等约束 |
+| Type | Content |
+|------|---------|
+| In Scope | Capabilities / scenarios covered by this PRD |
+| Key Scenarios | List of primary use scenarios |
+| Constraints | Performance, platform, timeline, and other constraints |
 
-## 3. 核心技术方案
+## 3. Core Technical Solution
 
-- **整体架构**：模块划分、上下游依赖、数据流向（附架构图） (可引用confluence的地址)
-- **关键流程 / 时序**：端到端主流程（附流程图）整个feature时序图(可选)
-- **接口与数据契约**：主要接口/API、核心数据模型（可选）
-- **backend技术方案**（可选）
-- **关键usecase的兜底方案**（可选）
+- **Overall Architecture**: Module breakdown, upstream/downstream dependencies, data flow (attach architecture diagram) (may reference a Confluence link)
+- **Key Flow / Sequence**: End-to-end main flow (attach flow diagram); full-feature sequence diagram (optional)
+- **Interface and Data Contracts**: Primary interfaces/APIs, core data models (optional)
+- **Backend Technical Solution** (optional)
+- **Fallback Plan for Key Use Cases** (optional)
 
-## 4.依赖项
+## 4. Dependencies
 
-| 项                      | 内容                                      |
-| ----------------------- | ----------------------------------------- |
-| 依赖清单                | 具体发布依赖清单                          |
-| 配置项                  | 配置项清单                                |
-| 三方/外部(可选)         | 第三方 / SDK 依赖                         |
-| 上游/系统依赖(可选)     | 上游系统 / 服务依赖                       |
-| 接口/数据(可选)         | 数据 / 数据源依赖                         |
-| STB／ARB 触发判定(可选) | 判定引入新云服务／三方库是否触发 STB／ARB |
+| Item | Content |
+| ---- | ------- |
+| Dependency List | Specific release dependency list |
+| Configuration Items | Configuration item list |
+| Third-Party / External (optional) | Third-party / SDK dependencies |
+| Upstream / System Dependencies (optional) | Upstream systems / service dependencies |
+| Interface / Data (optional) | Data / data source dependencies |
+| STB / ARB Trigger Assessment (optional) | Assess whether introducing a new cloud service / third-party library triggers STB / ARB |
 
-## 5. 交付与非功能要求
+## 5. Delivery and Non-Functional Requirements
 
-| 项 | 内容 |
-|------|------|
-| 非功能要求(可选) | 性能、稳定性、兼容性 |
-| 发布依赖(可选) | 需 safelist 的接口 / 发布前置/ 具体发布依赖清单 配置项是否有变更  配置项全量列表 |
-| Release 计划(可选) | 多端同节奏 / 错峰兼容方案 |
-| 上线监控 | 监控指标与手段 |
-| 版本兼容策略 | 多端/多版本共存策略等 |
+| Item | Content |
+|------|---------|
+| Non-Functional Requirements (optional) | Performance, stability, compatibility |
+| Release Dependencies (optional) | Interfaces requiring safelisting / release prerequisites / specific release dependency list; whether configuration items change; full list of configuration items |
+| Release Plan (optional) | Multi-platform same-cadence / staggered-compatibility plan |
+| Post-Launch Monitoring | Monitoring metrics and methods |
+| Version Compatibility Strategy | Multi-platform / multi-version coexistence strategy, etc. |
 
-## 6. 风险与未决项（可选）
+## 6. Risks and Open Items (optional)
 
-| 风险/未决项 | 影响 | 应对/结论 | Owner | 截止时间 |
-|------------|------|----------|-------|---------|
+| Risk / Open Item | Impact | Response / Conclusion | Owner | Due Date |
+|------------------|--------|-----------------------|-------|----------|
 | | | | | |
 
-## 7. 评审结论
+## 7. Review Conclusion
 
-| 结论 | 待办项 | Owner | 截止时间 |
-|------|-------|-------|---------|
+| Conclusion | Action Item | Owner | Due Date |
+|------------|-------------|-------|----------|
 | | | | |

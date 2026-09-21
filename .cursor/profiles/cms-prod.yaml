@@ -44,10 +44,6 @@ mcp:
       tech_solution_detail: CMS-TS-Detail-{story_key}
     content_format: markdown
 
-# ---------------------------------------------------------------- 内容模型
-content_model:
-  required: true
-
 # ---------------------------------------------------------------- 产物语言
 doc:
   body_language: en-US

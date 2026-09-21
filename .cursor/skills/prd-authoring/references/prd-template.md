@@ -1,189 +1,189 @@
-# PRD 模板
+# PRD Template
 
-## 文档信息
+## Document Information
 
-| 项目      | 内容             |
+| Item | Content |
 | ------- | -------------- |
-| 产品/功能名称 | {feature_name} |
-| 版本      | v{version}     |
-| 作者      | {author}       |
-| 日期      | YYYY-MM-DD     |
-| 状态      | 草稿 / 评审中 / 已确认 |
+| Product / Feature Name | {feature_name} |
+| Version | v{version} |
+| Author | {author} |
+| Date | YYYY-MM-DD |
+| Status | Draft / Under Review / Confirmed |
 
-## 版本变更记录
+## Change Log
 
-| Version | Update Date | 变更类型 | 改版说明 Description | 作者 Author | 评审 Reviewer |
+| Version | Update Date | Change Type | Description | Author | Reviewer |
 | ------- | ----------- | ---- | ---------------- | --------- | ----------- |
-| V1.0.0  | YYYY/MM/DD  | A    | 新建初版             | {author}  | {reviewer}  |
+| V1.0.0 | YYYY/MM/DD | A | Initial version | {author} | {reviewer} |
 
-> Type：A = Add（新增）｜ M = Modification（修改）｜ D = Deletion（删除）
+> Type: A = Add | M = Modification | D = Deletion
 
 ## 1. Business Overview
 
 ### 1.1 Business Background
 
-描述当前痛点、现状问题、用户行为模式。建议包含：
+Describe the current pain points, current-state problems, and user behavior patterns. It is recommended to include:
 
-- 现有流程的碎片化或低效之处
-- 缺乏统一数据源 / 工具带来的业务影响
-- 目标用户群体及其核心诉求
+- Fragmentation or inefficiency of existing processes
+- Business impact caused by the lack of a unified data source / tool
+- Target user groups and their core needs
 
-示例结构：
+Example structure:
 
-- 现状问题：{描述用户当前如何完成该任务，存在哪些障碍}
-- 业务影响：{对决策效率、数据可信度、协作成本的影响}
-- 为什么现在做：{业务驱动因素，如新市场上线等}
+- Current problem: {Describe how users currently complete this task and what obstacles exist}
+- Business impact: {Impact on decision-making efficiency, data credibility, and collaboration cost}
+- Why now: {Business drivers, such as a new market launch, etc.}
 
 ### 1.2 Purpose
 
-1-3 个可量化的目标。
+1–3 quantifiable goals.
 
-示例结构：
+Example structure:
 
-- {核心价值 1：如「提供统一的发现入口，替代分散的导航路径」}
+- {Core value 1: e.g., "Provide a unified discovery entry point to replace fragmented navigation paths"}
 
-### 1.3 Scope（可选）
+### 1.3 Scope (Optional)
 
-按端分别填写；不涉及的端写「本期不涉及」，不删行。
+Fill in per platform; for a platform not involved, write "Not applicable this cycle"; don't delete the row.
 
-| 端       | 需求范围 | 简要说明 | 优先级     |
+| Platform | Requirement Scope | Brief Description | Priority |
 | ------- | ---- | ---- | ------- |
-| Android |      |      | P1 / P2 |
-| iOS     |      |      | P1 / P2 |
-| 小程序     |      |      | P1 / P2 |
+| Android | | | P1 / P2 |
+| iOS | | | P1 / P2 |
+| Mini Program | | | P1 / P2 |
 
 ## 2. Feature Explanation
 
-### 2.1 产品架构图（可选）
+### 2.1 Product Architecture Diagram (Optional)
 
-{mermaid 或图片}
+{mermaid or image}
 
 ### 2.2 User Journey
 
-#### 2.2.1 Target Users & Usage Scenarios（目标用户与使用场景）
+#### 2.2.1 Target Users & Usage Scenarios
 
 | User Role | Usage Scenario |
 | --------- | -------------- |
-| {角色A}     | {角色名称 + 场景简述}  |
+| {Role A} | {Role name + scenario description} |
 
-> 示例：用户 HR 小李负责招聘；场景：公司启动新岗位招聘，需要候选人填写信息并上传简历。
+> Example: User: HR Xiao Li, responsible for recruitment. Scenario: The company launches recruitment for a new position and needs candidates to fill in information and upload resumes.
 
-#### 2.2.2 Business Process Step Details（业务流程步骤）（可选）
+#### 2.2.2 Business Process Step Details (Optional)
 
-流程图：{图片或 mermaid}
+Flowchart: {image or mermaid}
 
-| Step | Name  | Triggering Conditions (When) | Business Processing Steps (How) |
+| Step | Name | Triggering Conditions (When) | Business Processing Steps (How) |
 | ---- | ----- | ---------------------------- | ------------------------------- |
-| 1    | {步骤名} | {触发条件}                       | {系统处理逻辑}                        |
+| 1 | {Step name} | {Triggering condition} | {System processing logic} |
 
-### 2.3 UI Overview（界面概览）
+### 2.3 UI Overview
 
-- 插入高保真设计稿 / 线框图：
-- 插入 Figma link：
+- Insert high-fidelity design / wireframe:
+- Insert Figma link:
 
-（如有多个界面，请分点重复上述内容）
+(If there are multiple screens, repeat the above by bullet point)
 
-### 2.4 Function Module Explanation（功能模块说明）
+### 2.4 Function Module Explanation
 
-按 UI Section 逐一展开，每个模块使用统一表格结构。
+Expand section by section according to the UI. Each module uses a unified table structure.
 
-#### {Section 名称，如：Top Filter / Overview / Upload Modal}
+#### {Section name, e.g.: Top Filter / Overview / Upload Modal}
 
 | UI Component | Element | Operation Logic | Data Requirement | Performance Requirement |
 | ------------ | ------- | --------------- | ---------------- | ----------------------- |
-| {组件名}        | {元素描述}  | {用户操作 → 系统响应}   | {所需字段、校验规则}      | {响应时间、加载策略}             |
+| {Component name} | {Element description} | {User action → System response} | {Required fields, validation rules} | {Response time, loading strategy} |
 
 ## 3. User Story List
 
-> Story 拆分按照角色 + 场景 + 验收标准的方式拆分。
+> Stories are broken down by role + scenario + acceptance criteria.
 
-### Story 1：{标题}
+### Story 1: {Title}
 
-- **User story 描述**：As a {角色}, for {场景}, I want to {动作}, so that {价值}.
-- **需求详细描述**：
-- **识别并插入 Figma 设计图和 link**：
-- **验收标准**：
-  <!-- AC 格式仅供撰写参考，非固定输出结构：下面的 GIVEN/WHEN/AND/THEN 只是口径示意，AC 只需表达前置条件/操作/可观察结果三要素且可测，不照此逐行套用、不把本提示写入产物 -->
+- **User story description**: As a {role}, for {scenario}, I want to {action}, so that {value}.
+- **Detailed requirement description**:
+- **Identify and insert the Figma design and link**:
+- **Acceptance Criteria**:
+  <!-- The AC format is only for writing reference, not a fixed output structure: the GIVEN/WHEN/AND/THEN below is only a style hint; an AC only needs to express the three elements of precondition/action/observable result and be testable. Do not apply it line by line and do not write this hint into the product. -->
   - AC 1:
-    - GIVEN {前置条件}
-    - WHEN {用户操作}
-    - AND {附加操作}（可选）
-    - THEN {预期结果}
+    - GIVEN {precondition}
+    - WHEN {user action}
+    - AND {additional action} (optional)
+    - THEN {expected result}
   - AC 2: …
 
-## 4. 非功能性需求（可选）
+## 4. Non-Functional Requirements (Optional)
 
-描述系统应如何表现，例如性能指标、财务指标、营销指标等。
+Describe how the system should behave — e.g., performance metrics, financial metrics, marketing metrics, etc.
 
-| 类别    | 指标  | 口径  | 目标值 |
+| Category | Metric | Definition | Target Value |
 | ----- | --- | --- | --- |
-| 性能    |     |     |     |
-| 稳定性   |     |     |     |
-| 兼容性   |     |     |     |
-| 离线与弱网 |     |     |     |
+| Performance | | | |
+| Stability | | | |
+| Compatibility | | | |
+| Offline & Weak Network | | | |
 
-> 示例：通知触发延迟——从审批通过到开始处理通知，应在 5 秒内完成。
+> Example: Notification trigger delay — the time from approval to the start of notification processing should be completed within 5 seconds.
 
-## 5. 安全与权限（可选）
+## 5. Security & Permissions (Optional)
 
-填写安全要求并遵循最小权限原则。
+Fill in the security requirements and follow the principle of least privilege.
 
-- **权限控制**：{示例：查询 CMDB 映射关系，调用接口的权限应受到严格管控}
-- **数据分级与脱敏**：{字段级}
-- **日志审计**：{示例：通知发送记录至少保存 90 天，以备审计}
+- **Access control**: {Example: Permission to query CMDB mapping relationships and call interfaces should be strictly controlled}
+- **Data classification & masking**: {field level}
+- **Log auditing**: {Example: Notification sending records must be retained for at least 90 days for auditing}
 
-## 6. 业务规则与约束（可选）
+## 6. Business Rules & Constraints (Optional)
 
-| 规则编号  | 规则描述   | 优先级 |
+| Rule ID | Rule Description | Priority |
 | ----- | ------ | --- |
-| BR-01 | {业务规则} | P0  |
-| BR-02 | {业务规则} | P1  |
-| BR-03 | {业务规则} | P2  |
+| BR-01 | {Business rule} | P0 |
+| BR-02 | {Business rule} | P1 |
+| BR-03 | {Business rule} | P2 |
 
-## 7. 数据需求（可选）
+## 7. Data Requirements (Optional)
 
-### 7.1 数据来源
+### 7.1 Data Sources
 
-| 数据     | 来源      | 格式   |
+| Data | Source | Format |
 | ------ | ------- | ---- |
-| {数据项1} | {系统/输入} | {格式} |
+| {Data item 1} | {System / Input} | {Format} |
 
-### 7.2 数据规则
+### 7.2 Data Rules
 
-- **校验规则**：{描述}
-- **默认值**：{描述}
-- **异常处理**：{描述}
+- **Validation rules**: {Description}
+- **Default values**: {Description}
+- **Exception handling**: {Description}
 
-## 8. 依赖项（可选）
+## 8. Dependencies (Optional)
 
-| 依赖类型 | 描述        | 负责人  | 状态  |
+| Dependency Type | Description | Owner | Status |
 | ---- | --------- | ---- | --- |
-| 内部依赖 | {其他团队/系统} | {姓名} | 待确认 |
-| 外部依赖 | {第三方服务}   | {姓名} | 已确认 |
+| Internal Dependency | {Other team / system} | {Name} | To be confirmed |
+| External Dependency | {Third-party service} | {Name} | Confirmed |
 
-## 9. 风险与待定项（可选）
+## 9. Risks & Open Items (Optional)
 
-| 编号   | 风险/问题 | 影响   | 应对措施 |
+| ID | Risk / Issue | Impact | Mitigation |
 | ---- | ----- | ---- | ---- |
-| R-01 | {描述}  | {影响} | {方案} |
+| R-01 | {Description} | {Impact} | {Plan} |
 
-## 10. 优先级排序（可选）
+## 10. Priority Ranking (Optional)
 
-| Story   | 优先级 | 依赖关系    |
+| Story | Priority | Dependency |
 | ------- | --- | ------- |
-| Story 1 | P1  | 无       |
-| Story 2 | P2  | Story 1 |
+| Story 1 | P1 | None |
+| Story 2 | P2 | Story 1 |
 
-## 11. 附录
+## 11. Appendix
 
-> 链接书写约定：附录内链接项填了 URL 就写成可点击超链接 `[显示文字](URL)`（勿写裸 URL）并去掉「（可选）」；为空则保留「（可选）」占位、不写链接。
+> Link convention: for an appendix link item, when a URL is provided write it as a clickable hyperlink `[display text](URL)` (no bare URLs) and remove "(Optional)"; when empty, keep the "(Optional)" placeholder and write no link.
 
-- **Jira link**：
-- **参考文档链接**（可选）：
-- **相关会议纪要链接**（可选）：
-- **技术方案链接**（可选）：
-- **术语表**：
+- **Jira link**:
+- **Reference document link** (Optional):
+- **Related meeting notes link** (Optional):
+- **Tech solution link** (Optional):
+- **Glossary**:
 
-| 术语/缩略词 | 说明  |
+| Term / Acronym | Description |
 | ------ | --- |
-|        |     |
+| | |

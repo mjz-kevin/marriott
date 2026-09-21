@@ -1,96 +1,96 @@
-# 质量门禁（Quality Gates）
+# Quality Gates
 
-撰写类 Skill 在交付前过 G1–G7 与 G11，发布类 Skill 在写入前过 G8–G11。
+Authoring skills pass G1–G7 and G11 before delivery; publishing skills pass G8–G11 before writing.
 
-## G1 结构完整性
+## G1 Structural Completeness
 
-产物必须覆盖模板的全部**必填章节**。可选章节可写「本期不涉及」，但不得整段删除，否则读者分不清「没做」和「忘了写」。
+The product must cover all **required sections** of the template. Optional sections may say "Not applicable this cycle" but must not be deleted entirely, otherwise the reader can't tell "not done" from "forgot to write."
 
-判定：缺任一必填章节 → 阻断。
+Decision: missing any required section → block.
 
-## G2 占位符清零
+## G2 Placeholder Zeroing
 
-扫描残留占位符，命中即阻断：
+Scan for residual placeholders; a hit blocks:
 
-| 模式 | 说明 |
-|------|------|
-| `[填写名称]` `[描述]` `[角色]` `TBD` `TODO` `???` | 未填内容 |
-| `……` 出现在 AC 中 | AC 未写完 |
-| 章节标题下直接是下一章节标题 | 空章节 |
-| `本模板忠实于官方` `质量门禁负责` `不写入本模板` | 把 skill/模板给作者看的说明写进了 PRD |
-| 正文一级标题为 `PRD 模板` | 把模板文件名当成了产物标题 |
+| Pattern | Description |
+|---------|-------------|
+| `[Enter name]` `[Description]` `[Role]` `TBD` `TODO` `???` | Unfilled content |
+| `…` appearing in an AC | AC not finished |
+| A section heading directly followed by the next section heading | Empty section |
+| `faithful to the official template` `enforced by quality gates` `not written into the template` | Skill/template notes for the author written into the PRD |
+| The body's H1 is `PRD Template` | Treating the template file name as the product title |
 
-例外：模板本身就要求留空的「术语表」「附录链接」允许 `—`，但需在交付对话的待确认清单中登记。
+Exception: the "Glossary" and "Appendix links" that the template itself requires to be left empty may use `—`, but must be logged in the to-confirm list in the delivery conversation.
 
-## G3 合成数据与 PII
+## G3 Synthetic Data and PII
 
-- PRD / User Story / 测试用例中的示例数据必须是**合成数据**，不得复用生产真实值
-- 技术方案中的接口示例与测试数据必须是 **mock**，禁止真实密钥、内网域名、会员号、订单号
-- 写出前扫一遍真实密钥、内网域名、会员号、订单号、手机号，命中即阻断提交
+- Example data in PRD / User Story / test cases must be **synthetic data**, not reused production values
+- Interface examples and test data in tech solutions must be **mock**; real secrets, internal domains, member IDs, and order IDs are forbidden
+- Before writing out, scan for real secrets, internal domains, member IDs, order IDs, and phone numbers; a hit blocks the submission
 
-判定：命中 → 阻断，不做「提醒后继续」。
+Decision: hit → block; no "warn and continue."
 
-## G4 验收标准可测性
+## G4 Acceptance-Criteria Testability
 
-每条 AC 必须同时满足：
+Each AC must satisfy all of:
 
-| 检查项 | 反例 | 正例 |
-|--------|------|------|
-| 有明确前置条件 | "用户可以查看" | "GIVEN 用户已登录且账户有 1 条有效订单" |
-| 有可观察结果 | "体验流畅" | "THEN 订单列表在 1 秒内渲染完成" |
-| 不含模糊词 | "正常""合理""友好""快速" | 替换为可量化或可判定的描述 |
-| 可映射到测试用例 | 一条 AC 无法写出任何测试步骤 | 一条 AC 对应 1–N 个用例 |
-| 覆盖反例与边界 | 只有 happy path | 至少 1 条异常 AC + 1 条边界 AC |
+| Check | Anti-pattern | Correct |
+|-------|--------------|---------|
+| Has a clear precondition | "The user can view" | "GIVEN the user is logged in and the account has 1 valid order" |
+| Has an observable result | "Smooth experience" | "THEN the order list renders within 1 second" |
+| No vague words | "normal" / "reasonable" / "friendly" / "fast" | Replace with quantifiable or decidable descriptions |
+| Mappable to test cases | An AC that can't yield any test step | An AC maps to 1–N cases |
+| Covers exceptions and boundaries | Only the happy path | At least 1 exception AC + 1 boundary AC |
 
-判定：任一条 AC 不合格 → 打回重写该条，不阻断整体。
+Decision: any AC unqualified → send that AC back for rewrite; doesn't block the whole.
 
-## G5 术语一致性
+## G5 Terminology Consistency
 
-同一概念在全文中只能有一个名字。产出前扫一遍：
+The same concept can have only one name throughout. Scan before producing:
 
-- 角色名（会员 / 用户 / 客人）统一
-- 状态名（已发布 / 上线 / Published）统一
-- 字段名与代码/接口定义一致
+- Role names (member / user / guest) unified
+- State names (published / live / Published) unified
+- Field names consistent with code / interface definitions
 
-不一致 → 警告，列成对照表交作者裁决。
+Inconsistency → warning; list a comparison table for the author to decide.
 
-## G6 人工确认闸门
+## G6 Human-Confirmation Gate
 
-以下产物在**交付后必须停下等人工确认**，不得自动流转到发布环节：
+The following products **must stop and wait for human confirmation after delivery** and must not auto-flow into the publishing step:
 
-| 产物 | 确认人 |
-|------|--------|
+| Product | Confirmer |
+|---------|-----------|
 | PRD | PO |
-| PRD 级技术方案 | TL，PRD 中的方案章节需 PO 确认 |
-| Spike 结论 | TL |
-| Story 级明细方案 | DEV |
-| User Story 清单 | PO |
+| PRD-level tech solution | TL; the solution chapter in the PRD needs PO confirmation |
+| Spike conclusion | TL |
+| Story-level detailed solution | DEV |
+| User Story list | PO |
 
-AI 可以给出建议与默认值，但确认动作必须由人完成。
+The AI may give suggestions and defaults, but the confirmation action must be done by a human.
 
-## G7 幂等
+## G7 Idempotency
 
-Confluence 发布前必须按标题 CQL 查重；Jira 建单前必须按「Parent + 摘要」查重。
-命中已有对象 → 更新（Confluence）/ 跳过并提示（Jira），**禁止创建重复对象**。
+Before publishing to Confluence, dedup by title CQL; before creating a Jira ticket, dedup by "Parent + Summary."
+On a hit with an existing object → update (Confluence) / skip and prompt (Jira); **creating duplicate objects is forbidden**.
 
-## G8 权限边界
+## G8 Permission Boundary
 
-| 动作 | 允许环节 | 说明 |
-|------|----------|------|
-| Confluence 写入 | 需求撰写/发布、技术方案撰写/发布环节 | R+W |
-| Jira 建单与字段写入 | 建单环节 | R+W |
-| Jira 状态流转与评论 | 受限 | 不含字段重构与删除 |
+| Action | Allowed step | Description |
+|--------|--------------|-------------|
+| Confluence writes | Requirement authoring/publishing, tech-solution authoring/publishing steps | R+W |
+| Jira ticket creation and field writes | Ticket-creation step | R+W |
+| Jira status transitions and comments | Restricted | No field restructuring or deletion |
 
-## G9 图表可渲染性
+## G9 Diagram Renderability
 
-凡产物含 mermaid 图（架构图、流程图、时序图等），交付前逐条校验，任一不满足 → 打回修正该图：
+For any product containing a mermaid diagram (architecture, flowchart, sequence, etc.), verify item by item before delivery; any failure → send that diagram back for correction:
 
-| 检查项 | 反例 | 正例 |
-|--------|------|------|
-| 节点文本加双引号 | `A[MBY Audio H5 页面]` | `A["MBY Audio H5 页面"]` |
-| 禁用 HTML 换行标签 | `C["模块<br/>说明"]` | `C["模块 (说明)"]` |
-| 边标签加引号 | `E -->|选择章节| F` | `E -->|"选择章节"| F` |
-| 节点 ID 用 ASCII | `甲["会员"]` | `A["会员"]` |
-| 语法可渲染 | 未经校验直接交付 | 经 mermaid 预览器/live 确认无 Lexical error |
+| Check | Anti-pattern | Correct |
+|-------|--------------|---------|
+| Double-quote node text | `A[MBY Audio H5 Page]` | `A["MBY Audio H5 Page"]` |
+| Forbid HTML line-break tags | `C["Module<br/>note"]` | `C["Module (note)"]` |
+| Quote edge labels | `E -->|select chapter| F` | `E -->|"select chapter"| F` |
+| ASCII node IDs | `甲["Member"]` | `A["Member"]` |
+| Syntactically renderable | Delivered without verification | Confirmed no Lexical error via a mermaid previewer / live |
 
-**发布侧**：若 Confluence 无 Mermaid 渲染插件，直接写 mermaid 代码宏可能只显示源码。发布环节须把图渲染成图片附件后嵌入，不依赖站点插件。
+**Publishing side**: if Confluence has no Mermaid rendering plugin, writing a raw mermaid code macro may only show the source. The publishing step must render diagrams into image attachments and embed them, not relying on a site plugin.

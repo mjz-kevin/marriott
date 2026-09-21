@@ -133,7 +133,7 @@ What's clarified is the **technical disagreement points that decide the solution
 | Evaluation dimensions and candidate solutions | Spike | Evaluation dimensions decided, at least 2 candidate solutions with clear boundaries | Only one solution, or missing dimensions making comparison impossible |
 | Task-breakdown boundaries | Story detail | Can split into independently acceptable tasks, granularity and acceptance metric clear | One big task that can't be accepted |
 | Fallbacks and non-functional | Story detail | Failure/null fallbacks, performance/cache/auth, Feature Flag read-failure behavior decided | Only the success path, no fallback or degradation |
-| Compatibility and migration | All | New/old version coexistence strategy, data migration and rollback decided (with content migration when the team requires a content model) | Doesn't consider existing data and rollback |
+| Compatibility and migration | All | New/old version coexistence strategy, data migration and rollback decided | Doesn't consider existing data and rollback |
 
 ### 2. Detect conflicts
 

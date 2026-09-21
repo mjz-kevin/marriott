@@ -44,7 +44,8 @@ Create tickets in Jira from the confirmed Story list, fill fields, establish bac
 | 2 | No real secrets, internal domains, real member IDs, or real phone numbers anywhere |
 | 3 | **The PO has confirmed** the Story list (there must be explicit confirmation before batch creation) |
 | 4 | The target Jira project can be determined: each Story has a resolvable Parent Epic key (deriving the project), or `mcp.jira.project_key` is configured as an override; if neither, stop and require it to be completed |
-| 5 | Jira auth is available (stop if `mcp_auth` fails) |
+| 5 | **Labels resolve completely per `mcp.jira.labels`**: every `mandatory` category has a value (`business_domain` decided against the official domain definitions on `labels.source`; when `filter_gate` true a miss stops), and each ticket's Component and `platform` label are consistent (Component=`iOS` ⇒ `iOS` label). A gap here stops creation, don't guess |
+| 6 | Jira auth is available (stop if `mcp_auth` fails) |
 
 ## 2. Workflow
 
@@ -84,9 +85,9 @@ Write per the Story template's field table:
 | Type | Take `mcp.jira.issue_type` |
 | Parent | Must fill the Epic |
 | Agile Team | Per `mcp.jira.agile_team`: fill if it has a value, leave empty for manual entry if empty |
-| Component | Per `mcp.jira.components.platform_rule`; teams without `components` configured don't handle it |
+| Component | Per `mcp.jira.components.platform_rule`; teams without `components` configured don't handle it. When Component resolves to `iOS`, set the `iOS` label in `labels.platform` in tandem (keep Component ↔ platform label consistent) |
 | Priority | Don't fill |
-| Labels | Per `mcp.jira.labels` (the valid enum, `case_sensitive`, `auto_fill` categories, the `business_domain` gate, and the `ai_provenance` provenance label are all defined by this config key). **Mandatory at creation time**: categories with `auto_apply: always` (like `ai_provenance` → `AIGenerated`) are applied unconditionally, marking tickets created/synced by the agent; when `business_domain.filter_gate` is true, a missing category stops creation; hitting a label outside the enum stops, align per `labels.source` |
+| Labels | Per `mcp.jira.labels` (the valid enum, `case_sensitive`, `auto_fill` categories, the `business_domain` gate, the `platform` label, and the `ai_provenance` provenance label are all defined by this config key). **Mandatory at creation time**: categories with `auto_apply: always` (like `ai_provenance` → `AIGenerated`) are applied unconditionally; every category with `mandatory: true` must resolve to a value—`business_domain` is decided by the Story's functional nature against the official domain definitions on `labels.source` (not the literal title wording), and when `business_domain.filter_gate` is true a missing/unresolved one **stops creation**; the `platform` label follows `platform.platform_binding`—**a ticket whose Component is `iOS` MUST also carry the `iOS` platform label**. Hitting a label outside the enum stops; align per `labels.source` |
 | Acceptance Criteria | Supports Markdown; write the AC text as given in the Story list (three elements: precondition/action/observable result) |
 | Description | When the team requires self-contained descriptions, it must carry full background; see the layout spec below |
 | Estimation fields / Release fields | Don't fill (back-filled by the release flow) |
