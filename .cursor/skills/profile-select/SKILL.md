@@ -42,7 +42,7 @@ Any Agent / Skill that needs to read profile config should call this skill **bef
 config to get the current profile:
 
 - When an Agent (eval / tech-solution / userstory) initializes and determines the profile.
-- When a publishing / authoring Skill needs config such as `mcp.confluence.*` / `mcp.jira.*` / `content_model.*`.
+- When a publishing / authoring Skill needs config such as `mcp.confluence.*` / `mcp.jira.*`.
 
 Read-only, display-only scenarios that don't need to write should also resolve the profile first
 and then read the corresponding yaml.

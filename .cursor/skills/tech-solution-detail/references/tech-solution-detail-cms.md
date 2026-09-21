@@ -1,112 +1,112 @@
-# CMS 技术方案模板
+# CMS Technical Solution Template
 
-## 文档信息
+## Document Information
 
-| 项目          | 内容                   |
+| Item | Content |
 | ------------- | ---------------------- |
-| 产品/功能名称 | [填写名称]             |
-| 版本          | v1.0                   |
-| 作者          | [作者]                 |
-| 日期          | YYYY-MM-DD             |
-| 状态          | 草稿 / 评审中 / 已确认 |
+| Product / Feature Name | [Enter name] |
+| Version | v1.0 |
+| Author | [Author] |
+| Date | YYYY-MM-DD |
+| Status | Draft / In Review / Approved |
 
-## 版本变更记录
+## Change Log
 
-| Version | Update Date    | 变更类型 | 改版说明 Description | 作者 Author | 评审 Reviewer  |
+| Version | Update Date | Change Type | Description | Author | Reviewer |
 | ------- | -------------- | -------- | -------------------- | ----------- | -------------- |
-| V1.0.0  | 【YYYY/MM/DD】 | A        | 新建初版             | 【姓名】    | 【评审员姓名】 |
+| V1.0.0 | [YYYY/MM/DD] | A | Initial draft | [Name] | [Reviewer Name] |
 
-> A = 新增｜M = 修改｜D = 删除
+> A = Add | M = Modification | D = Deletion
 
-## 1. 背景与目标
+## 1. Background and Goals
 
-- **业务背景：** [业务需求背景与要解决的问题]
-- **本次目标：** [本次要交付的内容、实现的功能]
+- **Business Background:** [Business requirement background and the problem to solve]
+- **Goals for This Iteration:** [What will be delivered this time; the functionality to implement]
 
-## 2. 技术方案
+## 2. Technical Solution
 
-- **整体思路：** [内容如何建模、发布与被消费的总体方案]
-- **架构 / 流程：** [附架构图或主流程图：编辑 → 审核 → 发布 → 消费]
+- **Overall Approach:** [Overall plan for how content is modeled, published, and consumed]
+- **Architecture / Flow:** [Attach architecture diagram or main flow diagram: edit → review → publish → consume]
 
-| 关注点 | 说明 |
-|--------|------|
-| 内容存储 | [数据库 / 集合] |
-| 发布方式 | [草稿/版本、定时上下线] |
-| 消费方式 | [Local API / REST / GraphQL/渲染 layout + component] |
+| Focus | Description |
+|-------|-------------|
+| Content Storage | [Database / collection] |
+| Publishing Method | [Draft/version, scheduled publish/unpublish] |
+| Consumption Method | [Local API / REST / GraphQL / render layout + component] |
 
-## 3. 关键设计
+## 3. Key Design
 
-**3.1 内容模型**
+**3.1 Content Model**
 
-| 内容类型 | 用途 | 关键字段 | 草稿/版本 | 多语言 |
-|---------|------|---------|-----------|--------|
-| `[slug]` | [说明] | [字段] | 是/否 | 是/否 |
+| Content Type | Purpose | Key Fields | Draft/Version | Multilingual |
+|--------------|---------|------------|---------------|--------------|
+| `[slug]` | [Description] | [Fields] | Yes/No | Yes/No |
 
-**3.2 权限与发布流程**
+**3.2 Permissions and Publishing Workflow**
 
-| 角色 | 读 | 写 | 发布 | 说明 |
-|------|----|----|------|------|
+| Role | Read | Write | Publish | Description |
+|------|------|-------|---------|-------------|
 | [editor] | | | | |
 | [reviewer] | | | | |
 | admin | ✓ | ✓ | ✓ | |
 
-- 发布流程：[draft → 审核 → published；驳回如何处理]
+- Publishing workflow: [draft → review → published; how rejections are handled]
 
-**3.3 接口与消费方**
+**3.3 Interfaces and Consumers**
 
-| 消费方 | 读取方式 | 关键字段契约 | 空值/失败兜底 |
-|--------|---------|-------------|--------------|
-| [App/Web/下游] | [REST/GraphQL] | | [隐藏模块/用缓存，不静默失败] |
+| Consumer | Read Method | Key Field Contract | Null/Failure Fallback |
+|----------|-------------|--------------------|-----------------------|
+| [App/Web/Downstream] | [REST/GraphQL] | | [Hide module / use cache; do not fail silently] |
 
-**3.3.1 GraphQL 契约（Content API）**
+**3.3.1 GraphQL Contract (Content API)**
 
-| 项 | 内容 |
-|------|------|
-| Subgraph / Schema | [subgraph 名称；本次要新增/变更的 type、field] |
-| Data Type | [新增的 GraphQL data type，如 `AudioItem`、`ContentLayout`] |
-| Endpoint | [GraphQL endpoint 地址] |
-| Query 定义 | [query 名称、入参、返回结构] |
-| 按 Segment 检索 | [query 是否支持按 user segment 返回不同内容；segment 入参如何传递] |
+| Item | Content |
+|------|---------|
+| Subgraph / Schema | [Subgraph name; types and fields to add/change this time] |
+| Data Type | [New GraphQL data type, e.g., `AudioItem`, `ContentLayout`] |
+| Endpoint | [GraphQL endpoint address] |
+| Query Definition | [Query name, parameters, return structure] |
+| Retrieval by Segment | [Whether the query supports returning different content by user segment; how the segment parameter is passed] |
 
-**3.4数据迁移**
+**3.4 Data Migration**
 
-| 变更类型                    | 对象（Collection / Field） | 说明       | 迁移方式                                |
+| Change Type | Object (Collection / Field) | Description | Migration Method |
 | :-------------------------- | :------------------------- | :--------- | :-------------------------------------- |
-| 新增 / 删除 / 改类型 / 改名 | `[collection.field]`       | [变更内容] | `payload migrate`（生成 + 执行迁移脚本) |
+| Add / Delete / Change Type / Rename | `[collection.field]` | [Change content] | `payload migrate` (generate + run migration script) |
 
-## 4.任务拆解
+## 4. Task Breakdown
 
-| 项   | 技术任务 | 其他 Comments |
+| Item | Technical Task | Other Comments |
 | ---- | -------- | ------------- |
-|      |          |               |
-
-## 5. 依赖与风险
-
-**依赖与前置条件**
-
-| 依赖 | 用途 | 状态/前置 |
-|------|------|-----------|
-| DB | CMS 内容存储、schema 变更是否需要迁移 | |
-| CDN（内容分发网络） | 图片、视频等素材，以及内容接口的缓存分发 | |
-| 下游接口 | 接口契约是否对齐 | |
-| Feature Flag / 配置 | 控制功能上线、灰度的开关或配置项 | |
-
-**风险**
-
-| 风险 | 影响 | 应对 |
-|------|------|------|
 | | | |
 
-## 6. 非功能设计
+## 5. Dependencies and Risks
 
-| 维度 | 要求 / 说明 |
-|------|------------|
-| 性能 | [读取 Admin 编辑响应、并发] |
-| 缓存 | [下游缓存策略、TTL、发布后失效] |
-| 安全 | [鉴权、越权防护] |
+**Dependencies and Prerequisites**
 
-## 7. 评审结论 
+| Dependency | Purpose | Status/Prerequisite |
+|------------|---------|---------------------|
+| DB | CMS content storage; whether schema changes require migration | |
+| CDN (Content Delivery Network) | Images, videos, and other assets, plus caching/distribution of content APIs | |
+| Downstream Interface | Whether interface contracts are aligned | |
+| Feature Flag / Configuration | Switches or configuration items controlling launch and gradual rollout | |
 
-| 结论 | Action Item | Owner | 截止时间 |
+**Risks**
+
+| Risk | Impact | Response |
+|------|--------|----------|
+| | | |
+
+## 6. Non-Functional Design
+
+| Dimension | Requirement / Description |
+|-----------|---------------------------|
+| Performance | [Admin edit read response, concurrency] |
+| Caching | [Downstream caching strategy, TTL, invalidation after publish] |
+| Security | [Authentication, privilege-escalation protection] |
+
+## 7. Review Conclusion
+
+| Conclusion | Action Item | Owner | Due Date |
 | ---- | ----------- | ----- | -------- |
-|      |             |       |          |
+| | | | |

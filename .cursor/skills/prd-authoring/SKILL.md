@@ -22,7 +22,7 @@ Based on the released clarification conclusions, write the PRD following the PRD
 | Output | A PRD file conforming to the template + a to-confirm list |
 | Scope | Only writes the what and why; the how belongs to the tech-solution step; the to-confirm list is not part of the body and is not published |
 
-The template, file naming, scope-splitting dimensions, UI states, content-model requirements, language, etc., all come from the config.
+The template, file naming, scope-splitting dimensions, UI states, language, etc., all come from the config.
 
 ## 1. Prerequisites
 
@@ -47,41 +47,40 @@ If condition 1 isn't met, return to the requirement-clarification step; don't sk
 - S1  Load prd-template.md
 - S2  Gather and read through the inputs
 - S3  Write 1. Business Overview
-- S4  Write 1.3 Scope
+- S4  Write Scope (Optional)
 - S5  Write 2. Feature Explanation
 - S6  Write 3. User Story List
 - S7  Write chapters 4–10
-- S8  [conditional] Content model
-- S9  Add appendices and the to-confirm list
-- S10 Self-check
-- S11 Hand to the PO for confirmation
+- S8  Add appendices and the to-confirm list
+- S9  Self-check
+- S10 Hand to the PO for confirmation
 ```
 
 ### S1 Load the requirements-doc template
 
-Read [prd-template.md](references/prd-template.md). Treat only "## 文档信息" and the sections after it as the product skeleton: copy the order, headings, and (optional) / required markers verbatim; don't add or remove sections yourself and don't change the official headings. Replace all `{placeholders}` in the template, leaving no residue. For anything not in scope, write "本期不涉及" (out of scope this cycle); don't delete the section.
+Read [prd-template.md](references/prd-template.md). Treat only "## Document Information" and the sections after it as the product skeleton: copy the order, headings, and (optional) / required markers verbatim; don't add or remove sections yourself and don't change the official headings. Replace all `{placeholders}` in the template, leaving no residue. For an optional item not in scope, keep the heading and write `—` (or "Not applicable this cycle"); don't delete the section.
 
 The section hierarchy and wording follow Part 1 of the official "PRD Template." The authoring constraints (quantifiable, no placeholder residue, sensitive info) are enforced only in this skill's quality gates.
 
-**Version-history fill-in constraint**: the template's "## 版本变更记录" table records only **requirement-level changes**—one PRD corresponds to one requirement, only one PRD page is kept in Confluence, and only the latest version is uploaded when publishing.
+**Version-history fill-in constraint**: the template's "## Version Change Log" table records only **requirement-level changes**—one PRD corresponds to one requirement, only one PRD page is kept in Confluence, and only the latest version is uploaded when publishing.
 
-- Initial version: one row `A（新增）· 新建初版`.
+- Initial version: one row `A (Add) · Initial version`.
 - Only after publishing, when a **real requirement change** occurs (business-level changes to scope/goals/rules/Story additions or removals), add an `M` or `D` row; one requirement change corresponds to one row.
 - **Local iterations** during writing and revision (re-splitting / reordering / merging User Stories, wording tweaks, format fixes, and other "edit points") are **not recorded** as version-history rows—these are iteration snapshots kept in local archives, they don't go into the doc table and don't go out with the doc.
 - So for "a PRD of the same requirement," under normal circumstances there is **only one** version-history row (the initial version); the row count grows only when a requirement change occurs, and the count equals the number of requirement changes, not the number of local revisions.
 
 **Must not be written into the product** (these are metadata for the author to read, not official sections):
 
-- The file title "# PRD 模板"
-- Notes like "本模板忠实于官方," "质量门禁负责," "不写入本模板"
+- The file title "# PRD Template"
+- Notes like "faithful to the official template," "enforced by quality gates," "not written into the template"
 - Any block quote, HTML comment, or skill name written for the Agent
-- Any **writing convention / author note** (like the appendix's top "链接书写约定"—guidance on how to fill in links, removing "（可选）", leaving placeholders for empty items) applies only to the writing behavior and must **never** be written into the product as an explanatory sentence; even if it appears as a block quote or comment in the template, don't copy it into the product
+- Any **writing convention / author note** (like the appendix's top "Link convention"—guidance on how to fill in links, removing "(Optional)", leaving placeholders for empty items) applies only to the writing behavior and must **never** be written into the product as an explanatory sentence; even if it appears as a block quote or comment in the template, don't copy it into the product
 
-The product body starts from "## 文档信息". The Confluence page title is generated by the naming template; don't write a separate H1 "PRD 模板".
+The product body starts from "## Document Information". The Confluence page title is generated by the naming template; don't write a separate H1 "PRD Template".
 
 ### S2 Gather and read through the inputs
 
-The clarification conclusions are the source of truth; if an assumption in them is adopted, write it into the corresponding section and mark it `[假设]`.
+The clarification conclusions are the source of truth; if an assumption in them is adopted, write it into the corresponding section and mark it `[Assumption]`.
 
 When the input contains Figma links, you must read the design content via Figma MCP (the `figma` server) as the factual basis for the UI Overview, feature-module tables, and Story design references; don't infer from the link. See "Figma design handling" for the reading flow: a single link may contain multiple boards, so filter out the designs matching the screens this PRD covers, download them as local images, and insert them into 2.3 and the corresponding Story's design fields. If reading fails (no permission, broken link, expired auth), first retry via `mcp_auth`; if it still fails, log it in the to-confirm list and, at handoff, explain in the conversation which designs weren't obtained and why—don't fabricate design details.
 
@@ -90,41 +89,37 @@ When the input contains Figma links, you must read the design content via Figma 
 - 1.1 Background: current problem -> business impact -> why now
 - 1.2 Purpose: each goal must give current value -> target value -> measurement method -> measurement point in time; don't use unquantified phrasing like "improve efficiency"
 
-### S4 Write 1.3 Scope
+### S4 Write Scope (Optional)
 
-Split by the team-configured scope dimensions; for any dimension not involved, write "本期不涉及"; priorities use only P1 / P2.
+Fill the **Android / iOS / Mini Program** sub-tables under `### Scope (Optional)` per the team-configured scope dimensions; for any platform not involved, keep the row and write `—` (or "Not applicable this cycle"); priorities use only P1 / P2.
 
 ### S5 Write 2. Feature Explanation
 
 - 2.1 Product architecture diagram: draw with mermaid, follow the "Diagram spec" below, and ensure it renders both locally and after publishing
 - 2.2 User Journey (with a flowchart, also following the "Diagram spec")
-- 2.3 UI Overview: per the template, fill only two items—"插入高保真设计稿 / 线框图" and "插入 Figma link"; for multiple screens repeat as bullet points, don't expand with other explanations. When Figma links are present, download per "Figma design handling" and insert the design images of the screens this PRD covers into the "插入高保真设计稿 / 线框图" item, keeping the link in the "插入 Figma link" item; put images into the body, don't substitute explanatory text for images; on read failure, handle per S2
+- 2.3 UI Overview: per the template, fill only two items—"Insert high-fidelity design / wireframe" and "Insert Figma link"; for multiple screens repeat as bullet points, don't expand with other explanations. When Figma links are present, download per "Figma design handling" and insert the design images of the screens this PRD covers into the "Insert high-fidelity design / wireframe" item, keeping the link in the "Insert Figma link" item; put images into the body, don't substitute explanatory text for images; on read failure, handle per S2
 - 2.4 Feature-module tables: one table per UI Section, one element per row; Operation Logic writes "user action -> system response" not implementation; Data Requirement writes field names and validation; Performance Requirement must be quantifiable (metric name + threshold + measurement condition), no vague descriptions
 
 ### S6 Write 3. User Story List
 
-Fill per the `## 3. User Story List` skeleton of prd-template.md: the template's built-in block quote (`> Story 拆分按照角色 + 场景 + 验收标准的方式拆分。`) must be **kept verbatim, copied as-is**; you must not append, concatenate, or rewrite any wording after it—including stable-numbering rules, "don't reuse/renumber on revision," "leave estimation empty," etc. Such rules only govern writing behavior and must not be written into that block quote or anywhere in the product; don't add explanatory sentences, lead-ins, or subsections not defined by the template.
+Fill per the `## 3. User Story List` skeleton of prd-template.md: the template's built-in block quote (`> Stories are broken down by role + scenario + acceptance criteria.`) must be **kept verbatim, copied as-is**; you must not append, concatenate, or rewrite any wording after it—including stable-numbering rules, "don't reuse/renumber on revision," "leave estimation empty," etc. Such rules only govern writing behavior and must not be written into that block quote or anywhere in the product; don't add explanatory sentences, lead-ins, or subsections not defined by the template.
 
-Each Story fills only the template's existing fields: `User story 描述` (form `As a {角色}, for {场景}, I want to {动作}, so that {价值}.`), `需求详细描述`, `识别并插入 Figma 设计图和 link`, and `验收标准`. ACs must express the three elements of precondition/action/observable result and be reducible to test cases; a fixed keyword format is not required. The `识别并插入 Figma 设计图和 link` field inserts the design images and link of the screens this Story covers, per "Figma design handling."
+Each Story fills only the fields defined in its template block. **Story 1** includes `User story description` (form `As a {role}, for {scenario}, I want to {action}, so that {value}.`), `Detailed requirement description`, `Identify and insert the Figma design and link`, and `Acceptance Criteria`. **Story 2+** follow the slimmer skeleton in the template (no `Detailed requirement description` unless the template block includes it). ACs must express the three elements of precondition/action/observable result and be reducible to test cases; a fixed keyword format is not required. The `Identify and insert the Figma design and link` field inserts the design images and link of the screens this Story covers, per "Figma design handling."
 
 ### S7 Write chapters 4–10
 
 Give each NFR a quantified metric (performance, compatibility, offline and availability, security, accessibility); for security, follow least privilege and state the data classification and log retention; then write business rules and constraints, data requirements, dependencies, risks and open items, and priority ranking.
 
-### S8 [conditional] Content model
-
-When the team config requires it, add a content-model chapter answering change types, impact on historical content, migration and rollback, then add the role matrix; when the config requires it as a standalone item, split it into a separate Story in the Story List for independent rollback.
-
-### S9 Add appendices (to-confirm items not in the body)
+### S8 Add appendices (to-confirm items not in the body)
 
 Fill the appendix's Figma / Jira links and glossary. **The Jira link points only to the single Epic this PRD corresponds to** (don't fill in Story keys); if the Epic isn't created yet at writing time, leave a placeholder, and it's filled in by the write-back step after creation. For each appendix link field, fill it if there's a value and leave it empty otherwise; don't write explanatory text like "filled in later by XX" or "TBD."
-The to-confirm list is not written into the PRD body and not published to Confluence; to-confirm items are listed one by one (with owners) in the conversation only at S11 handoff.
+The to-confirm list is not written into the PRD body and not published to Confluence; to-confirm items are listed one by one (with owners) in the conversation only at S10 handoff.
 
-### S10 Self-check
+### S9 Self-check
 
 Verify item by item against the quality gates in section 5.
 
-### S11 Hand to the PO for confirmation
+### S10 Hand to the PO for confirmation
 
 Present the product and the to-confirm list in the conversation (each item annotated with its owner, existing only in the conversation and not written into the doc), and **you must** lay out the next step as two parallel options for the PO to choose from, presented equally—don't mention only publishing and don't weaken "convert to PDF" into a footnote or omit it:
 
@@ -139,8 +134,10 @@ After writing, stop and wait for PO confirmation; don't move on to the next step
 
 | Rule | Description |
 | ------------- | ---------------------------------------------------- |
-| Template first | Section order, headings, and (optional) / required markers follow prd-template.md starting from "## 文档信息"; the template file's H1 and author notes are not part of the product. Fill only the template's existing sections, fields, and block quotes; don't add explanatory sentences, lead-ins, comments, or subsections not defined by the template; keep the template's built-in body block quotes verbatim without expanding them, but author notes / writing conventions (like the appendix's "链接书写约定") and HTML comments are never written into the product |
-| Make assumptions explicit | If an assumption from the clarification conclusions is adopted, write it into the corresponding section and mark it `[假设]` |
+| Template first | Section order, headings, and (optional) / required markers follow prd-template.md starting from "## Document Information"; the template file's H1 and author notes are not part of the product. Fill only the template's existing sections, fields, and block quotes; don't add explanatory sentences, lead-ins, comments, or subsections not defined by the template; keep the template's built-in body block quotes verbatim without expanding them, but author notes / writing conventions (like the appendix's "Link convention") and HTML comments are never written into the product |
+| Optional items not involved | For an optional item/section not involved, keep the heading and write `—` (a checklist trace meaning "assessed, not needed this cycle"); when a full sentence is needed use "Not applicable this cycle"; don't delete the section or row |
+| No fabricated optional content | Don't proactively generate content for an optional item without a requirement/clarification basis; write it only when the requirement, clarification conclusion, or user explicitly calls for it, otherwise write `—` |
+| Make assumptions explicit | If an assumption from the clarification conclusions is adopted, write it into the corresponding section and mark it `[Assumption]` |
 | Only what and why | The how goes to the later tech-solution steps (PRD level and Story-level detail) |
 | Quantifiable goals | Purpose and Performance Requirement must have numbers, a metric, and measurement conditions |
 | Don't hardcode constants | The template, naming, dimensions, states, and language come from the team config; don't hardcode team identifiers in the product |
@@ -190,10 +187,10 @@ Design images target "readable in doc preview and as publish attachments," not p
 
 ## 5. Quality gates
 
-- Compare section by section against prd-template.md starting from "## 文档信息": sections are complete, order matches, no empty sections
+- Compare section by section against prd-template.md starting from "## Document Information": sections are complete, order matches, no empty sections
 - No explanatory sentences, lead-ins, or subsections added beyond the template; the template's built-in **body block quotes** (like in-section example/metric notes) are **kept verbatim, not appended to or expanded** (e.g. the `## 3. User Story List` block quote must not have stable-numbering/no-reuse/estimation rules concatenated onto it); the template's **author notes/writing conventions** (block-quote or HTML-comment form) are not body content and are never written into the product
-- No template metadata leakage: "# PRD 模板," "本模板忠实于官方," "质量门禁负责"; no writing-convention/author-note residue (like the appendix's top "链接书写约定"); no HTML-comment residue
-- No `[填写]` / `TBD` / `TODO` residue
+- No template metadata leakage: "# PRD Template," "faithful to the official template," "enforced by quality gates"; no writing-convention/author-note residue (like the appendix's top "Link convention"); no HTML-comment residue
+- No `[Enter ...]` / `TBD` / `TODO` residue
 - The version-history table contains only requirement-level changes: the initial version has only one row, with no version rows from local iterations (re-splitting/reordering/wording tweaks and other edit points)
 - Goals are quantifiable; ACs have no vague words and can be reduced to test cases
 - All example data is synthetic, with no real secrets, internal domains, or real member IDs
@@ -207,7 +204,7 @@ See [quality-gates.md](references/quality-gates.md) for details.
 
 ## 6. Output
 
-1. The product file, named per the team's requirements-doc naming rule; its structure and headings must match prd-template.md starting from "## 文档信息," with all `{placeholders}` replaced and no residue; the template file's H1 or author notes must not be written into the product
+1. The product file, named per the team's requirements-doc naming rule; its structure and headings must match prd-template.md starting from "## Document Information," with all `{placeholders}` replaced and no residue; the template file's H1 or author notes must not be written into the product
 2. The to-confirm list, each item annotated with its owner (presented in the conversation only, not written into the product file, not published)
 3. Next-step suggestion: the PRD publishing step (after PO confirmation)
 

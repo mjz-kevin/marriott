@@ -31,7 +31,6 @@ Fill chapter by chapter in the section order of the team's detail template; don'
 
 | Purpose | Key |
 |------|----|
-| Whether a content model is needed | `profiles/{profile}.yaml` → `content_model.required` |
 | detail template | Pick the detail template by the profile's `team` (one each for app / cms, see "## 6. Related") |
 
 ## 1. Prerequisites
@@ -47,18 +46,18 @@ Fill chapter by chapter in the section order of the team's detail template; don'
 ## 2. Workflow
 
 ```
-- S1 文档信息 + version-history table
+- S1 Document Information + version-history table
 - S2 Background
 - S3 Main flow
 - S4 Contracts and dependencies
-- S5 [conditional] Content model + permissions + migration (when the team requires a content model)
+- S5 [conditional] Content model + permissions + migration (only when the chosen team template has a content-model section; in the CMS template these are subsections of "3. Key Design", not a standalone chapter)
 - S6 Task breakdown (each with acceptance criteria)
 - S7 Risks and dependencies
 - S8 Special sections (reusable components, QA test paths, monitoring, non-functional design, etc.)
 - S9 Review conclusion (leave only the header row blank, filled in manually by reviewers at review time; don't pre-fill here)
 - S10 Self-check + hand to DEV for confirmation
 
-The exact section names and numbering follow the template used.
+S1–S10 are logical steps, not chapter numbers; fill by the actual chapter names and numbering of the chosen template. Chapter mapping differs by template: the APP template puts contracts/dependencies in "3. Dependencies" and has no content-model section; the CMS template groups the contracts and the content-model tables together under "3. Key Design" (3.1 Content Model / 3.2 Permissions and Publishing Workflow / 3.3 Interfaces / 3.4 Data Migration), so S4 and S5 land in the same chapter there.
 ```
 
 ### S3 Main flow
@@ -83,7 +82,9 @@ Fill the Feature Flag / config-item table row by row: Key, meaning, default, beh
 
 The design / spec source must give a Figma link.
 
-### S5 The three key tables of the content model (required when the team requires a content model)
+### S5 The three key tables of the content model (only when the chosen team template has a content-model section)
+
+In the CMS template these fill subsections 3.1 / 3.2 / 3.4 under "3. Key Design"; don't create a standalone chapter for them.
 
 **Content model**: content type / purpose / key fields / draft·version / multilingual (whether multilingual + fallback strategy)
 
@@ -96,7 +97,7 @@ The design / spec source must give a Figma link.
 | Add / delete / change type / rename | `[collection.field]` | | `payload migrate` (generate + run the migration script) |
 
 Must answer the impact on historical content (whether existing data is back-filled) and the rollback script.
-When the team requires the content model as a standalone item, migration should be a standalone task and independently rollback-able.
+When the migration is to be a standalone item, it should be a standalone task and independently rollback-able.
 
 ### S6 Task breakdown
 
@@ -130,20 +131,21 @@ Fill the template's special sections item by item:
 | Every task has acceptance criteria | Missing one is rejected |
 | Don't estimate | Only give impact scope and task count |
 | No missing states | Every screen state the design defines needs a handling note |
-| Don't delete sections | Write "本期不涉及" for anything not involved |
-| Faithful to the template | The body starts from "## 文档信息"; fill only the template's existing sections and fields, don't add explanatory sentences, lead-ins, comments, or subsections not defined by the template; the template file's title and author notes are not part of the product |
+| Don't delete sections | For an optional item/section not involved, keep the heading and write `—` (a checklist trace meaning "assessed, not needed this cycle"); when a full sentence is needed use "Not applicable this cycle"; don't delete the section |
+| No fabricated optional content | Don't proactively generate content for an optional item without a requirement/clarification basis; write it only when the requirement, clarification conclusion, or user explicitly calls for it, otherwise write `—` |
+| Faithful to the template | The body starts from "## Document Information"; fill only the template's existing sections and fields, don't add explanatory sentences, lead-ins, comments, or subsections not defined by the template; the template file's title and author notes are not part of the product |
 
 ## 4. Quality gates
 
 - Template sections complete, no empty sections
-- The body starts from "## 文档信息," with no explanatory sentences, lead-ins, or subsections added beyond the template
+- The body starts from "## Document Information," with no explanatory sentences, lead-ins, or subsections added beyond the template
 - No placeholder residue
 - Interface contracts include request/response/error-code mocks, with null and failure fallbacks stated
 - The Feature Flag table includes "behavior on read failure"
 - Every task has acceptance criteria
 - No real secrets / internal domains / real member IDs
 - Special sections filled: difference table, QA test paths covering all UI states, monitoring, non-functional design
-- When the team requires a content model: the content-model table is non-empty, the permission matrix is filled, the migration table includes rollback
+- When the chosen team template includes a content-model section: the content-model table is non-empty, the permission matrix is filled, the migration table includes rollback
 - Multilingual: gave the fallback strategy per the team's multilingual requirement
 
 ## 5. Output
