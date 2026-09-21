@@ -58,7 +58,7 @@ If condition 1 isn't met, return to the requirement-clarification step; don't sk
 
 ### S1 Load the requirements-doc template
 
-Read [prd-template.md](references/prd-template.md). Treat only "## Document Information" and the sections after it as the product skeleton: copy the order, headings, and (optional) / required markers verbatim; don't add or remove sections yourself and don't change the official headings. Replace all `{placeholders}` in the template, leaving no residue. For anything not in scope, write "Not applicable this cycle"; don't delete the section.
+Read [prd-template.md](references/prd-template.md). Treat only "## Document Information" and the sections after it as the product skeleton: copy the order, headings, and (optional) / required markers verbatim; don't add or remove sections yourself and don't change the official headings. Replace all `{placeholders}` in the template, leaving no residue. For an optional item not in scope, keep the heading and write `—` (or "Not applicable this cycle"); don't delete the section.
 
 The section hierarchy and wording follow Part 1 of the official "PRD Template." The authoring constraints (quantifiable, no placeholder residue, sensitive info) are enforced only in this skill's quality gates.
 
@@ -91,7 +91,7 @@ When the input contains Figma links, you must read the design content via Figma 
 
 ### S4 Write 1.3 Scope
 
-Split by the team-configured scope dimensions; for any dimension not involved, write "Not applicable this cycle"; priorities use only P1 / P2.
+Split by the team-configured scope dimensions; for any dimension not involved, keep the row and write `—` (or "Not applicable this cycle"); priorities use only P1 / P2.
 
 ### S5 Write 2. Feature Explanation
 
@@ -135,6 +135,8 @@ After writing, stop and wait for PO confirmation; don't move on to the next step
 | Rule | Description |
 | ------------- | ---------------------------------------------------- |
 | Template first | Section order, headings, and (optional) / required markers follow prd-template.md starting from "## Document Information"; the template file's H1 and author notes are not part of the product. Fill only the template's existing sections, fields, and block quotes; don't add explanatory sentences, lead-ins, comments, or subsections not defined by the template; keep the template's built-in body block quotes verbatim without expanding them, but author notes / writing conventions (like the appendix's "Link convention") and HTML comments are never written into the product |
+| Optional items not involved | For an optional item/section not involved, keep the heading and write `—` (a checklist trace meaning "assessed, not needed this cycle"); when a full sentence is needed use "Not applicable this cycle"; don't delete the section or row |
+| No fabricated optional content | Don't proactively generate content for an optional item without a requirement/clarification basis; write it only when the requirement, clarification conclusion, or user explicitly calls for it, otherwise write `—` |
 | Make assumptions explicit | If an assumption from the clarification conclusions is adopted, write it into the corresponding section and mark it `[Assumption]` |
 | Only what and why | The how goes to the later tech-solution steps (PRD level and Story-level detail) |
 | Quantifiable goals | Purpose and Performance Requirement must have numbers, a metric, and measurement conditions |

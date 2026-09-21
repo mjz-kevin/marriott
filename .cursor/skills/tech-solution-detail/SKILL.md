@@ -131,7 +131,8 @@ Fill the template's special sections item by item:
 | Every task has acceptance criteria | Missing one is rejected |
 | Don't estimate | Only give impact scope and task count |
 | No missing states | Every screen state the design defines needs a handling note |
-| Don't delete sections | Write "Not applicable this iteration" for anything not involved |
+| Don't delete sections | For an optional item/section not involved, keep the heading and write `—` (a checklist trace meaning "assessed, not needed this cycle"); when a full sentence is needed use "Not applicable this cycle"; don't delete the section |
+| No fabricated optional content | Don't proactively generate content for an optional item without a requirement/clarification basis; write it only when the requirement, clarification conclusion, or user explicitly calls for it, otherwise write `—` |
 | Faithful to the template | The body starts from "## Document Information"; fill only the template's existing sections and fields, don't add explanatory sentences, lead-ins, comments, or subsections not defined by the template; the template file's title and author notes are not part of the product |
 
 ## 4. Quality gates

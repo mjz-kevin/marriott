@@ -14,7 +14,7 @@ metadata:
 
 # Tech Solution — PRD level
 
-The PRD-level high-level tech solution, produced during requirement gathering and design based on the PRD, used to decide the implementation direction, architecture, and boundaries, for TL review, and synced back into the PRD's tech-solution chapter.
+The PRD-level high-level tech solution, produced during requirement gathering and design based on the PRD, used to decide the implementation direction, architecture, and boundaries, for TL review, and synced back to the PRD's tech-solution link in the appendix.
 
 | Dimension | Description |
 | --- | ------------------------------------------------------------------ |
@@ -105,7 +105,8 @@ Undecidable technical points are logged as a spike ticket for research (state th
 | Reference real code paths | Actually search before referencing |
 | Don't estimate | Only give impact scope and suggested split direction; points are set by DEV/QA/PO |
 | Don't write business rules | Business rules belong to the PRD; the solution only writes the technical implementation |
-| Don't delete sections | Write "Not applicable this iteration" for anything not involved and explain why |
+| Don't delete sections | For an optional item/section not involved, keep the heading and write `—` (a checklist trace meaning "assessed, not needed this cycle"); when a full sentence is needed use "Not applicable this cycle"; don't delete the section |
+| No fabricated optional content | Don't proactively generate content for an optional item without a requirement/clarification basis; write it only when the requirement, clarification conclusion, or user explicitly calls for it, otherwise write `—` |
 | Faithful to the template | The body starts from "## Document Information"; fill only the template's existing sections and fields, don't add explanatory sentences, lead-ins, comments, or subsections not defined by the template; the template file's title and author notes are not part of the product |
 
 ## 4. Quality gates
@@ -123,7 +124,7 @@ Undecidable technical points are logged as a spike ticket for research (state th
 ## 5. Output
 
 Named per the team's title format.
-After handoff, stop and wait for TL confirmation (writing into the PRD's solution chapter also needs PO confirmation). Once confirmed, **you must** lay out the next step as two parallel options, presented equally—don't mention only publishing and don't weaken "convert to PDF" into a footnote or omit it:
+After handoff, stop and wait for TL confirmation (write-back to the PRD appendix link is done directly after TL confirmation; no PO sign-off). Once confirmed, **you must** lay out the next step as two parallel options, presented equally—don't mention only publishing and don't weaken "convert to PDF" into a footnote or omit it:
 
 - Publish: enter the tech-solution publishing step (prd mode).
 - Local convert to PDF: convert the finalized local `.md` offline into a readable, well-formatted PDF for local review, archiving, or sending to people who don't use Confluence; doesn't modify the source or publish.

@@ -92,6 +92,8 @@ The PoC code lands in the team's actual code repo, and the build command must ru
 | Don't estimate | Only give the impact on estimation; points are set by DEV/QA |
 | Example data must be mock | Same as other solution tiers |
 | Faithful to the template | The body starts from "## Document Information"; fill only the template's existing sections and fields, don't add explanatory sentences, lead-ins, comments, or subsections not defined by the template; the template file's title and author notes are not part of the product |
+| Don't delete sections | For an optional item/section not involved, keep the heading and write `—` (a checklist trace meaning "assessed, not needed this cycle"); when a full sentence is needed use "Not applicable this cycle"; don't delete the section |
+| No fabricated optional content | Don't proactively generate content for an optional item without a requirement/clarification basis; write it only when the requirement, clarification conclusion, or user explicitly calls for it, otherwise write `—` |
 
 ## 4. Quality gates
 

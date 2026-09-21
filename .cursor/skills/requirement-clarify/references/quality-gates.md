@@ -4,7 +4,7 @@ Authoring skills pass G1–G6 before delivery; publishing skills pass G7–G8 be
 
 ## G1 Structural Completeness
 
-The product must cover all **required sections** of the template. Optional sections may say "Not applicable this cycle" but must not be deleted entirely, otherwise the reader can't tell "not done" from "forgot to write."
+The product must cover all **required sections** of the template. Optional sections/items not involved keep the heading and write `—` (or "Not applicable this cycle") but must not be deleted entirely, otherwise the reader can't tell "not done" from "forgot to write."
 
 Decision: missing any required section → block.
 
@@ -18,7 +18,7 @@ Scan for residual placeholders; a hit blocks:
 | `…` appearing in an AC | AC not finished |
 | A section heading directly followed by the next section heading | Empty section |
 
-Exception: the "Glossary" and "Appendix links" that the template itself requires to be left empty may use `—`, but must be logged in the to-confirm list in the delivery conversation.
+Exception: an optional section/item not involved may use `—` as a checklist trace ("assessed, not needed this cycle"); items the template itself requires to be left empty (like the "Glossary" and "Appendix links") may also use `—`. These `—` marks are not treated as unfilled residue, but must be logged in the to-confirm list in the delivery conversation when they represent a pending decision.
 
 ## G3 Synthetic Data and PII
 
@@ -59,7 +59,7 @@ The following products **must stop and wait for human confirmation after deliver
 | Product | Confirmer |
 |---------|-----------|
 | PRD | PO |
-| PRD-level tech solution | TL; the solution chapter in the PRD needs PO confirmation |
+| PRD-level tech solution | TL (write-back to the PRD appendix link needs no PO sign-off) |
 | Spike conclusion | TL |
 | Story-level detailed solution | DEV |
 | User Story list | PO |

@@ -44,7 +44,7 @@ Example structure:
 
 ### 1.3 Scope (Optional)
 
-Fill in per platform; for a platform not involved, write "Not applicable this cycle"; don't delete the row.
+Fill in per platform; for a platform not involved, keep the row and write `—` (or "Not applicable this cycle"); don't delete the row.
 
 | Platform | Requirement Scope | Brief Description | Priority |
 | ------- | ---- | ---- | ------- |
