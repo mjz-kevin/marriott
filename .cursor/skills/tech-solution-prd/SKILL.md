@@ -1,171 +1,146 @@
 ---
 name: tech-solution-prd
 description: >-
-  按 PRD 模板撰写 PRD 级技术方案：范围、端到端架构、关键流程、
-  接口与数据契约概览、含 STB/ARB 触发判定的依赖、交付与非功能要求、风险、
-  评审结论。本级不做任务拆解。技术栈、代码仓库、评审触发条件与内容模型要求
-  均遵循团队配置。当用户要求 PRD 级技术方案、高层设计或某功能的架构方案时使用；
-  触发词：PRD 技术方案 / 高层设计 / 架构方案 / HLD / prd tech solution。
+  Write a PRD-level tech solution following the PRD template: scope, end-to-end architecture,
+  key flows, an interface and data contract overview, dependencies with STB/ARB trigger decisions,
+  delivery and non-functional requirements, risks, and a review conclusion. This tier does no task
+  breakdown. The tech stack, code repos, review-trigger conditions, and content-model requirements
+  all follow the team config. Use when the user asks for a PRD-level tech solution, a high-level
+  design, or an architecture solution for a feature;
+  triggers: PRD 技术方案 / 高层设计 / 架构方案 / HLD / prd tech solution.
 metadata:
   agent: Tech Solution Agent
 ---
 
-# Tech Solution — PRD 级
+# Tech Solution — PRD level
 
-PRD 级 high-level 技术方案，在需求收集与设计阶段基于 PRD 产出，用于确定实现方向、架构与边界，供 TL 评审，并同步更新回 PRD 的技术方案章节。
+The PRD-level high-level tech solution, produced during requirement gathering and design based on the PRD, used to decide the implementation direction, architecture, and boundaries, for TL review, and synced back into the PRD's tech-solution chapter.
 
-
-| 维度  | 说明                                                                 |
+| Dimension | Description |
 | --- | ------------------------------------------------------------------ |
-| 定位  | PRD 粒度的架构图、技术选型、关键接口定义与总体设计                                       |
-| 输入  | PRD（含 Figma 链接）、代码仓库上下文、现有接口文档                                     |
-| 产出  | 一份 PRD 级技术方案（对齐模板 7 章），发布至 Confluence 并回写 PRD                     |
-| 决策  | 判定引入新云服务 / 三方库是否触发 STB / ARB；无法定论的复杂点转 spike ticket                |
-| 边界  | 只定方向与边界，不做任务拆解（任务拆解属 Story 级明细方案）；接口示例一律 mock，不引用真实密钥 / 内网域名 / 会员号 |
+| Purpose | PRD-granularity architecture diagram, tech selection, key interface definitions, and overall design |
+| Input | PRD (with Figma link), code-repo context, existing interface docs |
+| Output | A PRD-level tech solution (aligned to the template's 7 chapters), published to Confluence and written back to the PRD |
+| Decision | Judge whether introducing a new cloud service / third-party library triggers STB / ARB; turn undecidable complex points into a spike ticket |
+| Scope | Only sets direction and boundaries, no task breakdown (that belongs to the Story-level detailed solution); interface examples are always mock, no real secrets / internal domains / member IDs |
 
+Template: [tech-solution-prd.md](references/tech-solution-prd.md)
 
-模板：[tech-solution-prd.md](references/tech-solution-prd.md)
+## 0. Config values
 
-## 0. 配置取值
+`{profile}` is the current profile file name (without extension, like `app-prod` / `cms-test`), resolved and passed in by the caller via the `profile-select` skill (`profile.py resolve` gives its absolute path); if it isn't passed in or the file doesn't exist -> block, don't guess.
 
-`{profile}` 为当前 profile 文件名（不含扩展名，如 `app-prod` / `cms-test`），由调用方通过 `profile-select` skill 解析并传入（`profile.py resolve` 给出其绝对路径）；未传入或对应文件不存在 → 阻断，不猜测。
-
-
-| 用途       | 键                                                       |
+| Purpose | Key |
 | -------- | ------------------------------------------------------- |
-| 图示语言     | 默认 mermaid                                              |
-| 是否要内容模型  | `profiles/{profile}.yaml` → `content_model.required`    |
+| Diagram language | Default mermaid |
+| Whether a content model is needed | `profiles/{profile}.yaml` → `content_model.required` |
 
+## 1. Prerequisites
 
-
-
-## 1. 前置条件
-
-
-| #   | 条件                     |
+| #   | Condition |
 | --- | ---------------------- |
-| 1   | 已有需求文档（PRD），含 Figma 链接 |
-| 2   | 已读相关代码仓库上下文与现有接口文档     |
+| 1   | Have a requirements doc (PRD), with a Figma link |
+| 2   | Have read the relevant code-repo context and existing interface docs |
 
-> Figma 设计读取：含 Figma 链接时须经 Figma MCP 读取设计内容，作为架构、组件边界与契约依据，不仅凭链接推测；读取失败登记为风险，不臆造。
+> Figma design reading: when a Figma link is present, you must read the design content via Figma MCP as the basis for architecture, component boundaries, and contracts, not just infer from the link; a read failure is logged as a risk, don't fabricate.
 
+## 2. Workflow
 
-
-## 2. 工作流
-
-> 撰写前先在会话中澄清疑问、理解 PRD 与代码上下文，再按模板撰写。
+> Before writing, first clarify open questions in the conversation and understand the PRD and code context, then write per the template.
 
 ```
-- S1 文档信息 + 版本变更记录（A/M/D）
-- S2 第 1 章 背景与业务目标（承接 PRD，写清「为什么现在做」）
-- S3 第 2 章 范围（In Scope / 关键场景 / 约束）
-- S4 第 3 章 核心技术方案（架构图 + 主流程 + 契约概览）
-- S5 [条件] 内容模型概览，仅当团队要求内容模型
-- S6 第 4 章 依赖项（含 STB/ARB 触发判定行）
-- S7 第 5 章 交付与非功能要求（含上线监控、版本兼容策略）
-- S8 第 6 章 风险与未决项
-- S9 第 7 章 评审结论（仅留表头空行，由评审人人工填写）
-- S10 自检 + 交 TL 确认
+- S1 文档信息 + version-history table (A/M/D)
+- S2 Chapter 1 Background and business goals (continuing from the PRD, state "why now")
+- S3 Chapter 2 Scope (In Scope / key scenarios / constraints)
+- S4 Chapter 3 Core tech solution (architecture diagram + main flow + contract overview)
+- S5 [conditional] Content-model overview, only when the team requires a content model
+- S6 Chapter 4 Dependencies (including the STB/ARB trigger-decision row)
+- S7 Chapter 5 Delivery and non-functional requirements (including post-launch monitoring, version-compat strategy)
+- S8 Chapter 6 Risks and open items
+- S9 Chapter 7 Review conclusion (leave only the header row blank, filled in manually by reviewers)
+- S10 Self-check + hand to TL for confirmation
 ```
 
+### S3 Scope
 
+- **In Scope**: the capabilities / scenarios this PRD covers
+- **Key scenarios**: a list of the main usage scenarios
+- **Constraints**: performance, platform, time, and other constraints (add the compatibility and scope requirements for the team's tech stack)
 
-### S3 范围
+### S4 Core tech solution
 
-- **In Scope**：本 PRD 覆盖的能力 / 场景
-- **关键场景**：主要使用场景清单
-- **约束**：性能、平台、时间等约束（追加团队技术栈对应的兼容性与范围要求）
-
-
-
-### S4 核心技术方案
-
-
-| 子项               | 要求                                                           |
+| Sub-item | Requirement |
 | ---------------- | ------------------------------------------------------------ |
-| 整体架构             | 模块划分、上下游依赖、数据流向，附架构图（图示语言按团队配置，默认 mermaid）；可引用 Confluence 地址 |
-| 关键流程 / 时序        | 端到端主流程 + 整个 feature 时序图（可选）                                  |
-| 接口与数据契约          | 只定边界（接口 / 方法 / 用途 / 上下游），字段级留给 Story 级明细方案                   |
-| backend 技术方案     | 可选                                                           |
-| 关键 usecase 的兜底方案 | 可选，但建议撰写，此项为评审高频关注点                                          |
+| Overall architecture | Module partition, upstream/downstream dependencies, data flow, with an architecture diagram (diagram language per team config, default mermaid); may reference a Confluence address |
+| Key flow / sequence | End-to-end main flow + a whole-feature sequence diagram (optional) |
+| Interface and data contracts | Only set boundaries (interface / method / purpose / upstream-downstream); field-level is left to the Story-level detailed solution |
+| Backend tech solution | Optional |
+| Fallbacks for key use cases | Optional but recommended; this is a frequent review focus |
 
+When referencing code facts, give real paths (repos per the team's actual codebase); when nothing is found, write "no existing implementation found," don't fabricate search results.
 
-引用代码事实时须给出真实路径（仓库以团队实际代码库为准），
-未检索到时写「未找到既有实现」，不虚构检索结果。
+### S5 Content-model overview (only when the team requires a content model)
 
-### S5 内容模型概览（仅团队要求内容模型）
+Give the content-modeling direction, the main content types and fields, the draft / version strategy, the multilingual strategy, and the impact on historical content. Field-level design and migration scripts belong to the Story-level detailed solution.
+When the team requires the content model as a standalone item, note here the suggestion to split it into a standalone Story.
 
-给出内容建模方向、主要内容类型与字段、草稿 / 版本策略、多语言策略，
-以及对历史内容的影响面。字段级设计与迁移脚本属于 Story 级明细方案。
-当团队要求内容模型独立成条，在此说明建议拆成独立 Story。
+### S6 Dependencies (STB/ARB decision required)
 
-### S6 依赖项（STB/ARB 判定必填）
+Fill the table in the template's chapter 4 row by row; the STB/ARB trigger-decision row must give a conclusion.
+Go through the review-trigger conditions item by item; an empty item means that change item doesn't apply.
 
-模板第 4 章的表格逐行填，其中 STB／ARB 触发判定行须给结论。
-遍历评审触发条件逐项判定，某项为空即该变更项不适用。
+When unsure, treat as "triggered" (conservative); an item judged as triggered must reserve review time in the release plan.
+Undecidable technical points are logged as a spike ticket for research (state the problem, verification method, time box, decision criteria).
 
-不确定时按「触发」处理（保守），判定触发的须在 Release 计划里留出评审时间。
-无法定论的技术点登记为 spike ticket 转调研（写清问题、验证方式、时间盒、判定标准）。
+### S7 Delivery and non-functional requirements
 
-### S7 交付与非功能要求
-
-
-| 行          | 要点                               |
+| Row | Point |
 | ---------- | -------------------------------- |
-| 非功能要求      | 性能 P95、稳定性、兼容性、缓存与鉴权             |
-| 发布依赖       | 需 safelist 的接口、配置项全量清单、缓存刷新范围与时机 |
-| Release 计划 | 发布节奏与灰度方式，按团队的发布口径写              |
-| 上线监控       | 埋点 + 性能与稳定性指标 + 发布成功率            |
-| 版本兼容策略     | 新旧版本共存时的兼容处理                     |
+| Non-functional requirements | Performance P95, stability, compatibility, cache and auth |
+| Release dependencies | Interfaces needing safelist, the full config-item list, cache-refresh scope and timing |
+| Release plan | Release cadence and rollout method, written per the team's release convention |
+| Post-launch monitoring | Tracking + performance and stability metrics + release success rate |
+| Version-compat strategy | Compatibility handling when new and old versions coexist |
 
+## 3. Mandatory rules
 
-
-
-## 3. 强制规则
-
-
-| 规则           | 说明                                                                |
+| Rule | Description |
 | ------------ | ----------------------------------------------------------------- |
-| 不做任务拆解       | 任务拆解属 Story 级明细方案                                                 |
-| 接口示例必须 mock  | 域名 `api.example.com`；策略按团队的示例数据口径                                 |
-| 架构图用 mermaid | 便于 Confluence 渲染与 diff                                            |
-| 引用真实代码路径     | 引用前必须实际检索过                                                        |
-| 不估点          | 只给影响面与建议拆分方向，点数由 DEV/QA/PO 定                                      |
-| 不写业务规则       | 业务规则属 PRD，方案只写技术实现方式                                              |
-| 章节不删除        | 不涉及写「本期不涉及」并说明原因                                                  |
-| 忠于模板         | 正文自「## 文档信息」起笔；仅填模板既有章节与字段，不新增模板未定义的说明句、引导语、注释或小节；模板文件标题与作者说明不属产物 |
+| No task breakdown | Task breakdown belongs to the Story-level detailed solution |
+| Interface examples must be mock | Domain `api.example.com`; approach per the team's example-data convention |
+| Architecture diagram uses mermaid | Easier for Confluence rendering and diffs |
+| Reference real code paths | Actually search before referencing |
+| Don't estimate | Only give impact scope and suggested split direction; points are set by DEV/QA/PO |
+| Don't write business rules | Business rules belong to the PRD; the solution only writes the technical implementation |
+| Don't delete sections | Write "本期不涉及" for anything not involved and explain why |
+| Faithful to the template | The body starts from "## 文档信息"; fill only the template's existing sections and fields, don't add explanatory sentences, lead-ins, comments, or subsections not defined by the template; the template file's title and author notes are not part of the product |
 
+## 4. Quality gates
 
+- All 7 chapters complete, no empty sections
+- The body starts from "## 文档信息," with no explanatory sentences, lead-ins, or subsections added beyond the template
+- No `[填写]` / `【姓名】` / `TODO` residue
+- An architecture diagram exists (mermaid or a Confluence reference)
+- The STB/ARB trigger-decision row has a clear conclusion (if unsure, treat as triggered)
+- Post-launch monitoring and version-compat strategy are written
+- Risks and open items have an Owner and a due date
+- The review-conclusion table keeps only the header and blank rows, not pre-filled before review (content is filled in manually by reviewers at review time)
+- No real secrets / internal domains / real member IDs
+- When the team requires a content model: the content-model overview exists and gives the impact on historical content
 
+## 5. Output
 
-## 4. 质量门禁
+Named per the team's title format.
+After handoff, stop and wait for TL confirmation (writing into the PRD's solution chapter also needs PO confirmation). Once confirmed, **you must** lay out the next step as two parallel options, presented equally—don't mention only publishing and don't weaken "convert to PDF" into a footnote or omit it:
 
-- 7 章齐全，无空章节
-- 正文自「## 文档信息」起笔，未新增模板未定义的说明句、引导语或小节
-- 无 `[填写]` / `【姓名】` / `TODO` 残留
-- 架构图存在（mermaid 或 Confluence 引用）
-- STB/ARB 触发判定行有明确结论（不确定按触发）
-- 上线监控与版本兼容策略已写
-- 风险与未决项有 Owner 与截止时间
-- 评审结论表仅保留表头与空行，评审前不预填（内容由评审人在评审时人工填写）
-- 未出现真实密钥 / 内网域名 / 真实会员号
-- 团队要求内容模型时：内容模型概览存在且给出历史内容影响面
+- Publish: enter the tech-solution publishing step (prd mode).
+- Local convert to PDF: convert the finalized local `.md` offline into a readable, well-formatted PDF for local review, archiving, or sending to people who don't use Confluence; doesn't modify the source or publish.
 
+Even if this round is just a local revision to a finalized solution, finishing the revision counts as reaching this wrap-up step again, and you must still present the two parallel options above—don't skip.
 
+## 6. Related
 
-## 5. 输出
-
-命名按团队的标题格式。
-交付后停下等 TL 确认（写入 PRD 的方案章节还需 PO 确认）。确认后**必须**把下一步列成两条并列选项，两条同等呈现、不只提发布、不把转 PDF 弱化为附注或省略：
-
-- 发布：进入技术方案发布环节（prd 模式）。
-- 本地转 PDF：把定稿的本地 `.md` 离线转成排版可读的 PDF，供本地评审、存档或发给不用 Confluence 的人；不改原文、不发布。
-
-即使本次只是对已定稿方案做局部修订，修订完成即视为再次到达本收尾环节，仍须按上述两条并列选项提示，不得跳过。
-
-## 6. 相关
-
-- 模板：references/tech-solution-prd.md
-- 上游：prd-authoring（PRD）
-- 下游：tech-solution-detail（细化）、tech-solution-spike（调研）、tech-solution-publish
-- 平行可选：md-to-pdf（把定稿的本地技术方案转 PDF 供本地评审/存档）
+- Template: references/tech-solution-prd.md
+- Upstream: prd-authoring (PRD)
+- Downstream: tech-solution-detail (refinement), tech-solution-spike (research), tech-solution-publish
+- Parallel option: md-to-pdf (convert the finalized local tech solution to PDF for local review/archiving)

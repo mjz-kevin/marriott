@@ -1,231 +1,220 @@
 ---
 name: prd-authoring
 description: >-
-  按 PRD 模板撰写 PRD：业务概述、可量化目标、范围、用户旅程、
-  含 Figma 链接的 UI 概览、元素级功能表、含可测验收标准（前置条件/操作/可观察结果）的 Story 清单、
-  非功能需求、安全、数据规则、依赖与风险。章节集合、必备 UI 状态与语言规则
-  均遵循团队配置。当用户要求撰写或起草 PRD、需求文档时使用；
-  触发词：写 PRD / 生成 PRD / PRD 内容 / 起草需求文档 / 需求说明 / draft PRD。
+  Write a PRD following the PRD template: business overview, quantifiable goals, scope, user journey,
+  UI overview with Figma links, element-level feature tables, a Story list with testable acceptance
+  criteria (precondition/action/observable result), non-functional requirements, security, data rules,
+  dependencies, and risks. The section set, required UI states, and language rules all follow the
+  team config. Use when the user asks to write or draft a PRD or requirements doc;
+  triggers: 写 PRD / 生成 PRD / PRD 内容 / 起草需求文档 / 需求说明 / draft PRD.
 metadata:
   agent: Eval Agent
 ---
 
-# PRD Authoring — 需求文档撰写
+# PRD Authoring — writing the requirements doc
 
-基于已放行的澄清结论，按 PRD 模板撰写 PRD，交 PO 确认后进入发布环节。
+Based on the released clarification conclusions, write the PRD following the PRD template, then hand it to the PO for confirmation before moving on to publishing.
 
-| 维度 | 说明 |
+| Dimension | Description |
 |------|------|
-| 定位 | 将澄清结论落成结构完整、目标可量化、AC 可测的 PRD |
-| 输入 | 需求澄清结论（必填）、Figma 、历史 PRD/Epic、团队知识库 |
-| 产出 | 符合模板的 PRD 文件 + 待确认清单 |
-| 边界 | 只写 what 与 why，how 属技术方案环节；待确认清单不入正文、不发布 |
+| Purpose | Turn the clarification conclusions into a PRD that is structurally complete, has quantifiable goals, and has testable ACs |
+| Input | Requirement clarification conclusions (required), Figma, historical PRDs/Epics, team knowledge base |
+| Output | A PRD file conforming to the template + a to-confirm list |
+| Scope | Only writes the what and why; the how belongs to the tech-solution step; the to-confirm list is not part of the body and is not published |
 
-模板、文件命名、范围拆分维度、界面状态、内容模型要求、语言等均取自配置。
+The template, file naming, scope-splitting dimensions, UI states, content-model requirements, language, etc., all come from the config.
 
-## 1. 前置条件
+## 1. Prerequisites
 
-
-| #    | 条件                            |
+| #    | Condition |
 | ---- | ------------------------------- |
-| 1    | 需求澄清已放行：P0 全部闭合 |
+| 1    | Requirement clarification is released: all P0 items are closed |
 
+If condition 1 isn't met, return to the requirement-clarification step; don't skip clarification and start writing.
 
-第 1 条不满足时回到需求澄清环节，不得跳过澄清直接撰写。
+## 2. Input
 
-## 2. 输入
-
-
-| 输入            | 必需 | 说明                                                        |
+| Input | Required | Description |
 | --------------- | ---- | ----------------------------------------------------------- |
-| 需求澄清结论    | 必填 | 事实来源                                                    |
-| Figma           | 按需 | 提供链接时经 Figma MCP 读取，作为 UI Overview、功能模块表、Story 设计稿的依据 |
-| 历史 PRD / Epic | 可选 | 术语与写法一致性                                            |
-| 团队知识库      | 可选 | 既有业务规则与约束                                          |
+| Clarification conclusions | Required | Source of truth |
+| Figma | As needed | When a link is provided, read it via Figma MCP as the basis for the UI Overview, feature-module tables, and Story design references |
+| Historical PRD / Epic | Optional | Consistency of terminology and wording |
+| Team knowledge base | Optional | Existing business rules and constraints |
 
-
-## 3. 工作流
+## 3. Workflow
 
 ```
-- S1  载入 prd-template.md
-- S2  收集并通读输入
-- S3  写 1. Business Overview
-- S4  写 1.3 Scope
-- S5  写 2. Feature Explanation
-- S6  写 3. User Story List
-- S7  写 4–10 章
-- S8  [条件] 内容模型
-- S9  补附录与待确认清单
-- S10 自检
-- S11 交 PO 确认
+- S1  Load prd-template.md
+- S2  Gather and read through the inputs
+- S3  Write 1. Business Overview
+- S4  Write 1.3 Scope
+- S5  Write 2. Feature Explanation
+- S6  Write 3. User Story List
+- S7  Write chapters 4–10
+- S8  [conditional] Content model
+- S9  Add appendices and the to-confirm list
+- S10 Self-check
+- S11 Hand to the PO for confirmation
 ```
 
-### S1 载入需求文档模板
+### S1 Load the requirements-doc template
 
-读 [prd-template.md](references/prd-template.md)。仅把「## 文档信息」及之后的章节当作产物骨架：顺序、标题、（可选）/ 必填标注照抄，不自行增删章节、不改官方标题。模板里的 `{占位符}` 全部替换，不留残留。不涉及的内容写「本期不涉及」，不删章节。
+Read [prd-template.md](references/prd-template.md). Treat only "## 文档信息" and the sections after it as the product skeleton: copy the order, headings, and (optional) / required markers verbatim; don't add or remove sections yourself and don't change the official headings. Replace all `{placeholders}` in the template, leaving no residue. For anything not in scope, write "本期不涉及" (out of scope this cycle); don't delete the section.
 
-章节层级与措辞以官方《PRD Template》第一部分为准。撰写约束（可量化、无占位符残留、敏感信息）只在本 Skill 质量门禁执行。
+The section hierarchy and wording follow Part 1 of the official "PRD Template." The authoring constraints (quantifiable, no placeholder residue, sensitive info) are enforced only in this skill's quality gates.
 
-**版本变更记录填写约束**：模板「## 版本变更记录」表只记录**需求级变更**——同一份 PRD 对应同一需求，Confluence 上只保留一个 PRD 页面、发布时只上传最新一版。
+**Version-history fill-in constraint**: the template's "## 版本变更记录" table records only **requirement-level changes**—one PRD corresponds to one requirement, only one PRD page is kept in Confluence, and only the latest version is uploaded when publishing.
 
-- 初版：一条 `A（新增）· 新建初版`。
-- 发布后发生**真正的需求变更**（范围/目标/规则/Story 增删等业务层变化）才新增一条 `M` 或 `D`，一次需求变更对应一行。
-- 撰写与修订过程中的**本地迭代**（重拆 / 重排 / 合并 User Story、措辞调整、格式修正等「修改点」）**不登记**为版本变更记录行——这些属于本地归档留存的迭代快照，不进文档表、不随文档对外。
-- 因此「同一需求的 PRD」在正常情况下版本变更记录**只有一条**（初版）；只有出现需求变更时行数才增加，且行数 = 需求变更次数，而非本地修订次数。
+- Initial version: one row `A（新增）· 新建初版`.
+- Only after publishing, when a **real requirement change** occurs (business-level changes to scope/goals/rules/Story additions or removals), add an `M` or `D` row; one requirement change corresponds to one row.
+- **Local iterations** during writing and revision (re-splitting / reordering / merging User Stories, wording tweaks, format fixes, and other "edit points") are **not recorded** as version-history rows—these are iteration snapshots kept in local archives, they don't go into the doc table and don't go out with the doc.
+- So for "a PRD of the same requirement," under normal circumstances there is **only one** version-history row (the initial version); the row count grows only when a requirement change occurs, and the count equals the number of requirement changes, not the number of local revisions.
 
-**禁止写入产物**（这些是 skill/模板给作者看的元数据，不是官方章节）：
+**Must not be written into the product** (these are metadata for the author to read, not official sections):
 
-- 文件标题「# PRD 模板」
-- 「本模板忠实于官方」「质量门禁负责」「不写入本模板」等说明
-- 任何写给 Agent 的引用块、HTML 注释、skill 名称
-- 任何**书写约定 / 作者须知**（如附录顶部的「链接书写约定」——指导链接填写方式、去掉「（可选）」、空项留占位等），一律只作用于撰写行为，**绝不作为说明句写入产物**；即使模板中以引用块或注释形式出现，也不复制到产物
+- The file title "# PRD 模板"
+- Notes like "本模板忠实于官方," "质量门禁负责," "不写入本模板"
+- Any block quote, HTML comment, or skill name written for the Agent
+- Any **writing convention / author note** (like the appendix's top "链接书写约定"—guidance on how to fill in links, removing "（可选）", leaving placeholders for empty items) applies only to the writing behavior and must **never** be written into the product as an explanatory sentence; even if it appears as a block quote or comment in the template, don't copy it into the product
 
-产物正文从「## 文档信息」起笔。Confluence 页面标题由命名模板生成，不要另写 H1「PRD 模板」。
+The product body starts from "## 文档信息". The Confluence page title is generated by the naming template; don't write a separate H1 "PRD 模板".
 
-### S2 收集并通读输入
+### S2 Gather and read through the inputs
 
-澄清结论是事实来源；里面的假设若被采纳，写入对应章节并标 `[假设]`。
+The clarification conclusions are the source of truth; if an assumption in them is adopted, write it into the corresponding section and mark it `[假设]`.
 
-输入含 Figma 链接时，须通过 Figma MCP（`figma` server）读取设计内容，作为 UI Overview、功能模块表、Story 设计稿的事实依据，不基于链接推测。读取流程见「Figma 设计稿处理」：单个链接可能含多个画板，须筛出与本 PRD 涉及界面一致的设计稿，下载为本地图片并插入 2.3 及对应 Story 的设计图字段。读取失败（无权限、链接失效、认证过期）时先经 `mcp_auth` 认证重试；仍失败则登记入待确认清单，交付时于对话中说明未获取的设计稿及原因，不臆造设计细节。
+When the input contains Figma links, you must read the design content via Figma MCP (the `figma` server) as the factual basis for the UI Overview, feature-module tables, and Story design references; don't infer from the link. See "Figma design handling" for the reading flow: a single link may contain multiple boards, so filter out the designs matching the screens this PRD covers, download them as local images, and insert them into 2.3 and the corresponding Story's design fields. If reading fails (no permission, broken link, expired auth), first retry via `mcp_auth`; if it still fails, log it in the to-confirm list and, at handoff, explain in the conversation which designs weren't obtained and why—don't fabricate design details.
 
-### S3 写 1. Business Overview
+### S3 Write 1. Business Overview
 
-- 1.1 Background：现状问题 → 业务影响 → 为什么现在做
-- 1.2 Purpose：每条目标须给出当前值 → 目标值 → 度量方式 → 度量时间点，不使用仅「提升效率」一类无量化口径的表述
+- 1.1 Background: current problem -> business impact -> why now
+- 1.2 Purpose: each goal must give current value -> target value -> measurement method -> measurement point in time; don't use unquantified phrasing like "improve efficiency"
 
-### S4 写 1.3 Scope
+### S4 Write 1.3 Scope
 
-按团队配置的范围拆分维度拆分，没涉及的维度写「本期不涉及」；优先级只用 P1 / P2。
+Split by the team-configured scope dimensions; for any dimension not involved, write "本期不涉及"; priorities use only P1 / P2.
 
-### S5 写 2. Feature Explanation
+### S5 Write 2. Feature Explanation
 
-- 2.1 产品架构图：用 mermaid 绘制，遵守下方「图表规范」，保证本地与发布后都能渲染
-- 2.2 User Journey（含流程图，同样遵守「图表规范」）
-- 2.3 UI Overview：按模板仅填两项——「插入高保真设计稿 / 线框图」与「插入 Figma link」，多界面分点重复，不展开其他说明。含 Figma 链接时按「Figma 设计稿处理」下载并在「插入高保真设计稿 / 线框图」项插入本 PRD 涉及界面的设计稿图片，「插入 Figma link」项保留链接；以图片入正文，不以说明性文字占位替代，读取失败按 S2 处理
-- 2.4 功能模块表：按 UI Section 逐张表，每行一个元素；
-Operation Logic 写「用户操作 → 系统响应」不写实现；Data Requirement 写字段名与校验；
-Performance Requirement 须可量化（指标名 + 阈值 + 测量条件），不使用模糊描述
+- 2.1 Product architecture diagram: draw with mermaid, follow the "Diagram spec" below, and ensure it renders both locally and after publishing
+- 2.2 User Journey (with a flowchart, also following the "Diagram spec")
+- 2.3 UI Overview: per the template, fill only two items—"插入高保真设计稿 / 线框图" and "插入 Figma link"; for multiple screens repeat as bullet points, don't expand with other explanations. When Figma links are present, download per "Figma design handling" and insert the design images of the screens this PRD covers into the "插入高保真设计稿 / 线框图" item, keeping the link in the "插入 Figma link" item; put images into the body, don't substitute explanatory text for images; on read failure, handle per S2
+- 2.4 Feature-module tables: one table per UI Section, one element per row; Operation Logic writes "user action -> system response" not implementation; Data Requirement writes field names and validation; Performance Requirement must be quantifiable (metric name + threshold + measurement condition), no vague descriptions
 
-### S6 写 3. User Story List
+### S6 Write 3. User Story List
 
-按 prd-template.md 的 `## 3. User Story List` 骨架填写：模板自带的引用说明（`> Story 拆分按照角色 + 场景 + 验收标准的方式拆分。`）**逐字保留、原样照抄**，不得在其后追加、拼接或改写任何字句——包括稳定编号规则、"修订时不复用/不改号"、"估点不填"等撰写行为规则，此类规则仅约束撰写行为，不得写入该引用块或产物任何位置；不新增模板未定义的说明句、引导语或小节。
+Fill per the `## 3. User Story List` skeleton of prd-template.md: the template's built-in block quote (`> Story 拆分按照角色 + 场景 + 验收标准的方式拆分。`) must be **kept verbatim, copied as-is**; you must not append, concatenate, or rewrite any wording after it—including stable-numbering rules, "don't reuse/renumber on revision," "leave estimation empty," etc. Such rules only govern writing behavior and must not be written into that block quote or anywhere in the product; don't add explanatory sentences, lead-ins, or subsections not defined by the template.
 
-每条 Story 仅填模板既有字段：`User story 描述`（句式 `As a {角色}, for {场景}, I want to {动作}, so that {价值}.`）、`需求详细描述`、`识别并插入 Figma 设计图和 link`、`验收标准`。AC 须表达前置条件/操作/可观察结果三要素且可落测试用例，不强制固定关键词格式。`识别并插入 Figma 设计图和 link` 字段按「Figma 设计稿处理」插入本 Story 涉及界面的设计稿图片与 link。
+Each Story fills only the template's existing fields: `User story 描述` (form `As a {角色}, for {场景}, I want to {动作}, so that {价值}.`), `需求详细描述`, `识别并插入 Figma 设计图和 link`, and `验收标准`. ACs must express the three elements of precondition/action/observable result and be reducible to test cases; a fixed keyword format is not required. The `识别并插入 Figma 设计图和 link` field inserts the design images and link of the screens this Story covers, per "Figma design handling."
 
-### S7 写 4–10 章
+### S7 Write chapters 4–10
 
-NFR 逐项给量化口径（性能、兼容性、离线与可用性、安全、可访问性）；安全按最小权限，
-写清数据分级与日志留存；再写业务规则与约束、数据需求、依赖项、风险与待定项、优先级排序。
+Give each NFR a quantified metric (performance, compatibility, offline and availability, security, accessibility); for security, follow least privilege and state the data classification and log retention; then write business rules and constraints, data requirements, dependencies, risks and open items, and priority ranking.
 
-### S8 [条件] 内容模型
+### S8 [conditional] Content model
 
-团队配置要求时加内容模型章，回答变更类型、历史内容影响、迁移与回滚，再补角色矩阵；
-配置要求独立成条时，在 Story List 里拆成独立条目便于单独回滚。
+When the team config requires it, add a content-model chapter answering change types, impact on historical content, migration and rollback, then add the role matrix; when the config requires it as a standalone item, split it into a separate Story in the Story List for independent rollback.
 
-### S9 补附录（待确认项不入正文）
+### S9 Add appendices (to-confirm items not in the body)
 
-填附录的 Figma / Jira 链接与术语表。**Jira link 仅指向本 PRD 对应的那一个 Epic**（不填 Story key）；撰写时 Epic 未建则留空占位，建单后由回写环节补入。附录各链接字段有值则填、无值留空，不写「由 XX 回填」「待补」等说明性文字。
-待确认清单不写入 PRD 文档正文，也不发布到 Confluence；待确认项只在 S11 交付时于对话里逐条列出（含责任方）。
+Fill the appendix's Figma / Jira links and glossary. **The Jira link points only to the single Epic this PRD corresponds to** (don't fill in Story keys); if the Epic isn't created yet at writing time, leave a placeholder, and it's filled in by the write-back step after creation. For each appendix link field, fill it if there's a value and leave it empty otherwise; don't write explanatory text like "filled in later by XX" or "TBD."
+The to-confirm list is not written into the PRD body and not published to Confluence; to-confirm items are listed one by one (with owners) in the conversation only at S11 handoff.
 
-### S10 自检
+### S10 Self-check
 
-按第 5 节质量门禁逐项核对。
+Verify item by item against the quality gates in section 5.
 
-### S11 交 PO 确认
+### S11 Hand to the PO for confirmation
 
-在对话里给出产物与待确认清单（逐条标注责任方，仅存在于对话、不写入文档），并**必须**把下一步列成两条并列选项供 PO 选择，两条同等呈现、不只提发布、不把转 PDF 弱化为附注或省略：
+Present the product and the to-confirm list in the conversation (each item annotated with its owner, existing only in the conversation and not written into the doc), and **you must** lay out the next step as two parallel options for the PO to choose from, presented equally—don't mention only publishing and don't weaken "convert to PDF" into a footnote or omit it:
 
-- 发布：进入 PRD 发布环节（发布/同步到 Confluence，等 PO 确认后）。
-- 本地转 PDF：把定稿的本地 `.md` 离线转成排版可读的 PDF，供本地评审、存档或发给不用 Confluence 的人；不改原文、不发布。
+- Publish: enter the PRD publishing step (publish/sync to Confluence, after PO confirmation).
+- Local convert to PDF: convert the finalized local `.md` offline into a readable, well-formatted PDF for local review, archiving, or sending to people who don't use Confluence; doesn't modify the source or publish.
 
-即使本次只是对已定稿 PRD 做局部修订（如仅重写 AC、调整措辞），修订完成即视为再次到达本收尾环节，仍须按上述两条并列选项提示，不得跳过。
+Even if this round is just a local revision to a finalized PRD (like rewriting only the ACs or adjusting wording), finishing the revision counts as reaching this wrap-up step again, and you must still present the two parallel options above—don't skip.
 
-撰写完成后停下等 PO 确认，不自动进入下一环节。
+After writing, stop and wait for PO confirmation; don't move on to the next step automatically.
 
-## 4. 强制规则
+## 4. Mandatory rules
 
-
-| 规则            | 说明                                                   |
+| Rule | Description |
 | ------------- | ---------------------------------------------------- |
-| 模板优先          | 章节顺序、标题、（可选）/ 必填标注以 prd-template.md 自「## 文档信息」起为准；模板文件 H1 与作者说明不属产物。仅填模板既有的章节、字段与引用说明，不新增模板未定义的说明句、引导语、注释或小节；模板自带的正文引用保留原文、不扩写，但作者须知 / 书写约定（如附录「链接书写约定」）与 HTML 注释一律不写入产物 |
-| 假设显式化         | 澄清结论里的假设若被采纳，写入对应章节并标 `[假设]`                         |
-| 只写 what 与 why | how 交给后续的技术方案环节（PRD 级与 Story 级明细） |
-| 目标可量化         | Purpose 与 Performance Requirement 必须有数字、口径与测量条件      |
-| 常量不写死         | 模板、命名、维度、状态、语言取团队配置，不在产物里硬编码团队标识                  |
-| 图表可渲染         | 所有 mermaid 图遵守下方「图表规范」，本地与发布后都能正常显示                |
+| Template first | Section order, headings, and (optional) / required markers follow prd-template.md starting from "## 文档信息"; the template file's H1 and author notes are not part of the product. Fill only the template's existing sections, fields, and block quotes; don't add explanatory sentences, lead-ins, comments, or subsections not defined by the template; keep the template's built-in body block quotes verbatim without expanding them, but author notes / writing conventions (like the appendix's "链接书写约定") and HTML comments are never written into the product |
+| Make assumptions explicit | If an assumption from the clarification conclusions is adopted, write it into the corresponding section and mark it `[假设]` |
+| Only what and why | The how goes to the later tech-solution steps (PRD level and Story-level detail) |
+| Quantifiable goals | Purpose and Performance Requirement must have numbers, a metric, and measurement conditions |
+| Don't hardcode constants | The template, naming, dimensions, states, and language come from the team config; don't hardcode team identifiers in the product |
+| Renderable diagrams | All mermaid diagrams follow the "Diagram spec" below and display correctly both locally and after publishing |
 
+### Diagram spec
 
-### 图表规范
+When producing any mermaid diagram (architecture, flowchart, sequence, etc.), follow each item:
 
-产出任何 mermaid 图（架构图、流程图、时序图等）时，逐条遵守：
-
-| 规则 | 说明 |
+| Rule | Description |
 |------|------|
-| 图类型与方向 | 首行声明图类型与方向（如 `flowchart TD`、`sequenceDiagram`）；一张图只表达一个视角，节点过多时拆分为多张 |
-| 节点文本加引号 | 节点文本一律用双引号包裹：`A["MBY Audio H5 页面"]`。含空格、括号、斜杠、中英文混排、标点的文本不加引号会触发 Lexical error |
-| 边标签加引号 | 边标签同样加引号：`E -->|"选择章节"| F` |
-| 不用 HTML 换行 | 节点文本内不使用 `<br/>` 等 HTML 标签；需分行时把补充信息拆到括号里或另起节点，例如 `E["Audio Playlist (新增: 章节列表)"]` |
-| 节点 ID 用 ASCII | 节点 ID 用 ASCII（`A`/`B`/`S1`），中文只放在带引号的显示文本里；同图内 ID 唯一、不重名 |
-| 特殊字符处理 | 引号、尖括号等特殊字符改用等价文字或转义（如实体写法），避免破坏语法 |
-| 判断/分支完整 | 判断节点 `X{"…?"}` 的每条分支边都带条件标签，覆盖真/假等全部出口，不留悬空分支 |
-| 渲染自检 | 完稿后用支持 mermaid 的预览器（VS Code / Cursor 的 mermaid 插件，或 mermaid live）确认无语法错误、无截断再定稿。部分轻量预览器（如 MarkText）对多图连排有重叠 bug，出现重叠以插件或发布后图片为准，非内容问题 |
-| 发布一致 | Confluence 无 Mermaid 插件，发布环节由脚本经 mmdc 渲染为高分辨率 PNG 附件内联（独立成段、固定宽度），本地 `.md` 保留 mermaid 源码，二者语义一致。发布须以 `mermaid_pending` 为空为准，发布机须装 Node.js（`npx`）供 mmdc 使用 |
+| Diagram type and direction | Declare the diagram type and direction on the first line (like `flowchart TD`, `sequenceDiagram`); one diagram expresses one perspective; when there are too many nodes, split into multiple diagrams |
+| Quote node text | Always wrap node text in double quotes: `A["MBY Audio H5 页面"]`. Text with spaces, parentheses, slashes, mixed Chinese/English, or punctuation triggers a Lexical error without quotes |
+| Quote edge labels | Quote edge labels too: `E -->|"选择章节"| F` |
+| No HTML line breaks | Don't use HTML tags like `<br/>` in node text; when you need to break lines, split the extra info into parentheses or a separate node, e.g. `E["Audio Playlist (新增: 章节列表)"]` |
+| ASCII node IDs | Use ASCII for node IDs (`A`/`B`/`S1`); put Chinese only in the quoted display text; IDs are unique within a diagram |
+| Handle special characters | Replace or escape quotes, angle brackets, and other special characters with equivalents (like entity notation) to avoid breaking the syntax |
+| Complete decisions/branches | Every branch edge of a decision node `X{"…?"}` carries a condition label, covering all outlets (true/false, etc.), leaving no dangling branch |
+| Render self-check | When finished, confirm there are no syntax errors or truncation using a mermaid-capable previewer (the VS Code / Cursor mermaid plugin, or mermaid live) before finalizing. Some lightweight previewers (like MarkText) have an overlap bug with multiple diagrams in a row; if overlap appears, trust the plugin or the post-publish image—it's not a content issue |
+| Publish consistency | Confluence has no Mermaid plugin, so the publishing step renders diagrams into high-resolution PNG attachments via mmdc and inlines them (standalone paragraph, fixed width), while the local `.md` keeps the mermaid source; the two are semantically identical. Publishing requires `mermaid_pending` to be empty, and the publishing machine must have Node.js (`npx`) for mmdc |
 
-### Figma 设计稿处理
+### Figma design handling
 
-含 Figma 链接时（2.3 UI Overview、Story 设计图字段），读取设计事实并产出本地设计稿图片入正文，不以说明文字替代。图片落盘位置遵循调用方指定的输出路径。
+When Figma links are present (2.3 UI Overview, Story design fields), read the design facts and produce local design images into the body; don't substitute explanatory text for images. Images are saved to the output path specified by the caller.
 
-| 环节 | 约束 |
+| Step | Constraint |
 |------|------|
-| 定位 | 从链接提取 `fileKey` 与 `nodeId`（URL 的 `1-3` 对应节点 `1:3`）；读取画板结构、界面状态、组件与文案作为事实依据，不凭链接推测 |
-| 选取 | 单节点可能含多个画板，仅取与本 PRD 涉及界面一致的，无关画板不导出 |
-| 导出 | 图片存于调用方指定的 PRD 图片目录，用语义化英文名；体积与格式按「设计稿图片适配」控制 |
-| 引用 | 在 2.3 对应界面及 Story 设计图字段以 Markdown 图片语法引用本地图片（相对 PRD 文件的路径），并保留该界面的 Figma link |
-| 完备 | PRD 涉及的界面均须有对应图片，图片随 PRD 一并保存供发布环节作附件 |
-| 失败 | 经 `mcp_auth` 重试后仍读取失败时，于该字段登记待确认，交付时在对话中说明未获取的设计稿及原因，不臆造设计细节 |
+| Locate | Extract `fileKey` and `nodeId` from the link (the URL's `1-3` corresponds to node `1:3`); read the board structure, screen states, components, and copy as the factual basis; don't infer from the link |
+| Select | A single node may contain multiple boards; take only those matching the screens this PRD covers; don't export unrelated boards |
+| Export | Save images to the PRD image directory specified by the caller, using semantic English names; control size and format per "Design image adaptation" |
+| Reference | Reference the local images with Markdown image syntax (path relative to the PRD file) in the corresponding screen of 2.3 and the Story design fields, and keep that screen's Figma link |
+| Completeness | Every screen the PRD covers must have a corresponding image, saved together with the PRD for the publishing step to attach |
+| Failure | If reading still fails after retrying via `mcp_auth`, log it as to-confirm in that field, and at handoff explain in the conversation which designs weren't obtained and why; don't fabricate design details |
 
-#### 设计稿图片适配
+#### Design image adaptation
 
-设计稿以「文档预览与发布附件可读」为准，非像素级还原；控制单图与总体积，避免拖慢加载或超出附件限制。
+Design images target "readable in doc preview and as publish attachments," not pixel-perfect fidelity; control per-image and total size to avoid slowing loads or exceeding attachment limits.
 
-| 维度 | 约束 |
+| Dimension | Constraint |
 |------|------|
-| 分辨率 | 按用途取用：文档嵌入用低倍（移动端画板取 1x），仅需放大核对细节时用高倍 |
-| 格式 | 照片/渐变为主用有损（如 JPEG）显著降体积；大面积纯色、文字、图标或需透明背景用无损（如 PNG） |
-| 宽度 | 移动端截图约 320–480px 可读即可，不超出承载文档的展示宽度 |
-| 体积 | 单图与单文档图片总量控制在承载平台附件与渲染上限内；超限先降分辨率或换有损格式，再降质量，保持文字与关键元素清晰 |
-| 同步 | 改动文件名或扩展名后，同步更新正文所有引用，确保链接有效 |
-| 工具 | 调整手段用运行环境可用的图像处理能力，不绑定特定命令或平台，跨平台一致 |
+| Resolution | Use per purpose: low scale for doc embedding (1x for mobile boards), high scale only when zooming in to verify details |
+| Format | For photos/gradients use lossy (like JPEG) to cut size significantly; for large flat colors, text, icons, or transparency needs use lossless (like PNG) |
+| Width | Mobile screenshots readable at about 320–480px; don't exceed the display width of the hosting doc |
+| Size | Keep per-image and per-doc total image size within the hosting platform's attachment and render limits; if exceeded, first lower resolution or switch to a lossy format, then lower quality, keeping text and key elements clear |
+| Sync | After changing a file name or extension, update all references in the body to keep links valid |
+| Tools | Use the image-processing capability available in the runtime environment; don't bind to a specific command or platform; keep it cross-platform consistent |
 
-## 5. 质量门禁
+## 5. Quality gates
 
-- 与 prd-template.md 自「## 文档信息」起逐节对照：章节齐全、顺序一致、无空章节
-- 未新增模板未定义的说明句、引导语或小节；模板自带的**正文引用**（如章节内的示例/口径说明）**逐字保留、不得追加或扩写**（如 `## 3. User Story List` 的引用不得被拼接稳定编号/不复用/估点等撰写规则），模板中的**作者须知/书写约定**（引用块或 HTML 注释形式）不属正文、一律不写入产物
-- 无模板元数据泄漏：「# PRD 模板」「本模板忠实于官方」「质量门禁负责」；无书写约定/作者须知残留（如附录顶部「链接书写约定」）；无 HTML 注释残留
-- 无 `[填写]` / `TBD` / `TODO` 残留
-- 版本变更记录只含需求级变更：初版仅一条，无本地迭代（重拆/重排/措辞调整等修改点）产生的版本行
-- 目标可量化；AC 无模糊词，能落到测试用例
-- 示例数据全是合成数据，无真实密钥、内网域名、真实会员号
-- 同一概念全文使用统一名称
-- 多语言字段写明缺翻译时的回退策略
-- 所有 mermaid 图通过「图表规范」自检
-- 含 Figma 链接时，2.3 UI Overview 与相关 Story 已按「Figma 设计稿处理」插入本地设计稿图片；读取失败项已登记待确认，正文不以说明性文字替代图片
-- 设计稿图片已按「设计稿图片适配」控制分辨率/格式/宽度/体积，改名或换扩展名后正文引用已同步、链接有效
+- Compare section by section against prd-template.md starting from "## 文档信息": sections are complete, order matches, no empty sections
+- No explanatory sentences, lead-ins, or subsections added beyond the template; the template's built-in **body block quotes** (like in-section example/metric notes) are **kept verbatim, not appended to or expanded** (e.g. the `## 3. User Story List` block quote must not have stable-numbering/no-reuse/estimation rules concatenated onto it); the template's **author notes/writing conventions** (block-quote or HTML-comment form) are not body content and are never written into the product
+- No template metadata leakage: "# PRD 模板," "本模板忠实于官方," "质量门禁负责"; no writing-convention/author-note residue (like the appendix's top "链接书写约定"); no HTML-comment residue
+- No `[填写]` / `TBD` / `TODO` residue
+- The version-history table contains only requirement-level changes: the initial version has only one row, with no version rows from local iterations (re-splitting/reordering/wording tweaks and other edit points)
+- Goals are quantifiable; ACs have no vague words and can be reduced to test cases
+- All example data is synthetic, with no real secrets, internal domains, or real member IDs
+- The same concept uses a consistent name throughout
+- Multilingual fields state the fallback strategy when a translation is missing
+- All mermaid diagrams pass the "Diagram spec" self-check
+- When Figma links are present, 2.3 UI Overview and the relevant Stories have local design images inserted per "Figma design handling"; read-failure items are logged as to-confirm, and the body doesn't substitute explanatory text for images
+- Design images have resolution/format/width/size controlled per "Design image adaptation," and after a rename or extension change the body references are synced and links are valid
 
-细节见 [quality-gates.md](references/quality-gates.md)。
+See [quality-gates.md](references/quality-gates.md) for details.
 
-## 6. 输出
+## 6. Output
 
-1. 产物文件，命名按团队的需求文档命名规则；结构与标题必须与 prd-template.md 自「## 文档信息」起一致，
-    模板里的 `{占位符}` 全部替换、不留残留；不得把模板文件 H1 或作者说明写入产物
-2. 待确认清单，逐条标注责任方（仅在对话中呈现，不写入产物文件、不发布）
-3. 下一步建议：PRD 发布环节（PO 确认后）
+1. The product file, named per the team's requirements-doc naming rule; its structure and headings must match prd-template.md starting from "## 文档信息," with all `{placeholders}` replaced and no residue; the template file's H1 or author notes must not be written into the product
+2. The to-confirm list, each item annotated with its owner (presented in the conversation only, not written into the product file, not published)
+3. Next-step suggestion: the PRD publishing step (after PO confirmation)
 
-## 7. 相关
+## 7. Related
 
-- 上游：requirement-clarify
-- 下游：prd-publish
-- 平行可选：md-to-pdf（把定稿的本地 PRD 转 PDF 供本地评审/存档）
+- Upstream: requirement-clarify
+- Downstream: prd-publish
+- Parallel option: md-to-pdf (convert the finalized local PRD to PDF for local review/archiving)
 - references/prd-template.md
 - references/quality-gates.md
-

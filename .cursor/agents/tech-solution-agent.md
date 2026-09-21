@@ -69,6 +69,7 @@ The subagent may be **freshly started** (a brand-new context) or **resumed** by 
 ```
 
 - When you need an answer from the user: if the environment has a tool for asking directly, ask directly; otherwise write the full question into the status card and persist it to `sessions/`.
+- **Clarification questions must be presented as interactive dialog options — never as plain prose the user has to type answers to.** When `requirement-clarify` produces a machine-readable question list (the JSON handoff format), whoever holds the dialog control **must** render every question as structured option controls (one option card per question, auto-appending an "Other (custom)" fallback). A sub-agent has no dialog control, so it returns the machine-readable list and hands off; the main conversation that receives it **must** turn that list into dialog controls and **must not** relay it to the user as narrated text. Degrading to plain text is only allowed for a single question that is inherently an open-ended quantitative value that cannot be enumerated (state the expected format in the prompt).
 - When invoked again with an answer: first append the answer **verbatim** to `sessions/`, then continue.
 
 ### 2.1 Two ways to resume

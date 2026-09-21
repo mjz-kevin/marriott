@@ -1,135 +1,136 @@
 ---
 name: prd-publish
 description: >-
-  将本地 PRD 发布或同步到 Confluence。PRD 正文体量常超出 MCP 单次写入上限，
-  因此统一采用 scripts/upload_confluence_v2.py 脚本上传：从团队配置解析目标空间与父目录，
-  按标题幂等新建或更新页面，保持正文完整，并返回页面 URL。
-  当用户要求发布、同步或推送 PRD 到 Confluence 时使用；
-  触发词：PRD 上传 / 发布 PRD / 同步到 Confluence / publish PRD。
+  Publish or sync a local PRD to Confluence. A PRD body often exceeds the MCP single-write limit,
+  so it uses scripts/upload_confluence_v2.py uniformly: resolve the target space and parent folder
+  from the team config, idempotently create or update the page by title, keep the body complete,
+  and return the page URL.
+  Use when the user asks to publish, sync, or push a PRD to Confluence;
+  triggers: PRD 上传 / 发布 PRD / 同步到 Confluence / publish PRD.
 metadata:
   agent: Eval Agent
 ---
 
-# PRD Publish — 发布到 Confluence
+# PRD Publish — publish to Confluence
 
-将撰写完成的 PRD 写入 Confluence 指定 space 与父目录，按命名模板生成标题，并保留关联资产的回链；发布时按 `--epic` 自动把指向该 Jira Epic 的回链填入附录「Jira link」项，本地 `.md` 无需手动回填。
+Write the finished PRD into the designated Confluence space and parent folder, generate the title from the naming template, and preserve back-links to related assets; on publish, per `--epic`, automatically fill the back-link pointing to that Jira Epic into the appendix's "Jira link" item, so the local `.md` needs no manual back-fill.
 
-**发布方式**：正文体量常超 MCP 单次写入上限，统一用 `scripts/upload_confluence_v2.py` 经 Confluence REST 一次性提交完整正文（幂等查重、升版本、mermaid 转图、图片转附件）。
+**Publishing method**: the body often exceeds the MCP single-write limit, so use `scripts/upload_confluence_v2.py` uniformly to submit the complete body in one shot via the Confluence REST API (idempotent dedup, version bump, mermaid-to-image, images-to-attachments).
 
-**归档位置**：按 initiative → epic 分层，脚本自动查 epic 在 Jira 的父项确定是否含 `{initiative}` 层，缺失夹自动创建：
+**Archive location**: layered by initiative -> epic; the script automatically looks up the epic's parent in Jira to decide whether an `{initiative}` level is included, and missing folders are created automatically:
 
 ```
-{folder_layout.level1}              一级根（parent_pages.root）
-└── {initiative}                    Initiative 夹，标题为「Jira key-摘要」（无父项时省略此层）
-    └── {epic}                      Epic 夹，标题为「Jira key-摘要」，如 CNAPP-5661-会员权益重构
-        ├── {epic}-PRD              → PRD 文档
-        └── {epic}-Tech Solution    → 技术方案文档
+{folder_layout.level1}              level-1 root (parent_pages.root)
+└── {initiative}                    Initiative folder, titled "Jira key-summary" (omitted when there's no parent)
+    └── {epic}                      Epic folder, titled "Jira key-summary", e.g. CNAPP-5661-会员权益重构
+        ├── {epic}-PRD              → PRD doc
+        └── {epic}-Tech Solution    → tech-solution doc
 ```
 
-`{epic}` 取 Jira Epic key（非功能名/slug）；**除非用户显式给出，否则必须主动询问确认**（详见步骤 3）。`{initiative}` 与 `{epic}` 夹标题由脚本查 Jira 摘要自动拼为「key-摘要」，幂等查重按 Jira key 前缀匹配，摘要文案变动不会重复建夹。Initiative 层可 `--initiative <key>` 覆盖、`--initiative none` 强制无此层。
+`{epic}` takes the Jira Epic key (not a feature name/slug); **unless the user gives it explicitly, you must proactively ask to confirm** (see step 3). The `{initiative}` and `{epic}` folder titles are auto-composed by the script into "key-summary" from the Jira summary; idempotent dedup matches by the Jira key prefix, so a change in the summary text won't create duplicate folders. The Initiative level can be overridden with `--initiative <key>` or forced off with `--initiative none`.
 
-| 维度  | 说明                                                            |
-| --- | ------------------------------------------------------------- |
-| 定位  | 按 space 与命名规则将 PRD 幂等发布到 Confluence 指定路径                      |
-| 输入  | 经 PO 确认的本地 PRD `.md` 与团队 Confluence 配置                        |
-| 产出  | Confluence 页面（新建或更新），返回标题、URL、版本、完整性统计、回链清单                   |
-| 手段  | `scripts/upload_confluence_v2.py`（REST 上传，不受 MCP 体量限制，正文完整提交） |
-| 边界  | 敏感信息命中即终止；正文须与本地确认版逐节一致，不得精简删减；space、父页、命名一律取团队配置，不得写死        |
+| Dimension | Description |
+| --- | --- |
+| Purpose | Idempotently publish the PRD to the designated Confluence path per the space and naming rules |
+| Input | The PO-confirmed local PRD `.md` and the team's Confluence config |
+| Output | A Confluence page (created or updated); returns the title, URL, version, completeness stats, and back-link list |
+| Method | `scripts/upload_confluence_v2.py` (REST upload, not bound by the MCP size limit, submits the complete body) |
+| Scope | A sensitive-info hit stops immediately; the body must match the locally confirmed version section by section, with no trimming; space, parent page, and naming all come from the team config, never hardcoded |
 
-## 0. 配置取值
+## 0. Config values
 
-`{profile}` 为当前 profile 文件名（不含扩展名，如 `app-prod` / `cms-test`），由调用方通过 `profile-select` skill 解析并传入（`profile.py resolve` 给出其绝对路径）；未传入或对应文件不存在 → 阻断，不猜测。
+`{profile}` is the current profile file name (without extension, like `app-prod` / `cms-test`), resolved and passed in by the caller via the `profile-select` skill (`profile.py resolve` gives its absolute path); if it isn't passed in or the file doesn't exist -> block, don't guess.
 
-| 用途                | 键 / 来源                                                                                                                        |
+| Purpose | Key / source |
 | ----------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| Confluence 站点根    | `profiles/{profile}.yaml` → `mcp.confluence.base_url`（脚本实际从 `.cursor/mcp.json` → `confluenceRest.base_url` 读取，二者应一致）          |
-| 目标 space（key）     | `profiles/{profile}.yaml` → `mcp.confluence.space`，对应脚本 `--space`                                                             |
-| 一级根目录页 ID         | `profiles/{profile}.yaml` → `mcp.confluence.parent_pages.root`，对应脚本 `--root`（根目录名见 `folder_layout.level1`；为 `TBD` 即阻断） |
-| 文件夹层级约定           | `profiles/{profile}.yaml` → `mcp.confluence.folder_layout`（一级根 →〔epic 有父项时〕`{initiative}` → `{epic}` → `{epic}-PRD` / `{epic}-Tech Solution`；epic 无父项时省略 `{initiative}` 层） |
-| PRD 父目录 ID（旧模式回退） | `profiles/{profile}.yaml` → `mcp.confluence.parent_pages.prd`，仅未配 `root` 的团队用，对应脚本 `--parent`                                 |
-| 标题命名模板            | `profiles/{profile}.yaml` → `mcp.confluence.naming.prd`                                                                       |
-| 正文格式              | `profiles/{profile}.yaml` → `mcp.confluence.content_format`                                                                   |
-| 需回链的资产            | `profiles/{profile}.yaml` → `mcp.confluence` / `mcp.jira` 的 `links`                                                           |
-| 发布凭证              | `.cursor/mcp.json` → `confluenceRest`（`base_url` / `email` / `api_token`，三项非空；路径不同用 `--mcp` 指定）                                                     |
+| Confluence site root | `profiles/{profile}.yaml` → `mcp.confluence.base_url` (the script actually reads it from `.cursor/mcp.json` → `confluenceRest.base_url`; the two should match) |
+| Target space (key) | `profiles/{profile}.yaml` → `mcp.confluence.space`, maps to script `--space` |
+| Level-1 root page ID | `profiles/{profile}.yaml` → `mcp.confluence.parent_pages.root`, maps to script `--root` (root name in `folder_layout.level1`; a value of `TBD` blocks) |
+| Folder-layout convention | `profiles/{profile}.yaml` → `mcp.confluence.folder_layout` (level-1 root ->〔when the epic has a parent〕`{initiative}` → `{epic}` → `{epic}-PRD` / `{epic}-Tech Solution`; when the epic has no parent, the `{initiative}` level is omitted) |
+| PRD parent folder ID (legacy fallback) | `profiles/{profile}.yaml` → `mcp.confluence.parent_pages.prd`, used only by teams without `root`, maps to script `--parent` |
+| Title naming template | `profiles/{profile}.yaml` → `mcp.confluence.naming.prd` |
+| Body format | `profiles/{profile}.yaml` → `mcp.confluence.content_format` |
+| Assets to back-link | `profiles/{profile}.yaml` → the `links` under `mcp.confluence` / `mcp.jira` |
+| Publishing credentials | `.cursor/mcp.json` → `confluenceRest` (`base_url` / `email` / `api_token`, all three non-empty; use `--mcp` for a different path) |
 
-## 1. 前置：敏感信息扫描
+## 1. Prerequisite: sensitive-info scan
 
-发布前对 PRD 正文执行敏感信息扫描（真实密钥、内网域名、会员号、订单号、手机号），命中即终止写入并报告位置与类型，不做脱敏后自动继续。同时确认 `.cursor/mcp.json` 的 `confluenceRest.api_token` 不会被回显到对话或日志。
+Before publishing, run a sensitive-info scan on the PRD body (real secrets, internal domains, member IDs, order numbers, phone numbers); a hit stops the write immediately and reports the location and type—don't redact and auto-continue. Also confirm that `.cursor/mcp.json`'s `confluenceRest.api_token` won't be echoed to the conversation or logs.
 
-## 2. 工作流
+## 2. Workflow
 
 ```
-发布进度：
-- [ ] 步骤 1：加载团队配置（root / folder_layout / naming）
-- [ ] 步骤 2：敏感信息扫描，确认凭证不外泄
-- [ ] 步骤 3：定位本地 PRD .md 文件，并向用户确认所属 Jira Epic key（必问，不臆断）
-- [ ] 步骤 4：生成标题前缀（{team}-PRD-{epic}，唯一键；摘要由脚本自动补）
-- [ ] 步骤 5：dry-run 预检（统计章节/Story/AC，核对完整性与目标文件夹）
-- [ ] 步骤 6：执行脚本上传（自动建 epic 夹与 -PRD 夹，幂等新建/更新，正文完整）
-- [ ] 步骤 7：校验回链、正文完整性与结果，返回 URL
+Publishing progress:
+- [ ] Step 1: Load the team config (root / folder_layout / naming)
+- [ ] Step 2: Sensitive-info scan, confirm credentials aren't leaked
+- [ ] Step 3: Locate the local PRD .md and confirm its Jira Epic key with the user (must ask, don't assume)
+- [ ] Step 4: Generate the title prefix ({team}-PRD-{epic}, the unique key; summary is auto-appended by the script)
+- [ ] Step 5: Dry-run pre-check (count sections/Stories/ACs, verify completeness and the target folder)
+- [ ] Step 6: Run the script upload (auto-create the epic folder and -PRD folder, idempotent create/update, complete body)
+- [ ] Step 7: Verify back-links, body completeness, and the result; return the URL
 ```
 
-### 步骤 3：定位本地 PRD 并确定 epic
+### Step 3: Locate the local PRD and determine the epic
 
-- 以经 PO 确认的本地 `.md` 全文文件作为发布源，脚本按文件逐节转换为 Confluence storage。
-- 若 PRD 尚在对话中而未写入文件，须先保存为本地 `.md` 再发布。脚本仅以文件为发布源。
-- **确定 epic（硬约束，必须主动询问用户）**：PRD 按 epic 分层归档，发布前须明确所属 **Jira Epic key**（如 `CNAPP-5661`，不用功能名或中文 slug），作为脚本 `--epic` 传入，决定 `{epic}` 与 `{epic}-PRD` 夹。
-  - **除非用户本次已显式给出 Epic key，否则一律先提问确认**，不得自行推断、沿用历史或留空。从 PRD 内容、Jira 父子关系、`state.md` 推断出的候选仅作「建议默认值」，须标注来源（如「GCD-105 的父 Epic」）交用户确认；多个候选时全部列出让用户裁决，禁止静默择一。
-  - 回报中如实记录「Epic 由用户确认」，不表述为自行推断。
+- Use the full text of the PO-confirmed local `.md` file as the publishing source; the script converts it to Confluence storage section by section.
+- If the PRD is still in the conversation and not written to a file, save it as a local `.md` first, then publish. The script uses only a file as the publishing source.
+- **Determine the epic (hard constraint, must proactively ask the user)**: the PRD is archived by epic, so before publishing you must know its **Jira Epic key** (like `CNAPP-5661`, not a feature name or a Chinese slug), passed as script `--epic`, which determines the `{epic}` and `{epic}-PRD` folders.
+  - **Unless the user has explicitly given the Epic key this round, always ask to confirm first**; don't infer on your own, reuse history, or leave it empty. Candidates inferred from the PRD content, Jira parent-child relations, or `state.md` are only "suggested defaults," must be annotated with their source (like "GCD-105's parent Epic"), and handed to the user for confirmation; when there are multiple candidates, list them all for the user to decide—don't silently pick one.
+  - In the report, faithfully record "Epic confirmed by the user," don't phrase it as self-inferred.
 
-### 步骤 4：生成标题前缀
+### Step 4: Generate the title prefix
 
-用 `mcp.confluence.naming.prd` 模板生成**标题前缀**（唯一键）。当前模板为 `{team}-PRD-{epic}`（如 `APP-PRD-CNAPP-5661`），只需把 `{epic}` 替换为步骤 3 确认的 Jira Epic key。
+Generate the **title prefix** (the unique key) with the `mcp.confluence.naming.prd` template. The current template is `{team}-PRD-{epic}` (like `APP-PRD-CNAPP-5661`); just replace `{epic}` with the Jira Epic key confirmed in step 3.
 
-| 占位符     | 含义            | 取值来源                    |
+| Placeholder | Meaning | Value source |
 | ------- | ------------- | ----------------------- |
-| `{epic}` | Jira Epic key | 步骤 3 用户确认的 Epic key（必问） |
+| `{epic}` | Jira Epic key | The Epic key the user confirmed in step 3 (must ask) |
 
-该前缀作为脚本 `--title` 传入，**同时是幂等查重的唯一键**。脚本会查 Jira 摘要，自动把页面标题补成「前缀-摘要」（如 `APP-PRD-CNAPP-5661-会员权益重构`）；查重只按前缀匹配，摘要文案变动不新建页；命中后若摘要变了脚本自动改名。**功能名、日期、版本一律不进标题**——功能名写在正文「文档信息」，日期/版本写在正文版本变更记录与 `--version-msg`。因此「同一 Epic 只有一页 PRD」由固定的 `{team}-PRD-{epic}` 保证。
+This prefix is passed as script `--title` and is **also the unique key for idempotent dedup**. The script looks up the Jira summary and auto-appends the page title into "prefix-summary" (like `APP-PRD-CNAPP-5661-会员权益重构`); dedup matches by prefix only, so a change in the summary text doesn't create a new page; on a hit, if the summary changed, the script renames automatically. **Feature names, dates, and versions never go into the title**—the feature name goes in the body's "文档信息," and the date/version go in the body's version-history table and `--version-msg`. So "one PRD page per Epic" is guaranteed by the fixed `{team}-PRD-{epic}`.
 
-### 步骤 5：dry-run 预检
+### Step 5: Dry-run pre-check
 
-先执行 `--dry-run`。脚本不写入 Confluence，仅输出标题（`title` 为补全摘要后的完整标题，`title_prefix` 为唯一键前缀）、`stats`（章节 h2 数、Story 数、AC 条数、mermaid 图数、image 图片数）、`storage_chars` 与 `target`（目标 root/initiative/epic/kind）。核对 `title_prefix` 为预期的 `{team}-PRD-{epic}`、`stats` 与本地确认版一致、`target.epic` 与步骤 3 中**用户确认的 Epic key 完全一致**，并核对 `target.initiative`（脚本自动查 Jira 得到的父项，有则四级归档、`null` 则三级）符合预期后再正式上传；若 epic 或 initiative 不符预期，停下重新确认，不得带着未经确认的路径上传。
+First run `--dry-run`. The script doesn't write to Confluence and only outputs the title (`title` is the complete title after appending the summary, `title_prefix` is the unique-key prefix), `stats` (h2 section count, Story count, AC count, mermaid diagram count, image count), `storage_chars`, and `target` (target root/initiative/epic/kind). Verify that `title_prefix` is the expected `{team}-PRD-{epic}`, `stats` matches the locally confirmed version, `target.epic` **exactly matches the Epic key the user confirmed in step 3**, and `target.initiative` (the parent the script auto-looked-up from Jira; present -> four-level archive, `null` -> three-level) meets expectations before the actual upload; if the epic or initiative doesn't meet expectations, stop and re-confirm—don't upload with an unconfirmed path.
 
-> **命令写法（跨平台统一）**：命令为单行、不含续行符，可在 Windows PowerShell / CMD、macOS、Linux 直接运行。下文示例中的 `python` 是启动器占位符：macOS / Linux 用 PATH 里的 `python` / `python3`；Windows 绿色版（Python 未加入 PATH）用 `C:/AI-SDLC/runtime/python-*/python.exe`。脚本运行后会自动解析 `npx`（渲染 mermaid 用），无需在命令里指定 Node 路径。
-
-```bash
-python .cursor/skills/prd-publish/scripts/upload_confluence_v2.py --md "<PRD.md 绝对或相对路径>" --space "<mcp.confluence.space>" --root "<mcp.confluence.parent_pages.root>" --epic "<Jira Epic key，如 CNAPP-5661>" --kind prd --title "<步骤4生成的标题前缀，如 APP-PRD-CNAPP-5661>" --dry-run
-```
-
-### 步骤 6：执行上传
-
-移除 `--dry-run`，添加 `--version-msg` 说明本次变更后正式发布。
+> **Command form (cross-platform, unified)**: the command is a single line with no line continuations, and can run directly in Windows PowerShell / CMD, macOS, and Linux. `python` in the examples below is a launcher placeholder: on macOS / Linux use the `python` / `python3` on your PATH; on the Windows portable build (Python not on PATH) use `C:/AI-SDLC/runtime/python-*/python.exe`. After running, the script auto-resolves `npx` (for rendering mermaid), so there's no need to specify a Node path in the command.
 
 ```bash
-python .cursor/skills/prd-publish/scripts/upload_confluence_v2.py --md "<PRD.md 路径>" --space "<space>" --root "<parent_pages.root>" --epic "<Jira Epic key，如 CNAPP-5661>" --kind prd --title "<标题前缀>" --version-msg "PRD v1.1：补充 §3 Story"
+python .cursor/skills/prd-publish/scripts/upload_confluence_v2.py --md "<absolute or relative path to PRD.md>" --space "<mcp.confluence.space>" --root "<mcp.confluence.parent_pages.root>" --epic "<Jira Epic key, e.g. CNAPP-5661>" --kind prd --title "<the title prefix from step 4, e.g. APP-PRD-CNAPP-5661>" --dry-run
 ```
 
-- **文件夹自动分层**：按开头「归档位置」定义的规则由脚本落地——以 `--root` 为一级根，自动查该 epic 的直接父项确定四级 / 三级，`{initiative}` 与 `{epic}` 夹标题拼上 Jira 摘要，缺失夹自动建空容器页，最后把 PRD 建/更到最内层 `{epic}-PRD` 夹下。返回 JSON 的 `folders` 字段列出各级夹的 id 与是否本次新建。`--initiative <key>` 手动指定 Initiative 层、`--initiative none` 强制省略该层；Jira 查询失败时静默回退为无此层（不阻断发布）。
-- **幂等新建或更新（按前缀+key）**：脚本在三级 `{epic}-PRD` 夹下**按标题前缀（`--title`）查重**。命中则 `update` 并升版本、写入 `--version-msg`，且若现标题与最新摘要不一致先自动改名（结果 JSON 的 `renamed_from` 记录原标题）；未命中则以「前缀-摘要」完整标题 `create`。同一需求迭代沿用同一 epic 与同一前缀以更新原页面，不新建重复页。
-- **旧模式回退**：未配 `parent_pages.root` 的团队（如 CMS）仍可用 `--parent <parent_pages.prd>` 直挂固定父页，不走文件夹分层。
-- **正文完整、禁止 MCP 写页面（硬约束）**：脚本一次性提交整篇 storage，不受 MCP 体量限制。发布/更新一律走本脚本 REST；禁止手工摘要、删减章节或 AC 原文，禁止用 Atlassian MCP 的 `updateConfluencePage`/`createConfluencePage` 写页面（单次写入受限会截断正文、丢图、破坏 storage）。脚本报错只修入参或凭证后重跑，不得改用 MCP 兜底。允许的差异仅限 mermaid 转图、markdown 转 storage HTML；MCP 只读查询不受此限。
-- **正文格式**：脚本内置 markdown 转 Confluence storage 的转换（标题、表格、列表、引用、代码宏、行内加粗/代码/链接）。`content_format` 保持 `markdown` 即可直接使用本地 `.md`。
-- **图表**：mermaid 由 mmdc 渲染为高分辨率图片附件内联，支持全部图类型；结果记入 `mermaid_pending`（空为全部成功），本地 `.md` 保留源码。含 mermaid 时本机须有 Node.js（`npx`），缺失即阻断（`--allow-degraded-diagrams` 可显式降级，默认不启用）。
-- **图片附件**：markdown 的 `![alt](path)` 自动处理，本地相对路径上传为附件、网络图片外链，失败或不支持记入 `image_pending`。引用的设计稿/截图须与 `.md` 同目录，体积与格式按撰写环节的设计稿图片适配规范控制。
-- **回链**：`mcp` 配置声明的各类链接（`figma` / `tech_solution` / `jira`）须在正文写为 markdown 链接以随正文发布；无对应链接则跳过。其中指向本 PRD 所属 **Jira Epic** 的回链由脚本按 `--epic` **自动填入附录「Jira link」项**（把该项占位替换为 `<a href>` 并去掉「（可选）」），与技术方案回链填入附录「技术方案链接」项保持同一布局，本地 `.md` 无需手动回填：脚本注入前先查重，正文若已含指向同一 Epic（同 URL 或 `/browse/<KEY>`）的链接则跳过、不重复；PRD 无标准附录「Jira link」项时回退到正文顶部注入一条信息条，保证回链不丢；`--no-epic-link` 可关闭该注入。结果 JSON 的 `epic_link_injected` 记录本次是否注入、`epic_url` 为注入的地址。指向**技术方案**的回链不在本环节处理——技术方案晚于 PRD 产出，由技术方案发布环节在其发布后回填到本 PRD 的「技术方案链接」项。
+### Step 6: Run the upload
 
-### 步骤 7：校验与回报
+Remove `--dry-run`, add `--version-msg` describing this change, then publish for real.
 
-**结果校验**：解析脚本输出 JSON，确认退出码为 0 且 `action`（create/update）、`page_id`、`version`、`url` 均返回、`url` 可访问。以下门禁任一未过即视为发布未达标，须修正后重跑，不得以降级版结束；确因环境限制无法达标时，在回报中标注具体项、原因与后续动作，不静默通过。
+```bash
+python .cursor/skills/prd-publish/scripts/upload_confluence_v2.py --md "<path to PRD.md>" --space "<space>" --root "<parent_pages.root>" --epic "<Jira Epic key, e.g. CNAPP-5661>" --kind prd --title "<title prefix>" --version-msg "PRD v1.1: add §3 Story"
+```
 
-| 门禁    | 通过标准                                                              | 未过时的处理                                                                                                                                  |
+- **Automatic folder layering**: laid out by the script per the "Archive location" rules at the top—`--root` is the level-1 root, the script auto-looks-up the epic's direct parent to decide four-level / three-level, the `{initiative}` and `{epic}` folder titles get the Jira summary appended, missing folders are auto-created as empty container pages, and finally the PRD is created/updated under the innermost `{epic}-PRD` folder. The returned JSON's `folders` field lists each level's folder id and whether it was newly created this run. `--initiative <key>` sets the Initiative level manually, `--initiative none` forces it off; on a Jira query failure it silently falls back to no such level (doesn't block publishing).
+- **Idempotent create or update (by prefix+key)**: the script **dedups by title prefix (`--title`)** under the three-level `{epic}-PRD` folder. On a hit it `update`s, bumps the version, and writes `--version-msg`, and if the current title doesn't match the latest summary it auto-renames first (the result JSON's `renamed_from` records the original title); on a miss it `create`s with the complete "prefix-summary" title. A requirement iteration reuses the same epic and prefix to update the original page, not create a duplicate.
+- **Legacy fallback**: teams without `parent_pages.root` configured (like CMS) can still use `--parent <parent_pages.prd>` to attach directly to a fixed parent page, bypassing folder layering.
+- **Complete body, MCP page-writes forbidden (hard constraint)**: the script submits the whole storage in one shot, not bound by the MCP size limit. Publishing/updating always goes through this script over REST; manual summarizing, trimming sections or AC text is forbidden, and writing pages via Atlassian MCP's `updateConfluencePage`/`createConfluencePage` is forbidden (the single-write limit truncates the body, drops images, and corrupts storage). On a script error, only fix the arguments or credentials and rerun—don't fall back to MCP. The only allowed differences are mermaid-to-image and markdown-to-storage-HTML; MCP read-only queries aren't subject to this.
+- **Body format**: the script has built-in markdown-to-Confluence-storage conversion (headings, tables, lists, quotes, code macros, inline bold/code/links). Keep `content_format` as `markdown` to use the local `.md` directly.
+- **Diagrams**: mermaid is rendered by mmdc into high-resolution image attachments and inlined, supporting all diagram types; the result is recorded in `mermaid_pending` (empty means all succeeded), and the local `.md` keeps the source. When mermaid is present, the machine must have Node.js (`npx`); a missing one blocks (`--allow-degraded-diagrams` explicitly degrades, off by default).
+- **Image attachments**: markdown's `![alt](path)` is handled automatically—local relative paths are uploaded as attachments, network images are linked externally, and failures or unsupported items are recorded in `image_pending`. Referenced designs/screenshots must be in the same directory as the `.md`, with size and format controlled per the authoring step's design-image adaptation spec.
+- **Back-links**: the various links declared in the `mcp` config (`figma` / `tech_solution` / `jira`) must be written as markdown links in the body so they publish with it; skip when there's no corresponding link. Of these, the back-link pointing to this PRD's **Jira Epic** is **auto-filled into the appendix's "Jira link" item** by the script per `--epic` (replacing that item's placeholder with an `<a href>` and removing "（可选）"), keeping the same layout as the tech-solution back-link filled into the appendix's "技术方案链接" item, so the local `.md` needs no manual back-fill: before injecting, the script dedups—if the body already contains a link pointing to the same Epic (same URL or `/browse/<KEY>`), it skips and doesn't duplicate; when the PRD has no standard appendix "Jira link" item, it falls back to injecting an info banner at the top of the body so the back-link isn't lost; `--no-epic-link` disables the injection. The result JSON's `epic_link_injected` records whether it was injected this run, and `epic_url` is the injected address. The back-link pointing to the **tech solution** is not handled in this step—the tech solution is produced later than the PRD, so the tech-solution publishing step back-fills it into this PRD's "技术方案链接" item after its own publish.
+
+### Step 7: Verify and report
+
+**Result verification**: parse the script's output JSON, confirm exit code 0 and that `action` (create/update), `page_id`, `version`, and `url` are all returned and `url` is reachable. If any gate below doesn't pass, the publish counts as not meeting the bar and must be fixed and rerun—don't end on a degraded version; if the bar genuinely can't be met due to environment limits, annotate the specific item, cause, and follow-up action in the report, don't pass silently.
+
+| Gate | Passing criteria | Handling when it fails |
 | ----- | ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| 正文完整性 | `stats`（章节 / Story / AC 条数）与本地确认版一致，各 AC 原文（前置条件/操作/可观察结果三要素）均已完整写入 | 修正本地 `.md` 后重跑更新                                                                                                                        |
-| 图表    | `mermaid_pending` 为空                                              | 按图号定位：mmdc 不可用→装 Node.js/`npx`；首次渲染需联网下载 mermaid-cli 与 Chromium，网络受限→预热缓存；源码语法错→修正 mermaid，后重跑                                          |
-| 图片附件  | `image_pending` 为空                                                | 按记录定位：路径缺失→修正相对路径或补文件；扩展名不支持→转为 png / jpg / jpeg / gif / svg / webp；上传失败→修正后重跑                                                          |
-| 调用通道  | 全程走脚本 REST                                                        | 退出码非 0 或 JSON 含 `error` 时按 HTTP 状态（401 凭证 / 403 权限 / 404 parent/space）修正后重跑；禁止改用 MCP `updateConfluencePage` / `createConfluencePage` 兜底 |
+| Body completeness | `stats` (section / Story / AC counts) matches the locally confirmed version, and each AC's full text (precondition/action/observable result) is fully written | Fix the local `.md`, then rerun the update |
+| Diagrams | `mermaid_pending` is empty | Locate by diagram number: mmdc unavailable -> install Node.js/`npx`; the first render needs network to download mermaid-cli and Chromium, restricted network -> warm the cache; source syntax error -> fix the mermaid, then rerun |
+| Image attachments | `image_pending` is empty | Locate by record: missing path -> fix the relative path or add the file; unsupported extension -> convert to png / jpg / jpeg / gif / svg / webp; upload failure -> fix and rerun |
+| Call channel | Everything goes through the script over REST | On non-zero exit or JSON containing `error`, fix per HTTP status (401 credentials / 403 permission / 404 parent/space) and rerun; falling back to MCP `updateConfluencePage` / `createConfluencePage` is forbidden |
 
-**回报**：页面标题、URL、版本号、本次为新建或更新、`stats` 完整性核对结果、`mermaid_pending` 与 `image_pending` 状态、正文中已建立的回链清单（含 `epic_link_injected` / `epic_url` 反映的 Epic 顶部回链是否注入）。
+**Report**: page title, URL, version, whether this was a create or update, the `stats` completeness check result, the `mermaid_pending` and `image_pending` status, and the list of back-links established in the body (including whether the Epic top back-link was injected as reflected by `epic_link_injected` / `epic_url`).
 
-## 3. 相关
+## 3. Related
 
-- 上游：prd-authoring
-- 协作：tech-solution-publish（同一 `{epic}` 夹下的 `{epic}-Tech Solution`）
-- 脚本：scripts/upload_confluence_v2.py
-- 凭证：.cursor/mcp.json → confluenceRest
+- Upstream: prd-authoring
+- Collaboration: tech-solution-publish (the `{epic}-Tech Solution` under the same `{epic}` folder)
+- Script: scripts/upload_confluence_v2.py
+- Credentials: .cursor/mcp.json → confluenceRest

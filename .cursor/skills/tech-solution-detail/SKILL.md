@@ -1,164 +1,164 @@
 ---
 name: tech-solution-detail
 description: >-
-  按当前团队的官方 detail 模板撰写 Story 级详细技术方案：业务背景、主流程、
-  含兜底的接口/数据契约、Feature Flag 表、含逐项验收的任务拆解、可复用组件、
-  平台专项章节、QA 测试路径与监控。当用户要求详细设计、Story 级技术方案或
-  实现拆解时使用；触发词：详细技术方案 / 详细设计 / 任务拆解 / Story 技术方案 / detail design。
+  Write a Story-level detailed tech solution following the team's official detail template:
+  business background, main flow, interface/data contracts with fallbacks, a Feature Flag table,
+  a task breakdown with per-item acceptance, reusable components, platform-specific sections,
+  QA test paths, and monitoring. Use when the user asks for a detailed design, a Story-level
+  tech solution, or an implementation breakdown;
+  triggers: 详细技术方案 / 详细设计 / 任务拆解 / Story 技术方案 / detail design.
 metadata:
   agent: Tech Solution Agent
 ---
 
-# Tech Solution — Detail 级
+# Tech Solution — Detail level
 
-Story 级明细技术方案，在开发启动前基于 User Story + AC 产出，是唯一可供 DEV 直接照此实现的一档，也是单测编写、接口契约比对、任务验收的比对基线。
+The Story-level detailed tech solution, produced before development starts based on the User Story + AC. It is the one tier a DEV can implement directly, and the baseline for writing unit tests, comparing interface contracts, and accepting tasks.
 
-| 维度 | 说明 |
+| Dimension | Description |
 |------|------|
-| 定位 | 落到接口字段级的详细设计 + 任务拆解 + 每项任务验收标准 |
-| 输入 | Story + AC、已确认的 PRD 档方案、设计稿（Figma 链接） |
-| 产出 | 一份 Story 级明细方案（对齐团队 detail 模板），作为 feature 分支的关联任务清单与验证基线 |
-| 边界 | 不改需求方向（方向变更回 PRD 级方案确认）；不估点，只给影响面与任务数；接口示例一律 mock 且必须含错误场景 |
-| 验收基准 | 判断标准：未参与前期讨论的 DEV 看完可直接开工 |
+| Purpose | Detailed design down to the interface field level + task breakdown + acceptance criteria for each task |
+| Input | Story + AC, the confirmed PRD-tier solution, designs (Figma link) |
+| Output | A Story-level detailed solution (aligned to the team detail template), serving as the feature branch's linked task list and verification baseline |
+| Scope | Doesn't change the requirement direction (a direction change returns to PRD-level solution confirmation); doesn't estimate, only gives impact scope and task count; interface examples are always mock and must include error scenarios |
+| Acceptance benchmark | Test: a DEV who wasn't in the earlier discussions can start work directly after reading it |
 
-按团队所用的 detail 模板自带的章节顺序逐章填，不增删章节、不与其他模板混用。
+Fill chapter by chapter in the section order of the team's detail template; don't add or remove sections and don't mix templates.
 
-## 0. 配置取值
+## 0. Config values
 
-`{profile}` 为当前 profile 文件名（不含扩展名，如 `app-prod` / `cms-test`），由调用方通过 `profile-select` skill 解析并传入（`profile.py resolve` 给出其绝对路径）；未传入或对应文件不存在 → 阻断，不猜测。
+`{profile}` is the current profile file name (without extension, like `app-prod` / `cms-test`), resolved and passed in by the caller via the `profile-select` skill (`profile.py resolve` gives its absolute path); if it isn't passed in or the file doesn't exist -> block, don't guess.
 
-| 用途 | 键 |
+| Purpose | Key |
 |------|----|
-| 是否要内容模型 | `profiles/{profile}.yaml` → `content_model.required` |
-| detail 模板 | 按 profile 的 `team` 选取 detail 模板（app / cms 各一份，见「## 6. 相关」） |
+| Whether a content model is needed | `profiles/{profile}.yaml` → `content_model.required` |
+| detail template | Pick the detail template by the profile's `team` (one each for app / cms, see "## 6. Related") |
 
-## 1. 前置条件
+## 1. Prerequisites
 
-| # | 条件 |
+| # | Condition |
 |---|------|
-| 1 | 有 Story + AC（验收边界） |
-| 2 | PRD 档方案已确认（方向不变，否则先回 PRD 级方案确认） |
-| 3 | 有设计稿（Figma 链接），覆盖设计稿定义的界面状态 |
+| 1 | Have Story + AC (acceptance boundary) |
+| 2 | The PRD-tier solution is confirmed (direction unchanged; otherwise return to PRD-level solution confirmation first) |
+| 3 | Have designs (Figma link), covering the screen states the design defines |
 
-> Figma 设计读取：含 Figma 链接时须经 Figma MCP 读取设计内容，作为详细设计与 QA 路径依据，不仅凭链接推测；读取失败登记为风险，不臆造。
+> Figma design reading: when a Figma link is present, you must read the design content via Figma MCP as the basis for the detailed design and QA paths, not just infer from the link; a read failure is logged as a risk, don't fabricate.
 
-## 2. 工作流
+## 2. Workflow
 
 ```
-- S1 文档信息 + 版本变更记录
-- S2 背景
-- S3 主流程
-- S4 契约与依赖
-- S5 [条件] 内容模型 + 权限 + 迁移（团队要求内容模型时填）
-- S6 任务拆解（每项含验收标准）
-- S7 风险与依赖
-- S8 专项章节（可复用组件、QA 测试路径、监控、非功能设计等）
-- S9 评审结论（仅留表头空行，由评审人在评审时人工填写，此处不预填）
-- S10 自检 + 交 DEV 确认
+- S1 文档信息 + version-history table
+- S2 Background
+- S3 Main flow
+- S4 Contracts and dependencies
+- S5 [conditional] Content model + permissions + migration (when the team requires a content model)
+- S6 Task breakdown (each with acceptance criteria)
+- S7 Risks and dependencies
+- S8 Special sections (reusable components, QA test paths, monitoring, non-functional design, etc.)
+- S9 Review conclusion (leave only the header row blank, filled in manually by reviewers at review time; don't pre-fill here)
+- S10 Self-check + hand to DEV for confirmation
 
-具体章节名与编号以所用模板为准。
+The exact section names and numbering follow the template used.
 ```
 
-### S3 主流程
+### S3 Main flow
 
-按模板的主流程章节填写：入口、请求时机、数据加载、业务异常、状态切换、关键操作后跳转，
-并附流程图或架构图。mermaid 图遵循图表规范：首行声明图类型与方向、节点文本与边标签加双引号、节点 ID 用 ASCII、分支边覆盖全部出口、完稿后预览器渲染自检；发布经 mmdc 渲染为图片，须装 Node.js（`npx`）。
+Fill the template's main-flow section: entry, request timing, data loading, business exceptions, state transitions, redirect after a key action, with a flowchart or architecture diagram. mermaid diagrams follow the diagram spec: declare the diagram type and direction on the first line, double-quote node text and edge labels, use ASCII node IDs, cover all branch outlets, and do a previewer render self-check when finished; publishing renders them into images via mmdc, so Node.js (`npx`) must be installed.
 
-### S4 契约与依赖
+### S4 Contracts and dependencies
 
-接口 / 数据契约须明确以下四项：
+Interface / data contracts must specify the following four items:
 
-| 项 | 要求 |
+| Item | Requirement |
 |----|------|
-| 请求 / 触发时机 | 进页 / 刷新 / 登录态变化 |
-| 关键字段 | `字段名`：含义、类型 |
-| 空值 / 失败兜底 | 字段为空→？请求失败→兜底策略，不静默失败 |
-| 前置 / Safelisting | 接口 safelist |
+| Request / trigger timing | Enter page / refresh / login-state change |
+| Key fields | `field name`: meaning, type |
+| Null / failure fallback | Field empty -> ? Request fails -> fallback strategy, no silent failure |
+| Prerequisite / Safelisting | Interface safelist |
 
-给出请求 / 响应 / 错误码的 mock 示例（策略按团队的示例数据口径，
-域名 `api.example.com`），须含错误场景，只给成功示例的方案无法验收。
+Give mock examples of the request / response / error codes (the approach follows the team's example-data convention, domain `api.example.com`), and they must include error scenarios; a solution with only success examples can't be accepted.
 
-Feature Flag / 配置项表逐行填：Key、含义、默认值、读取失败时的行为、备注。
-> 默认值默认「关」，读取失败不阻塞进页，两端读同一 key，不本地写死默认开。
+Fill the Feature Flag / config-item table row by row: Key, meaning, default, behavior on read failure, notes.
+> The default is "off" by default, a read failure doesn't block entering the page, both ends read the same key, don't hardcode default-on locally.
 
-设计 / 规格来源须给出 Figma 链接。
+The design / spec source must give a Figma link.
 
-### S5 内容模型三张关键表（团队要求内容模型时必填）
+### S5 The three key tables of the content model (required when the team requires a content model)
 
-**内容模型**：内容类型 / 用途 / 关键字段 / 草稿·版本 / 多语言（是否多语言 + 回退策略）
+**Content model**: content type / purpose / key fields / draft·version / multilingual (whether multilingual + fallback strategy)
 
-**权限与发布流程**：editor / reviewer / admin 的读写发布矩阵 + 发布流程（draft → 审核 → published，驳回如何处理）
+**Permissions and publishing flow**: the read/write/publish matrix for editor / reviewer / admin + the publishing flow (draft -> review -> published, how rejection is handled)
 
-**数据迁移**：
+**Data migration**:
 
-| 变更类型 | 对象 | 说明 | 迁移方式 |
+| Change type | Object | Description | Migration method |
 |----------|------|------|----------|
-| 新增 / 删除 / 改类型 / 改名 | `[collection.field]` | | `payload migrate`（生成 + 执行迁移脚本） |
+| Add / delete / change type / rename | `[collection.field]` | | `payload migrate` (generate + run the migration script) |
 
-须回答历史内容影响（存量是否回填）与回滚脚本。
-当团队要求内容模型独立成条，迁移应作为独立任务项并可独立回滚。
+Must answer the impact on historical content (whether existing data is back-filled) and the rollback script.
+When the team requires the content model as a standalone item, migration should be a standalone task and independently rollback-able.
 
-### S6 任务拆解
+### S6 Task breakdown
 
-| 项 | 技术任务 | 其他 Comments |
+| Item | Technical task | Other Comments |
 |----|----------|---------------|
 
-每个任务须有验收标准（可写在 Comments 或单独列）。
-这是任务验收环节的比对基线，缺一项则验证环节无法执行。
-任务应可独立验收、粒度不宜过大（过大则继续拆）；工时/点数由 DEV 评估。
+Each task must have acceptance criteria (write them in Comments or list separately).
+This is the comparison baseline for the task-acceptance step; missing one makes the verification step unable to run.
+Tasks should be independently acceptable and not too coarse-grained (split further if too coarse); effort/points are estimated by the DEV.
 
-### S8 专项章节
+### S8 Special sections
 
-按模板的专项章节逐项填：
+Fill the template's special sections item by item:
 
-| 要点 | 内容 |
+| Point | Content |
 |------|------|
-| 可复用组件 | 组件名 / 使用处；优先复用设计系统组件（见团队的编码约定） |
-| 多端 / 多站点差异 | 逐需求点列出差异，无差异写「一致」 |
-| 建议 QA 测试路径 | 覆盖团队的测试范围；状态覆盖设计稿定义的界面状态逐态 |
-| 上线后监控 | 埋点、崩溃 / 性能指标、发布成功率 |
-| 非功能设计 | 性能、缓存（TTL 与失效）、安全（鉴权、越权防护） |
-| 其他 | 状态页（Loading / Empty / Error）与边界 |
+| Reusable components | Component name / where used; prefer reusing design-system components (see the team's coding conventions) |
+| Multi-end / multi-site differences | List differences per requirement point; write "consistent" if none |
+| Suggested QA test paths | Cover the team's test scope; state coverage covers each screen state the design defines |
+| Post-launch monitoring | Tracking, crash / performance metrics, release success rate |
+| Non-functional design | Performance, cache (TTL and invalidation), security (auth, privilege-escalation protection) |
+| Other | State pages (Loading / Empty / Error) and boundaries |
 
-## 3. 强制规则
+## 3. Mandatory rules
 
-| 规则 | 说明 |
+| Rule | Description |
 |------|------|
-| 接口示例必须 mock | 禁真实密钥、内网域名、会员号 |
-| 示例含错误场景 | 只给成功示例无法验收 |
-| 引用真实代码路径 | 引用前必须实际检索过相关代码仓库 |
-| 任务都有验收标准 | 缺一项即打回 |
-| 不估点 | 只给影响面与任务数 |
-| 状态不遗漏 | 设计稿定义的界面状态每态都要有处理说明 |
-| 章节不删除 | 不涉及写「本期不涉及」 |
-| 忠于模板 | 正文自「## 文档信息」起笔；仅填模板既有章节与字段，不新增模板未定义的说明句、引导语、注释或小节；模板文件标题与作者说明不属产物 |
+| Interface examples must be mock | No real secrets, internal domains, member IDs |
+| Examples include error scenarios | Success-only examples can't be accepted |
+| Reference real code paths | Actually search the relevant code repo before referencing |
+| Every task has acceptance criteria | Missing one is rejected |
+| Don't estimate | Only give impact scope and task count |
+| No missing states | Every screen state the design defines needs a handling note |
+| Don't delete sections | Write "本期不涉及" for anything not involved |
+| Faithful to the template | The body starts from "## 文档信息"; fill only the template's existing sections and fields, don't add explanatory sentences, lead-ins, comments, or subsections not defined by the template; the template file's title and author notes are not part of the product |
 
-## 4. 质量门禁
+## 4. Quality gates
 
-- 模板章节齐全，无空章节
-- 正文自「## 文档信息」起笔，未新增模板未定义的说明句、引导语或小节
-- 无占位符残留
-- 接口契约含请求/响应/错误码 mock，且写明空值与失败兜底
-- Feature Flag 表含「读取失败时」行为
-- 每个任务都有验收标准
-- 未出现真实密钥 / 内网域名 / 真实会员号
-- 专项章节已填：差异表、QA 测试路径覆盖全部 UI 状态、监控方式、非功能设计
-- 团队要求内容模型时：内容模型表非空、权限矩阵已填、迁移表含回滚
-- 多语言：按团队的多语言要求给了回退策略
+- Template sections complete, no empty sections
+- The body starts from "## 文档信息," with no explanatory sentences, lead-ins, or subsections added beyond the template
+- No placeholder residue
+- Interface contracts include request/response/error-code mocks, with null and failure fallbacks stated
+- The Feature Flag table includes "behavior on read failure"
+- Every task has acceptance criteria
+- No real secrets / internal domains / real member IDs
+- Special sections filled: difference table, QA test paths covering all UI states, monitoring, non-functional design
+- When the team requires a content model: the content-model table is non-empty, the permission matrix is filled, the migration table includes rollback
+- Multilingual: gave the fallback strategy per the team's multilingual requirement
 
-## 5. 输出
+## 5. Output
 
-命名按团队的标题格式。
-交付后停下等 DEV 确认。确认后**必须**把下一步列成两条并列选项，两条同等呈现、不只提发布、不把转 PDF 弱化为附注或省略：
+Named per the team's title format.
+After handoff, stop and wait for DEV confirmation. Once confirmed, **you must** lay out the next step as two parallel options, presented equally—don't mention only publishing and don't weaken "convert to PDF" into a footnote or omit it:
 
-- 发布：进入技术方案发布环节（detail 模式）。
-- 本地转 PDF：把定稿的本地 `.md` 离线转成排版可读的 PDF，供本地评审、存档或发给不用 Confluence 的人；不改原文、不发布。
+- Publish: enter the tech-solution publishing step (detail mode).
+- Local convert to PDF: convert the finalized local `.md` offline into a readable, well-formatted PDF for local review, archiving, or sending to people who don't use Confluence; doesn't modify the source or publish.
 
-即使本次只是对已定稿方案做局部修订，修订完成即视为再次到达本收尾环节，仍须按上述两条并列选项提示，不得跳过。
+Even if this round is just a local revision to a finalized solution, finishing the revision counts as reaching this wrap-up step again, and you must still present the two parallel options above—don't skip.
 
-## 6. 相关
+## 6. Related
 
-- 模板：references/tech-solution-detail-app.md / references/tech-solution-detail-cms.md（按 profile 的 `team` 取用：APP / CMS）
-- 上游：tech-solution-prd
-- 下游：tech-solution-publish
-- 平行可选：md-to-pdf（把定稿的本地技术方案转 PDF 供本地评审/存档）
+- Templates: references/tech-solution-detail-app.md / references/tech-solution-detail-cms.md (pick by the profile's `team`: APP / CMS)
+- Upstream: tech-solution-prd
+- Downstream: tech-solution-publish
+- Parallel option: md-to-pdf (convert the finalized local tech solution to PDF for local review/archiving)

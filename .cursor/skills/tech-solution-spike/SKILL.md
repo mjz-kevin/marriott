@@ -1,153 +1,127 @@
 ---
 name: tech-solution-spike
 description: >-
-  按官方调研模板撰写 Spike / 调研类技术方案：背景与调研目标、评估维度、
-  至少 2~3 个方案对比、PoC 验证、含对估点与排期影响的选型结论、未决项与评审结论。
-  当用户有 spike 工单或未定的技术问题，要求做可行性研究、技术调研或方案对比时使用；
-  触发词：spike 调研 / 可行性 / 技术选型 / 方案对比 / PoC / research spike。
+  Write a Spike / research tech solution following the official research template: background and
+  research goals, evaluation dimensions, at least 2–3 solution comparisons, PoC validation, a
+  selection conclusion with its impact on estimation and schedule, open items, and a review
+  conclusion. Use when the user has a spike ticket or an undecided technical question and asks for
+  a feasibility study, technical research, or a solution comparison;
+  triggers: spike 调研 / 可行性 / 技术选型 / 方案对比 / PoC / research spike.
 metadata:
   agent: Tech Solution Agent
 ---
 
-# Tech Solution — Spike / 调研类
+# Tech Solution — Spike / research
 
-Spike / 调研类技术方案，在 Refinement 阶段针对无法直接定论的技术点做调研并给出可执行结论，供 TL 评审后落到后续设计。
+The Spike / research tech solution, produced during Refinement for technical points that can't be decided directly, giving an actionable conclusion for TL review and later design.
 
-
-| 维度  | 说明                                                      |
+| Dimension | Description |
 | --- | ------------------------------------------------------- |
-| 定位  | 评估技术可行性、比较候选路线、量化选型代价，在时间盒内收敛出选型结论                  |
-| 输入  | spike ticket（含待调研问题）、约束与判定标准                            |
-| 产出  | 一份调研方案（对齐模板 7 章），含方案对比、PoC 验证、选型结论；结论回写 spike ticket    |
-| 边界  | 不展开字段级设计（需字段级设计时转 Story 级明细方案）；不估点，只给对估点的影响；接口示例一律 mock |
+| Purpose | Evaluate technical feasibility, compare candidate routes, quantify the selection cost, and converge to a selection conclusion within a time box |
+| Input | Spike ticket (with the questions to research), constraints, and decision criteria |
+| Output | A research solution (aligned to the template's 7 chapters), with a solution comparison, PoC validation, and a selection conclusion; the conclusion is written back to the spike ticket |
+| Scope | Doesn't expand into field-level design (when field-level design is needed, move to the Story-level detailed solution); doesn't estimate, only gives the impact on estimation; interface examples are always mock |
 
+Template: [tech-solution-spike.md](references/tech-solution-spike.md)
 
-模板：[tech-solution-spike.md](references/tech-solution-spike.md)
+## 0. Config values
 
-## 0. 配置取值
+`{profile}` is the current profile file name (without extension, like `app-prod` / `cms-test`), resolved and passed in by the caller via the `profile-select` skill (`profile.py resolve` gives its absolute path); if it isn't passed in or the file doesn't exist -> block, don't guess.
 
-`{profile}` 为当前 profile 文件名（不含扩展名，如 `app-prod` / `cms-test`），由调用方通过 `profile-select` skill 解析并传入（`profile.py resolve` 给出其绝对路径）；未传入或对应文件不存在 → 阻断，不猜测。
-
-
-| 用途       | 键                                                       |
+| Purpose | Key |
 | -------- | ------------------------------------------------------- |
-| 是否要内容模型  | `profiles/{profile}.yaml` → `content_model.required`    |
+| Whether a content model is needed | `profiles/{profile}.yaml` → `content_model.required` |
 
+## 1. Prerequisites
 
-
-
-## 1. 前置条件
-
-
-| #   | 条件                                                   |
+| #   | Condition |
 | --- | ---------------------------------------------------- |
-| 1   | 有 spike ticket（工单类型按团队 Jira 约定），写清待调研问题，且已确认「无法直接定论」 |
-| 2   | 已确认时间盒（建议 ≤ 1 Sprint）与判定标准                           |
+| 1   | Have a spike ticket (ticket type per the team's Jira convention), stating the question to research, and confirmed as "can't be decided directly" |
+| 2   | A confirmed time box (recommended <= 1 Sprint) and decision criteria |
 
-
-
-
-## 2. 工作流
+## 2. Workflow
 
 ```
-- S1 文档信息 + 版本变更记录
-- S2 第 1 章 背景与调研目标（问题 / 关键问题 / 约束）
-- S3 第 2 章 评估维度（6 个维度，可增补）
-- S4 第 3 章 方案对比（≥2 个方案，逐项 6 要素 + 对比矩阵）
-- S5 第 4 章 验证过程（PoC：方法 / Demo+数据 / 结论）
-- S6 第 5 章 选型结论与建议（推荐 + 否决理由 + 对估点排期影响）
-- S7 [条件] 内容模型与历史内容影响，仅当团队要求内容模型
-- S8 第 6 章 未决项与风险
-- S9 第 7 章 评审结论（仅留表头空行，由评审人人工填写）
-- S10 自检 + 交 TL 确认
+- S1 文档信息 + version-history table
+- S2 Chapter 1 Background and research goals (problem / key questions / constraints)
+- S3 Chapter 2 Evaluation dimensions (6 dimensions, extendable)
+- S4 Chapter 3 Solution comparison (>=2 solutions, 6 elements each + comparison matrix)
+- S5 Chapter 4 Validation process (PoC: method / Demo+data / conclusion)
+- S6 Chapter 5 Selection conclusion and recommendation (recommendation + rejection reasons + impact on estimation/schedule)
+- S7 [conditional] Content model and impact on historical content, only when the team requires a content model
+- S8 Chapter 6 Open items and risks
+- S9 Chapter 7 Review conclusion (leave only the header row blank, filled in manually by reviewers)
+- S10 Self-check + hand to TL for confirmation
 ```
 
+### S2 Background and research goals
 
+- The technical problem / uncertainty to solve
+- Research goals (the key questions to answer, must be decidable)
+- Constraints (performance, compatibility, time, dependencies)
 
-### S2 背景与调研目标
+### S3 Evaluation dimensions (the template's 6 items, fill each)
 
-- 要解决的技术问题 / 不确定点
-- 调研目标（要回答的关键问题，须可判定）
-- 约束条件（性能、兼容、时间、依赖）
+Implementation complexity | Multi-end/multi-implementation consistency | Performance | Maintainability/extensibility | Dependencies and risks | Reusability
 
+- "Multi-end / multi-implementation consistency" = whether each end covered by the team's tech stack yields a consistent business result
+- "Performance" = jank, CPU / memory, response latency; the metric convention follows the team's tech stack
 
+### S4 Solution comparison
 
-### S3 评估维度（模板 6 项，逐项填）
+Fill all 6 elements for each solution: approach overview / architecture (with a diagram), key implementation points, pros / cons, multi-end consistency impact, dependencies and risks, reusability.
 
-实现复杂度 ｜ 多端/多实现一致性 ｜ 性能 ｜ 可维护性/可扩展性 ｜ 依赖与风险 ｜ 复用性
+- At least 2 solutions. With only one solution, state in the text "why there's no alternative"
+- With >=2 solutions, add a comparison matrix
 
-- 「多端 / 多实现一致性」= 团队技术栈覆盖的各端能否得到一致业务结果
-- 「性能」= 卡顿、CPU / 内存、响应耗时，指标口径按团队技术栈给
+### S5 Validation process (PoC)
 
+For each validated solution, give: the validation method, the Demo / data, and the key conclusion.
+The PoC code lands in the team's actual code repo, and the build command must run successfully.
 
+### S6 Selection conclusion and recommendation
 
-### S4 方案对比
+- The recommended solution + core reasons
+- The reasons for the rejected solutions
+- The impact on estimation / schedule (give a range and impact scope; the final points are set by DEV/QA)
+- The recommendation on Story splitting (whether a standalone Story is needed)
 
-每个方案写满 6 要素：思路概述 / 架构（附图）、关键实现点、优点 / 缺点、
-多端一致性影响、依赖与风险、复用性。
+## 3. Mandatory rules
 
-- 至少 2 个方案。只有一个方案时须在文中说明「为什么没有替代方案」
-- 方案 ≥2 时补对比矩阵
-
-
-
-### S5 验证过程（PoC）
-
-每个被验证的方案给出：验证方法、Demo / 数据、关键结论。
-PoC 代码落在团队实际代码仓库中，构建命令必须能跑通。
-
-### S6 选型结论与建议
-
-- 推荐方案 + 核心理由
-- 被否决方案的原因
-- 对估点 / 排期的影响（给区间与影响面，最终点数由 DEV/QA 定）
-- 对 Story 拆分的建议（是否需要拆出独立 Story）
-
-
-
-## 3. 强制规则
-
-
-| 规则          | 说明                                                                |
+| Rule | Description |
 | ----------- | ----------------------------------------------------------------- |
-| 时间盒硬性       | 超过时间盒仍未收敛 → 停在「未决项与风险」，交 TL 决策，不无限延长                              |
-| 不展开字段级设计    | 需要字段级设计时，结论转入 Story 级明细方案另开一份                                     |
-| 判定标准前置      | 没有判定标准的调研不予启动                                                     |
-| 结论必须单选      | 完成对比后必须给出推荐；无法单选时须说明评估维度或数据不足                                         |
-| 不估点         | 只给对估点的影响，点数由 DEV/QA 定                                             |
-| 示例数据必须 mock | 同其他方案档                                                            |
-| 忠于模板        | 正文自「## 文档信息」起笔；仅填模板既有章节与字段，不新增模板未定义的说明句、引导语、注释或小节；模板文件标题与作者说明不属产物 |
+| Time box is hard | If it hasn't converged past the time box -> stop at "Open items and risks," hand to the TL to decide, don't extend indefinitely |
+| Don't expand into field-level design | When field-level design is needed, the conclusion moves to a separate Story-level detailed solution |
+| Decision criteria first | Research without decision criteria isn't started |
+| The conclusion must be a single choice | After the comparison you must give a recommendation; when a single choice isn't possible, state that the evaluation dimensions or data are insufficient |
+| Don't estimate | Only give the impact on estimation; points are set by DEV/QA |
+| Example data must be mock | Same as other solution tiers |
+| Faithful to the template | The body starts from "## 文档信息"; fill only the template's existing sections and fields, don't add explanatory sentences, lead-ins, comments, or subsections not defined by the template; the template file's title and author notes are not part of the product |
 
+## 4. Quality gates
 
+- All 7 chapters complete, no empty sections
+- The body starts from "## 文档信息," with no explanatory sentences, lead-ins, or subsections added beyond the template
+- No placeholder residue
+- >= 2 solutions, each with all 6 elements filled
+- The comparison matrix is filled (when >=2 solutions)
+- The PoC has a validation method and a key conclusion
+- The recommended solution + rejection reasons + impact on estimation/schedule are all present
+- The time box and decision criteria are visible in the text
+- When the team requires a content model: gave the impact on historical content and published pages
 
+## 5. Output and write-back
 
-## 4. 质量门禁
+Named per the team's title format. After handing to the TL for confirmation, **you must** lay out the next step as two parallel options, presented equally—don't mention only publishing and don't weaken "convert to PDF" into a footnote or omit it:
 
-- 7 章齐全，无空章节
-- 正文自「## 文档信息」起笔，未新增模板未定义的说明句、引导语或小节
-- 无占位符残留
-- 方案 ≥ 2 个，每个写满 6 要素
-- 对比矩阵已填（方案 ≥2 时）
-- PoC 有验证方法与关键结论
-- 推荐方案 + 否决理由 + 对估点排期影响三者齐全
-- 时间盒与判定标准在文中可见
-- 团队要求内容模型时：给出了对历史内容与已发布页面的影响
+- Publish: enter the tech-solution publishing step (spike mode), writing the conclusion back to the spike ticket (the Jira write action is done by the ticket-creation step that has Jira write access, see the permission note).
+- Local convert to PDF: convert the finalized local `.md` offline into a readable, well-formatted PDF for local review, archiving, or sending to people who don't use Confluence; doesn't modify the source or publish.
 
+Even if this round is just a local revision to a finalized solution, finishing the revision counts as reaching this wrap-up step again, and you must still present the two parallel options above—don't skip.
 
+## 6. Related
 
-## 5. 输出与回写
-
-命名按团队的标题格式。交 TL 确认后**必须**把下一步列成两条并列选项，两条同等呈现、不只提发布、不把转 PDF 弱化为附注或省略：
-
-- 发布：进入技术方案发布环节（spike 模式），把结论回写到 spike ticket（写 Jira 的动作由有 Jira 写权限的建单环节执行，见权限说明）。
-- 本地转 PDF：把定稿的本地 `.md` 离线转成排版可读的 PDF，供本地评审、存档或发给不用 Confluence 的人；不改原文、不发布。
-
-即使本次只是对已定稿方案做局部修订，修订完成即视为再次到达本收尾环节，仍须按上述两条并列选项提示，不得跳过。
-
-## 6. 相关
-
-- 模板：references/tech-solution-spike.md
-- 上游：spike ticket（Refinement 阶段登记的待调研问题）
-- 下游：tech-solution-detail（结论细化）、tech-solution-publish
-- 平行可选：md-to-pdf（把定稿的本地技术方案转 PDF 供本地评审/存档）
-
+- Template: references/tech-solution-spike.md
+- Upstream: spike ticket (the research question logged during Refinement)
+- Downstream: tech-solution-detail (conclusion refinement), tech-solution-publish
+- Parallel option: md-to-pdf (convert the finalized local tech solution to PDF for local review/archiving)

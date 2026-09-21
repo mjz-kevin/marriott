@@ -1,177 +1,181 @@
 ---
 name: requirement-clarify
 description: >-
-  多轮澄清业务需求与技术方案：判断输入是否自洽、按固定维度清单扫描遗漏、识别冲突并批量追问，
-  直至需求／方案分歧点澄清完整后在对话里给出澄清结论，直接交给 PRD 撰写或技术方案撰写环节。本环节不产出文档。
-  当用户粘贴原始需求、会议纪要、一句话想法，或要撰写 PRD／技术方案（PRD 级／Spike／Story 明细）前需要澄清、检查完整性时使用；
-  触发词：需求澄清 / 方案澄清 / 技术澄清 / 需求是否完整 / 帮我提问 / 澄清一下 / clarify requirements / clarify tech solution。
+  Multi-round clarification of business requirements and technical solutions: judge whether the input
+  is self-consistent, scan for gaps against a fixed dimension checklist, detect conflicts, and ask
+  batched follow-ups until the requirement / solution disagreement points are fully clarified, then
+  give a clarification conclusion in the conversation and hand it directly to the PRD-authoring or
+  tech-solution-authoring step. This step produces no document.
+  Use when the user pastes raw requirements, meeting notes, or a one-line idea, or needs clarification /
+  completeness checking before writing a PRD / tech solution (PRD level / Spike / Story detail);
+  triggers: 需求澄清 / 方案澄清 / 技术澄清 / 需求是否完整 / 帮我提问 / 澄清一下 / clarify requirements / clarify tech solution.
 metadata:
   agent: [Eval Agent, Tech Solution Agent]
 ---
 
-# Requirement Clarify — 需求与方案澄清
+# Requirement Clarify — requirement and solution clarification
 
-进入 PRD 撰写或技术方案撰写前的澄清环节，通过多轮追问把待撰写内容收敛到完整、自洽、可撰写。分两种模式：**业务模式**（Eval Agent，收敛业务需求）与**技术模式**（Tech Solution Agent，收敛技术方案分歧点，含 PRD 级 / Spike / Story 明细三档）。
+The clarification step before writing a PRD or tech solution; through multi-round follow-ups, converge the content to be written until it is complete, self-consistent, and writable. Two modes: **business mode** (Eval Agent, converge the business requirement) and **technical mode** (Tech Solution Agent, converge the tech-solution disagreement points, across three tiers: PRD level / Spike / Story detail).
 
-| 维度  | 说明                                                              |
-| --- | --------------------------------------------------------------- |
-| 定位  | 按固定维度清单扫描缺口、检测冲突、批量追问，收敛出澄清结论                                   |
-| 输入  | 业务模式：原始需求 / 会议纪要 / 一句话想法；技术模式：PRD / spike ticket / Story＋AC ＋代码仓库上下文；Figma 与关联 Jira/Confluence 均可选 |
-| 产出  | 会话内的澄清结论，回答「还缺什么、哪里自相矛盾、未问清处暂按什么假设」；作为 PRD 撰写或技术方案撰写环节的输入      |
-| 边界  | **不产出文档**、不落盘、不发布；不做技术方案设计本身（选型/契约由方案撰写环节落笔），只澄清分歧点；结论只存在于会话上下文  |
+| Dimension | Description |
+| --- | --- |
+| Purpose | Scan for gaps against a fixed dimension checklist, detect conflicts, ask batched follow-ups, and converge to a clarification conclusion |
+| Input | Business mode: raw requirements / meeting notes / a one-line idea; technical mode: PRD / spike ticket / Story+AC + code-repo context; Figma and linked Jira/Confluence are optional |
+| Output | An in-conversation clarification conclusion answering "what's still missing, where it's self-contradictory, what assumption to use for unclarified points"; serves as input to the PRD-authoring or tech-solution-authoring step |
+| Scope | **Produces no document**, doesn't save, doesn't publish; doesn't do the tech-solution design itself (selection/contracts are drafted in the authoring step), only clarifies disagreement points; the conclusion exists only in the conversation context |
 
-## 1. 何时使用
+## 1. When to use
 
-**业务模式**（Eval Agent）：
+**Business mode** (Eval Agent):
 
-| 用户输入                  | 动作                    |
+| User input | Action |
 | --------------------- | --------------------- |
-| 一段口述需求 / 会议纪要 / 一句话想法 | 全文检查 + 缺口扫描           |
-| 「帮我看看这个需求还缺什么」        | 只做缺口扫描，输出清单           |
-| 「按这个需求写 PRD」          | 先走本 Skill，P0 全部闭合再转撰写 |
-| 已有 PRD 草稿，想查漏         | 以 PRD 为输入做反向扫描        |
+| A spoken requirement / meeting notes / a one-line idea | Full-text review + gap scan |
+| "Help me see what's still missing in this requirement" | Only do a gap scan, output the list |
+| "Write a PRD from this requirement" | Run this Skill first, close all P0s, then move to authoring |
+| An existing PRD draft, want a gap check | Do a reverse scan with the PRD as input |
 
-**技术模式**（Tech Solution Agent）：按目标档位选对应维度清单（见「1.b 技术方案维度」）。
+**Technical mode** (Tech Solution Agent): pick the corresponding dimension checklist by target tier (see "1.b Tech-solution dimensions").
 
-| 用户输入                       | 目标档 | 动作                          |
+| User input | Target tier | Action |
 | -------------------------- | --- | --------------------------- |
-| 「按这份 PRD 写 PRD 级技术方案」      | PRD 级 | 先澄清架构方向、选型、契约边界、STB/ARB 触发分歧 |
-| 「这个 spike ticket 帮我做调研」    | Spike | 先澄清调研目标、评估维度、判定标准、时间盒       |
-| 「按这个 Story 写明细方案 / 任务拆解」   | Story 明细 | 先澄清接口字段契约、依赖、兜底、任务边界        |
+| "Write a PRD-level tech solution from this PRD" | PRD level | First clarify the architecture direction, selection, contract boundaries, STB/ARB triggers |
+| "Do a spike for this spike ticket" | Spike | First clarify the research goal, evaluation dimensions, decision criteria, time box |
+| "Write a detailed solution / task breakdown for this Story" | Story detail | First clarify interface field contracts, dependencies, fallbacks, task boundaries |
 
-**不适用**：内容已明确到可以直接填模板（此时直接进对应撰写环节）。
+**Not applicable**: when the content is already clear enough to fill the template directly (in that case go straight to the corresponding authoring step).
 
-## 2. 输入
+## 2. Input
 
-**业务模式**：
+**Business mode**:
 
-| 输入                   | 必需  | 说明                                                |
+| Input | Required | Description |
 | -------------------- | --- | ------------------------------------------------- |
-| 原始需求 / 纪要            | 必填  | 文本、链接、口述转写均可                                      |
-| Figma 链接             | 可选  | 一旦提供即通过 Figma MCP 读取内容，作为视觉事实并入上下文（见「Figma 视觉事实」） |
-| 关联 Jira / Confluence | 可选  | 读历史需求文档、Epic、既有 Story 做上下文                        |
+| Raw requirement / notes | Required | Text, links, or a transcription of speech all work |
+| Figma link | Optional | Once provided, read the content via Figma MCP as visual fact merged into context (see "Figma visual facts") |
+| Linked Jira / Confluence | Optional | Read historical requirements docs, Epics, and existing Stories as context |
 
-**技术模式**：
+**Technical mode**:
 
-| 输入                   | 必需  | 说明                                                |
+| Input | Required | Description |
 | -------------------- | --- | ------------------------------------------------- |
-| 目标档位                 | 必填  | PRD 级 / Spike / Story 明细，决定采用哪套技术维度清单             |
-| PRD / spike ticket / Story＋AC | 必填  | 按目标档提供对应上游产物                                      |
-| 代码仓库上下文 / 现有接口文档     | 可选  | 通过 GitHub MCP 读取既有实现与契约作为事实，不作为问题抛给用户             |
-| Figma 链接             | 可选  | 一旦提供即通过 Figma MCP 读取，作为架构、组件边界与 UI 状态机依据          |
-| 关联 Jira / Confluence | 可选  | 读已确认的 PRD 级方案、历史技术方案做上下文                          |
+| Target tier | Required | PRD level / Spike / Story detail, decides which technical dimension checklist to use |
+| PRD / spike ticket / Story+AC | Required | Provide the corresponding upstream artifact per the target tier |
+| Code-repo context / existing interface docs | Optional | Read the existing implementation and contracts via GitHub MCP as fact, not thrown to the user as a question |
+| Figma link | Optional | Once provided, read via Figma MCP as the basis for architecture, component boundaries, and UI state machines |
+| Linked Jira / Confluence | Optional | Read the confirmed PRD-level solution and historical tech solutions as context |
 
-## 3. 工作流
+## 3. Workflow
 
 ```
-0. 判定模式与档位（业务 / 技术-PRD 级 / 技术-Spike / 技术-Story 明细）
-1. 收集输入并按对应维度清单扫描缺口
-2. 检测冲突
-3. 批量提问（P0 优先）
-4. 未闭合项落成假设 / 待确认，给出澄清结论
+0. Judge mode and tier (business / tech-PRD level / tech-Spike / tech-Story detail)
+1. Gather input and scan for gaps against the corresponding dimension checklist
+2. Detect conflicts
+3. Ask batched questions (P0 first)
+4. Turn unclosed items into assumptions / to-confirm, give the clarification conclusion
 ```
 
-**S0 判定模式与档位**：先按调用来源与输入判定走哪套清单，选错清单会漏掉关键分歧点。
+**S0 Judge mode and tier**: first decide which checklist to use by the calling source and input; picking the wrong checklist misses key disagreement points.
 
-| 判定依据                              | 模式 / 档位   | 采用清单        |
+| Basis for judgment | Mode / tier | Checklist used |
 | --------------------------------- | --------- | ----------- |
-| Eval Agent 调用，输入为原始需求 / 纪要 / 想法    | 业务        | 「1.a 业务需求维度」 |
-| Tech Solution Agent，输入为 PRD，产 high-level 方案 | 技术 · PRD 级 | 「1.a 业务需求维度」补技术上下文 + 「1.b」PRD 级行 |
-| Tech Solution Agent，输入为 spike ticket | 技术 · Spike | 「1.b」Spike 行 |
-| Tech Solution Agent，输入为 Story＋AC，产明细方案 | 技术 · Story 明细 | 「1.b」Story 明细行 |
+| Called by Eval Agent, input is raw requirement / notes / idea | Business | "1.a Business-requirement dimensions" |
+| Tech Solution Agent, input is a PRD, producing a high-level solution | Tech · PRD level | "1.a Business-requirement dimensions" plus technical context + the "1.b" PRD-level rows |
+| Tech Solution Agent, input is a spike ticket | Tech · Spike | The "1.b" Spike rows |
+| Tech Solution Agent, input is Story+AC, producing a detailed solution | Tech · Story detail | The "1.b" Story-detail rows |
 
-首轮不得要求用户先整理信息——信息整理是本 Skill 的职责。并行读取原始需求、关联的 Jira/Confluence、Figma（若有）；技术模式并行读取代码仓库上下文与现有接口文档。
+Don't ask the user to organize the information first in the opening round—organizing information is this Skill's job. Read the raw requirement, linked Jira/Confluence, and Figma (if any) in parallel; in technical mode also read the code-repo context and existing interface docs in parallel.
 
-**执行体协议（交互能力自适应）**：批量提问依赖对话框控件，仅主 agent 具备。执行前先判定自身角色：
+**Executor protocol (interaction-capability adaptive)**: batched questioning depends on dialog controls, which only the main agent has. Before executing, judge your own role:
 
-| 执行体       | 是否有对话框控件 | 提问方式              | 是否可下澄清结论                        |
+| Executor | Has dialog controls | Question method | Can give a clarification conclusion |
 | --------- | -------- | ----------------- | ------------------------------- |
-| 主 agent   | 有        | 走「3. 批量提问」的对话框选项  | 可，收满答案后按「4. 假设登记与澄清结论」输出        |
-| sub-agent | 无        | 不弹框、不代替用户作答、不臆造答案 | 否，只产出「问题清单（机读交接格式）」并显式移交主 agent |
+| Main agent | Yes | Use the dialog options of "3. Ask batched questions" | Yes; once answers are collected, output per "4. Assumption logging and clarification conclusion" |
+| Sub-agent | No | No popups, don't answer for the user, don't fabricate answers | No; only produce a "question list (machine-readable handoff format)" and explicitly hand off to the main agent |
 
-sub-agent 承担无需用户交互的重活（读 Jira/Confluence/Figma、扫描缺口、检测冲突、生成机读问题清单），**禁止**自行认定澄清完成或自选默认值收敛；主 agent 逐轮弹框，收到答复后可用 `resume` 回传 sub-agent 做二次扫描。
+The sub-agent takes on the heavy lifting that needs no user interaction (reading Jira/Confluence/Figma, scanning for gaps, detecting conflicts, generating the machine-readable question list); it is **forbidden** to decide on its own that clarification is done or to self-select defaults to converge; the main agent pops up dialogs round by round and, after receiving answers, can use `resume` to hand back to the sub-agent for a second scan.
 
-**事实自查**：凡能从环境（代码仓库、接口文档、Figma、既有 Story、已确认的 PRD 级方案）查到的事实，由本 Skill 自行查证（必要时派 sub-agent），不作为问题抛给用户；查证可并行进行、不阻塞其它已就绪的提问。只有**需用户裁决的决策**才进入提问。技术模式下，接口现状、既有实现、依赖可用性属可查证事实，选型取舍、契约变更、Story 拆分粒度属需裁决的决策。
+**Fact self-check**: any fact obtainable from the environment (code repo, interface docs, Figma, existing Stories, the confirmed PRD-level solution) is verified by this Skill itself (dispatching a sub-agent if needed), not thrown to the user as a question; verification can run in parallel and doesn't block other ready questions. Only **decisions requiring the user's judgment** enter the questions. In technical mode, interface status, existing implementation, and dependency availability are verifiable facts, while selection trade-offs, contract changes, and Story-splitting granularity are decisions requiring judgment.
 
-**Figma 视觉事实**：输入含 Figma 链接时，**必须**通过 Figma MCP（`figma` server）读取设计内容（画板结构、界面状态、关键组件与字段、文案与交互标注），不基于链接推测，也不就设计细节直接追问用户。读取结果并入缺口扫描与冲突检测，比对界面、数据、角色场景等维度以识别需求与设计的不一致项，相关事实在澄清结论中标注来源为「设计稿」；设计稿缺失的界面状态登记为待确认，不判定为「无此状态」。若读取失败（无权限 / 链接失效 / MCP 不可用），将「设计事实未获取」登记为风险并继续其余维度，不阻断澄清。
+**Figma visual facts**: when the input contains a Figma link, you **must** read the design content via Figma MCP (the `figma` server) (board structure, screen states, key components and fields, copy and interaction annotations); don't infer from the link and don't directly ask the user about design details. The reading results are merged into the gap scan and conflict detection, comparing dimensions like screens, data, and role scenarios to identify inconsistencies between requirement and design; the related facts are annotated in the clarification conclusion with the source "design"; screen states missing from the design are logged as to-confirm, not judged as "no such state." If reading fails (no permission / broken link / MCP unavailable), log "design facts not obtained" as a risk and continue the other dimensions—don't block the clarification.
 
-### 1. 扫描缺口
+### 1. Scan for gaps
 
-按 S0 判定的模式取对应清单，逐维过下面的清单，判定 `COVERED / PARTIAL / MISSING`。**必须逐维判定，不得选择性抽查。**
+Take the corresponding checklist per the S0 judgment, go through the checklist below dimension by dimension, and judge `COVERED / PARTIAL / MISSING`. **You must judge every dimension; no selective spot-checking.**
 
-#### 1.a 业务需求维度（业务模式 / 技术-PRD 级的需求上下文）
+#### 1.a Business-requirement dimensions (business mode / the requirement context of tech-PRD level)
 
-| 维度         | COVERED 判据                 | 常见 MISSING 表现        |
+| Dimension | COVERED criteria | Common MISSING signs |
 | ---------- | -------------------------- | -------------------- |
-| 问题陈述       | 谁的什么问题、现在怎么解决、代价是什么        | 只有"做一个 XX 功能"        |
-| 目标与度量      | 1–3 条可量化目标，含当前值与目标值        | "提升效率""优化体验"         |
-| 范围与边界      | 明确 in/out-of-scope，按端拆分    | 未说明是否覆盖 Android / 后台 |
-| 角色与场景      | 角色 × 场景，覆盖主路径与异常路径         | 只有 happy path        |
-| 业务流程       | 分步流程，含触发条件与系统处理逻辑          | 只有界面没有流程             |
-| 界面与状态      | 有设计稿，设计稿定义的各状态（如加载/空/错误）齐全 | 只有 default 态         |
-| 数据与规则      | 字段、来源、校验、默认值、异常处理          | 只有字段列表               |
-| 集成与依赖      | 上下游系统、负责人、状态               | 默认"接口都有"             |
-| 非功能 / 安全合规 | 性能容量可用性有量化口径；权限、审计、数据分级明确  | 空白或只写"遵循规范"          |
-| 验收标准       | 可观察、可自动化、覆盖正反例与边界          | "功能正常""体验良好"         |
+| Problem statement | Whose problem, how it's solved now, what the cost is | Only "build an XX feature" |
+| Goals and metrics | 1–3 quantifiable goals, with current and target values | "improve efficiency," "optimize experience" |
+| Scope and boundaries | Clear in/out-of-scope, split by end | Doesn't say whether it covers Android / backend |
+| Roles and scenarios | Role × scenario, covering the main path and exception paths | Only the happy path |
+| Business flow | Step-by-step flow, with trigger conditions and system processing logic | Only screens, no flow |
+| Screens and states | Has designs; all states the design defines (loading/empty/error, etc.) are complete | Only the default state |
+| Data and rules | Fields, source, validation, defaults, exception handling | Only a field list |
+| Integration and dependencies | Upstream/downstream systems, owners, status | Assumes "all interfaces exist" |
+| Non-functional / security & compliance | Performance/capacity/availability have quantified metrics; permissions, auditing, data classification are clear | Blank or only "follow the spec" |
+| Acceptance criteria | Observable, automatable, covering positive/negative cases and boundaries | "works fine," "good experience" |
 
-#### 1.b 技术方案维度（技术模式，按档位取行）
+#### 1.b Tech-solution dimensions (technical mode, take rows by tier)
 
-澄清的是**决定方案走向的技术分歧点**，不是替方案撰写环节做设计。凡能从代码仓库 / 接口文档 / Figma 查到的技术事实先自查（见「事实自查」），只有需人裁决的技术决策才进入提问。
+What's clarified is the **technical disagreement points that decide the solution's direction**, not doing design for the authoring step. Any technical fact obtainable from the code repo / interface docs / Figma is self-checked first (see "Fact self-check"); only technical decisions requiring human judgment enter the questions.
 
-| 维度            | 适用档位            | COVERED 判据                              | 常见 MISSING 表现               |
+| Dimension | Applicable tier | COVERED criteria | Common MISSING signs |
 | ------------- | --------------- | --------------------------------------- | --------------------------- |
-| 架构方向与选型       | PRD 级           | 模块划分、上下游、关键技术选型方向已定或已给候选               | 只有需求没有实现方向                  |
-| 接口 / 数据契约边界   | PRD 级 / Story 明细 | 接口/方法/用途/上下游已定；Story 明细还需字段级、错误码、空值兜底   | 只有"调个接口"，字段与失败分支未定          |
-| 依赖与集成         | 全部              | 上下游系统、负责人、可用性、safelist 状态已确认           | 默认"依赖都就绪"                   |
-| STB / ARB 触发判定 | PRD 级           | 引入新云服务 / 三方库是否触发评审已有结论（不确定按触发）         | 未判定，Release 计划无评审时间         |
-| 复杂点是否转 Spike  | PRD 级           | 无法定论的技术点已识别，边界与判定标准清楚                  | 把无法定论的点当已定方案写下去            |
-| 调研目标与判定标准     | Spike           | 要回答的关键问题可判定，判定标准与时间盒明确                 | "研究一下 X"，无判定标准也无时间盒         |
-| 评估维度与候选方案     | Spike           | 评估维度已定，至少 2 个候选方案的边界清楚                 | 只有一个方案，或维度缺失无法对比            |
-| 任务拆解边界        | Story 明细        | 可拆成可独立验收的任务，粒度与验收口径清楚                  | 一个大任务无法验收                   |
-| 兜底与非功能        | Story 明细        | 失败/空值兜底、性能缓存鉴权、Feature Flag 读取失败行为已定 | 只给成功路径，无兜底与降级              |
-| 兼容与迁移         | 全部              | 新旧版本共存策略、数据迁移与回滚已定（团队要求内容模型时含内容迁移）    | 未考虑存量数据与回滚                  |
+| Architecture direction and selection | PRD level | Module partition, upstream/downstream, key tech-selection direction decided or candidates given | Only requirements, no implementation direction |
+| Interface / data contract boundaries | PRD level / Story detail | Interface/method/purpose/upstream-downstream decided; Story detail also needs field-level, error codes, null fallbacks | Only "call an interface," fields and failure branches undecided |
+| Dependencies and integration | All | Upstream/downstream systems, owners, availability, safelist status confirmed | Assumes "dependencies are all ready" |
+| STB / ARB trigger decision | PRD level | A conclusion on whether a new cloud service / third-party library triggers review (if unsure, treat as triggered) | Not judged, no review time in the release plan |
+| Whether a complex point becomes a Spike | PRD level | Undecidable technical points identified, boundaries and decision criteria clear | Writing undecidable points down as a decided solution |
+| Research goal and decision criteria | Spike | The key questions to answer are decidable, decision criteria and time box clear | "research X," no decision criteria and no time box |
+| Evaluation dimensions and candidate solutions | Spike | Evaluation dimensions decided, at least 2 candidate solutions with clear boundaries | Only one solution, or missing dimensions making comparison impossible |
+| Task-breakdown boundaries | Story detail | Can split into independently acceptable tasks, granularity and acceptance metric clear | One big task that can't be accepted |
+| Fallbacks and non-functional | Story detail | Failure/null fallbacks, performance/cache/auth, Feature Flag read-failure behavior decided | Only the success path, no fallback or degradation |
+| Compatibility and migration | All | New/old version coexistence strategy, data migration and rollback decided (with content migration when the team requires a content model) | Doesn't consider existing data and rollback |
 
-### 2. 检测冲突
+### 2. Detect conflicts
 
-至少查下列类型，找到即列给用户裁决。技术模式额外查技术类冲突。
+Check at least the following types; when found, list them for the user to decide. Technical mode additionally checks technical conflicts.
 
-| 冲突类型 | 例子                          |
+| Conflict type | Example |
 | ---- | --------------------------- |
-| 自相矛盾 | 需求说"所有用户可见"，AC 里又写"仅会员可见"   |
-| 度量冲突 | 目标"减少操作步骤"，方案却增加一步确认弹窗      |
-| 约束冲突 | "首屏 1 秒加载" + "首屏展示 8 个实时接口" |
-| 方案与需求冲突（技术） | PRD 要求离线可用，方案却强依赖实时接口       |
-| 契约不一致（技术） | Story 明细字段与既有接口 / PRD 级方案契约不一致 |
-| 依赖不可用（技术） | 方案依赖的上游接口尚未 safelist 或未上线   |
+| Self-contradiction | The requirement says "visible to all users," but the AC says "visible only to members" |
+| Metric conflict | The goal is "reduce steps," but the solution adds a confirmation popup step |
+| Constraint conflict | "first screen loads in 1s" + "first screen shows 8 real-time interfaces" |
+| Solution-vs-requirement conflict (technical) | The PRD requires offline availability, but the solution hard-depends on real-time interfaces |
+| Contract inconsistency (technical) | Story-detail fields don't match the existing interface / PRD-level solution contract |
+| Dependency unavailable (technical) | An upstream interface the solution depends on isn't safelisted or isn't live yet |
 
-### 3. 批量提问
+### 3. Ask batched questions
 
-先按依赖关系与阻塞级别排序，再一次性输出本轮完整清单，**禁止一问一答逐条追问**：
+First sort by dependency and blocking level, then output the full list for this round at once; **one-at-a-time serial questioning is forbidden**:
 
-- **依赖排序**：只问「前置条件已定」的问题——即当前不依赖任何本轮未决答案、可直接回答的问题。若某问题的答案取决于本轮另一个尚未回答的问题，则推入后续轮次，本轮不问（避免问了个会被推翻的问题）。
-- **阻塞级别**：按下表分级，P0 优先。
+- **Dependency sorting**: ask only questions "whose preconditions are decided"—i.e. those that don't depend on any unresolved answer in this round and can be answered directly. If a question's answer depends on another question not yet answered this round, push it to a later round and don't ask it this round (to avoid asking a question that will be overturned).
+- **Blocking level**: grade per the table below, P0 first.
 
-| 级别        | 含义                       | 处理                      |
+| Level | Meaning | Handling |
 | --------- | ------------------------ | ----------------------- |
-| **P0 阻塞** | 答案不同会导致方案完全不同或返工         | 必须回答，未闭合不得进入下一环节        |
-| **非阻塞**   | 不改变方向，仅影响工作量/排期，或有行业通行做法 | 给推荐默认值并登记为假设，用户可沿用或事后推翻 |
+| **P0 blocking** | A different answer leads to a completely different solution or rework | Must be answered; can't move to the next step while unclosed |
+| **Non-blocking** | Doesn't change direction, only affects effort/schedule, or has an industry-standard practice | Give a recommended default and log it as an assumption; the user can keep it or overturn it later |
 
-每轮 P0 不超过 5 个（含非阻塞项一轮总量不超过 8 个），超出则分批、先问 P0。
+Each round has at most 5 P0s (at most 8 total per round including non-blocking items); if exceeded, batch them and ask P0s first.
 
-**呈现方式（硬约束）**：主 agent 必须用结构化选项控件（question / 选项卡）把本轮全部问题一次性发出、让用户点选，**不得写成纯文本正文让用户手敲**；仅当问题本质是开放式量化取值（如目标转化率）无法枚举时，才退化为文本输入项并在题面写清期望格式。sub-agent 无控件，按「问题清单（机读交接格式）」输出交主 agent 弹框（见执行体协议）。
+**Presentation (hard constraint)**: the main agent must send all questions of the round at once using structured option controls (question / option cards) for the user to click; it **must not** write them as plain-text body for the user to type; only when a question is inherently an open-ended quantitative value (like a target conversion rate) that can't be enumerated does it degrade to a text input, with the expected format stated in the prompt. The sub-agent has no controls; it outputs per the "question list (machine-readable handoff format)" and hands off to the main agent to pop up (see executor protocol).
 
-每题承载四要素，按下面骨架发出（实际以对话框选项呈现）：题面写「问题」（闭合式优先），补充写「为什么问」，候选项首项为推荐默认并标「（推荐）」、末尾附「其他（自定义）」兜底，可多选的显式标注。
+Each question carries four elements, sent per the skeleton below (actually presented as dialog options): the prompt writes the "question" (closed-form preferred), the note writes "why ask," the first candidate is the recommended default marked "(recommended)," a "other (custom)" fallback is appended at the end, and multi-select is explicitly marked.
 
 ```markdown
-### Q{n} · [{P0 | 非阻塞}] · {维度}
-**问题**：{一句话，闭合式优先}
-**为什么问**：{这个答案会改变什么}
-**选项（对话框点选）**：A. {推荐默认}（推荐） B. … C. … · 其他（自定义）
+### Q{n} · [{P0 | non-blocking}] · {dimension}
+**Question**: {one line, closed-form preferred}
+**Why ask**: {what this answer changes}
+**Options (click in dialog)**: A. {recommended default} (recommended) B. … C. … · other (custom)
 ```
 
-禁止：只给默认值而不提问（等同于把判定项变成填空项）、提问「是否还有补充」这类无信息量问题、将非阻塞问题包装为 P0 强制用户回答。
+Forbidden: giving only a default without asking (equivalent to turning a decision item into a fill-in item), asking no-information questions like "anything else to add," and packaging a non-blocking question as P0 to force the user to answer.
 
-**问题清单（机读交接格式）**：sub-agent 按下面这段 JSON 输出（放在返回体内，主 agent 据此逐题弹框）。字段：`round` 本轮轮次；`questions[]` 每题含 `id`、`level`(`P0`/`非阻塞`)、`dimension` 维度、`prompt` 题面、`why` 为什么问、`allow_multiple` 是否多选、`options[]`（首项为推荐默认，`recommended:true`）、`open_input`（题面无法枚举时为 `true` 并在 `prompt` 写明期望格式）。主 agent 逐题映射为对话框选项并自动补「其他（自定义）」，`options` 无需写「其他」。
+**Question list (machine-readable handoff format)**: the sub-agent outputs the JSON block below (inside the return body; the main agent pops up each question accordingly). Fields: `round` this round's number; `questions[]` each with `id`, `level` (`P0`/`非阻塞`), `dimension`, `prompt`, `why`, `allow_multiple` (multi-select), `options[]` (the first is the recommended default, `recommended:true`), `open_input` (`true` when the prompt can't be enumerated, with the expected format stated in `prompt`). The main agent maps each question to dialog options and auto-appends "other (custom)"; `options` need not include "other."
 
 ```json
 {
@@ -194,77 +198,77 @@ sub-agent 承担无需用户交互的重活（读 Jira/Confluence/Figma、扫描
 }
 ```
 
-### 4. 假设登记与澄清结论
+### 4. Assumption logging and clarification conclusion
 
-凡是未问到、未答清、或用户采用了默认值的项，全部登记。假设登记不构成免责，每条须写明「推翻成本」，供用户判断是否值得当下确认。
+Log every item that wasn't asked, wasn't answered clearly, or where the user took a default. Assumption logging doesn't grant an exemption; each entry must state its "cost to overturn" so the user can judge whether it's worth confirming now.
 
-在对话里直接给出下面这段结论（不写文件、不发布），它就是交给 PRD 撰写或技术方案撰写环节的输入：
+Give the following conclusion directly in the conversation (don't write a file, don't publish); it is the input to the PRD-authoring or tech-solution-authoring step:
 
 ```markdown
-## 1. 已确认结论
-{按维度列出，每条一句话，标注来源：原始需求 / 第 n 轮回答 / 设计稿 / 代码事实 / 接口文档}
+## 1. Confirmed conclusions
+{Listed by dimension, one line each, annotated with source: raw requirement / round-n answer / design / code fact / interface doc}
 
-## 2. 冲突与裁决
-| 冲突 | 选项 | 裁决 | 裁决人 |
+## 2. Conflicts and decisions
+| Conflict | Options | Decision | Decider |
 |------|------|------|--------|
 
-## 3. 待确认（P0 未闭合，无则写「无」）
+## 3. To confirm (P0 unclosed; write "none" if none)
 
-## 4. 假设登记
-| # | 假设 | 依据 | 影响面 | 推翻成本 |
+## 4. Assumption log
+| # | Assumption | Basis | Impact | Cost to overturn |
 |---|------|------|--------|----------|
 
-## 5. 下一步
-→ P0 全部闭合，进入对应撰写环节，上面这段即其输入：
-   · 业务模式 → PRD 撰写环节
-   · 技术 · PRD 级 → PRD 级技术方案撰写环节
-   · 技术 · Spike → Spike 调研撰写环节
-   · 技术 · Story 明细 → Story 级明细方案撰写环节
-→ 否则：继续下一轮，或退回上游（需求方 / TL）补齐
+## 5. Next step
+→ All P0s closed, enter the corresponding authoring step; the block above is its input:
+   · Business mode → PRD-authoring step
+   · Tech · PRD level → PRD-level tech-solution authoring step
+   · Tech · Spike → Spike research authoring step
+   · Tech · Story detail → Story-level detailed-solution authoring step
+→ Otherwise: continue to the next round, or return upstream (requester / TL) to complete
 ```
 
-## 4. 收敛规则
+## 4. Convergence rules
 
-- **轮次上限 3 轮**。第 1 轮扫全部维度出缺口清单，第 2 轮对上轮回答做二次扫描（上轮答案会解锁原本依赖它的问题，并可能引入新缺口），第 3 轮只问仍未闭合的 P0 并给假设登记。第 4 轮起停止提问，把未决项写成风险表交人工确认。超过 3 轮通常表明输入质量不足，应退回上游补齐。
-- **放行门槛**：P0 全部闭合才放行到对应撰写环节；仍有 P0 未闭合则不放行，无论其它维度多齐。若维度大面上齐了但个别非 P0 项待定，可放行但要求下游产物保留「待确认」章节。sub-agent 无对话框控件，不得独自认定 P0 已闭合或放行，只能移交主 agent 由用户作答后判定。
-- **每个问题必须带推荐默认值**。
-- **不臆造业务规则与技术方案**。没查到也没问到的一律进假设登记，不能写进「已确认结论」；技术分歧点未定的登记为待确认或 spike，不替方案撰写环节拍板选型。
-- **区分事实与推断**。来自代码/文档/接口/原话的标来源；AI 推断的显式标注。
-- **敏感信息不过问也不记录**。遇到手机号、账号等真实数据，只确认「是否需要该字段」，不记录值。
+- **Round cap of 3**. Round 1 scans all dimensions to produce the gap list; round 2 does a second scan of the previous round's answers (which unlock questions that depended on them and may introduce new gaps); round 3 asks only the still-unclosed P0s and gives the assumption log. From round 4 on, stop asking and write the open items into a risk table for human confirmation. Exceeding 3 rounds usually means the input quality is insufficient and should be returned upstream to complete.
+- **Release threshold**: release to the corresponding authoring step only when all P0s are closed; if any P0 is unclosed, don't release, no matter how complete the other dimensions are. If the dimensions are broadly complete but a few non-P0 items are pending, you may release but require the downstream product to keep a "to confirm" section. The sub-agent has no dialog controls and must not decide on its own that P0s are closed or release; it can only hand off to the main agent for the user to answer and then judge.
+- **Every question must carry a recommended default.**
+- **Don't fabricate business rules or technical solutions.** Anything neither found nor asked goes into the assumption log, not "confirmed conclusions"; undecided technical disagreement points are logged as to-confirm or a spike, not deciding the selection for the authoring step.
+- **Distinguish fact from inference.** Facts from code/docs/interfaces/original words are annotated with source; AI inferences are explicitly marked.
+- **Don't ask about or record sensitive info.** For real data like phone numbers or accounts, only confirm "whether that field is needed," don't record the value.
 
-## 5. 质量门禁
+## 5. Quality gates
 
-调用 `references/quality-gates.md`。澄清结论的最低要求：每个维度都有判定、假设表非空（或有显式「无假设」）、待确认项全部标注责任方。
+Call `references/quality-gates.md`. The minimum for a clarification conclusion: every dimension has a judgment, the assumption table is non-empty (or has an explicit "no assumptions"), and all to-confirm items are annotated with an owner.
 
-## 6. 输出示例
+## 6. Output example
 
 ```markdown
-**轮次**：2/3
+**Round**: 2/3
 
-## 已确认结论
-- 问题陈述：会员无法在一个入口看到全部可用权益（来源：原始需求第 1 段）
-- 目标：权益页转化率从 12% 提升到 18%（来源：第 2 轮回答）
+## Confirmed conclusions
+- Problem statement: members can't see all available benefits in one entry (source: raw requirement, paragraph 1)
+- Goal: benefits-page conversion up from 12% to 18% (source: round-2 answer)
 
-## 冲突与裁决
-| 冲突 | 选项 | 裁决 |
+## Conflicts and decisions
+| Conflict | Options | Decision |
 |------|------|------|
-| 「所有用户可见」vs「仅会员可见」 | A 全量 B 会员 | 待 PO 裁决 |
+| "visible to all" vs "members only" | A all B members | Pending PO decision |
 
-## 待确认（P0）
-- Q3 是否包含 Android 端？
+## To confirm (P0)
+- Q3 Does it include Android?
 
-## 假设登记
-| # | 假设 | 依据 | 推翻成本 |
+## Assumption log
+| # | Assumption | Basis | Cost to overturn |
 |---|------|------|----------|
-| A1 | 首期只做 iOS | 范围表只勾了 iOS | 低：补一份 Scope |
+| A1 | First release does iOS only | The scope table checked only iOS | Low: add a Scope entry |
 
-## 下一步
-→ P0 未闭合（Q3），暂不放行。请先回答 Q3。
+## Next step
+→ P0 unclosed (Q3), not released yet. Please answer Q3 first.
 ```
 
-用户答完 Q3 后继续下一轮，P0 全部闭合后直接进对应撰写环节（业务模式进 PRD 撰写；技术模式按档进 PRD 级 / Spike / Story 明细方案撰写）。
+After the user answers Q3, continue to the next round; once all P0s are closed, go straight to the corresponding authoring step (business mode -> PRD authoring; technical mode -> PRD level / Spike / Story detail per tier).
 
-## 7. 相关
+## 7. Related
 
-- 下一环节（业务模式）：prd-authoring
-- 下一环节（技术模式）：tech-solution-prd / tech-solution-spike / tech-solution-detail
+- Next step (business mode): prd-authoring
+- Next step (technical mode): tech-solution-prd / tech-solution-spike / tech-solution-detail

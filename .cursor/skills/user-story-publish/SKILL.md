@@ -1,172 +1,173 @@
 ---
 name: user-story-publish
 description: >-
-  从准备好的 Story 清单在 Jira 建单：幂等查重、填必填字段、建立链接
-  （父 Epic 加上团队配置声明的链接集合）、执行技术方案发布遗留的待回写项，
-  并让 Story 停在团队配置的初始状态。当用户要求创建 Jira 工单、推送 Story 到 Jira
-  或同步 Story 时使用；触发词：创建 Jira / 建工单 / 推送 Story 到 Jira / 建单 / create jira ticket。
+  Create tickets in Jira from a prepared Story list: idempotent dedup, fill required fields,
+  establish links (the parent Epic plus the link set declared by the team config), execute the
+  write-back items left by the tech-solution publishing step, and leave the Story in the
+  team-configured initial status. Use when the user asks to create Jira tickets, push Stories to
+  Jira, or sync Stories;
+  triggers: 创建 Jira / 建工单 / 推送 Story 到 Jira / 建单 / create jira ticket.
 metadata:
   agent: UserStory Agent
 ---
 
-# User Story Publish — Jira 建单
+# User Story Publish — Jira ticket creation
 
-把已确认的 Story 清单在 Jira 建单、填字段、建回链，并代执行技术方案发布遗留的回写项。
+Create tickets in Jira from the confirmed Story list, fill fields, establish back-links, and execute the write-back items left by the tech-solution publishing step on its behalf.
 
-| 维度 | 说明 |
+| Dimension | Description |
 |------|------|
-| 定位 | 幂等建单 + 填字段 + 建 link（Parent Epic + 团队声明的链接集合）+ 状态流转 |
-| 输入 | 上游 User Story 撰写环节产出的 Story 清单（已过 PO 确认）+ 团队 Jira 配置 |
-| 产出 | Jira 工单（新建 / 跳过）+ 回报（含待回写内容） |
-| 权限 | 本环节有 Jira 写权限；对 Confluence 为只读，需求文档附录回写产出内容交有权限环节执行 |
+| Purpose | Idempotent ticket creation + fill fields + establish links (Parent Epic + the team-declared link set) + status transition |
+| Input | The Story list produced by the upstream User Story authoring step (PO-confirmed) + the team's Jira config |
+| Output | Jira tickets (created / skipped) + a report (with pending write-back content) |
+| Permission | This step has Jira write access; it is read-only on Confluence, so the requirements-doc appendix write-back only produces content, handed to a step with permission |
 
-## 0. 配置取值
+## 0. Config values
 
-`{profile}` 为当前 profile 文件名（不含扩展名，如 `app-prod` / `cms-test`），由调用方通过 `profile-select` skill 解析并传入（`profile.py resolve` 给出其绝对路径）；未传入或对应文件不存在 → 阻断，不猜测。
+`{profile}` is the current profile file name (without extension, like `app-prod` / `cms-test`), resolved and passed in by the caller via the `profile-select` skill (`profile.py resolve` gives its absolute path); if it isn't passed in or the file doesn't exist -> block, don't guess.
 
-| 用途 | 键 |
+| Purpose | Key |
 |------|----|
-| Jira 站点 | `profiles/{profile}.yaml` → `mcp.jira.host` |
-| Jira 项目 | 默认从 Parent Epic key 前缀推导（如 Parent=CNAPP-5661 → 项目 CNAPP）；`profiles/{profile}.yaml` → `mcp.jira.project_key` 存在时作为覆盖值 |
-| 工单类型 | `profiles/{profile}.yaml` → `mcp.jira.issue_type` |
-| 建单后初始状态 | `profiles/{profile}.yaml` → `mcp.jira.initial_status` |
-| Agile Team 默认值 | `profiles/{profile}.yaml` → `mcp.jira.agile_team`（为空表示无默认，需人工填写） |
-| 标签枚举与自动填充策略 | `profiles/{profile}.yaml` → `mcp.jira.labels`（合法枚举、大小写敏感、`auto_fill` 允许自动填的类别） |
-| 需建立的链接集合 | `profiles/{profile}.yaml` → `mcp.jira.links` |
+| Jira site | `profiles/{profile}.yaml` → `mcp.jira.host` |
+| Jira project | By default derived from the Parent Epic key prefix (like Parent=CNAPP-5661 → project CNAPP); when `profiles/{profile}.yaml` → `mcp.jira.project_key` exists, it's used as an override |
+| Ticket type | `profiles/{profile}.yaml` → `mcp.jira.issue_type` |
+| Initial status after creation | `profiles/{profile}.yaml` → `mcp.jira.initial_status` |
+| Agile Team default | `profiles/{profile}.yaml` → `mcp.jira.agile_team` (empty means no default, needs manual entry) |
+| Label enum and auto-fill policy | `profiles/{profile}.yaml` → `mcp.jira.labels` (valid enum, case sensitivity, the `auto_fill` categories allowed to be auto-filled) |
+| The link set to establish | `profiles/{profile}.yaml` → `mcp.jira.links` |
 
-## 1. 前置检查
+## 1. Pre-checks
 
-| # | 检查 |
+| # | Check |
 |---|------|
-| 1 | 每条 Story 有 Parent、≥3 条 AC、字段无缺失 |
-| 2 | 全文无真实密钥、内网域名、真实会员号、真实手机号 |
-| 3 | **PO 已确认** Story 清单（批量建单前必须有明确确认） |
-| 4 | 目标 Jira 项目可确定：每条 Story 有可解析的 Parent Epic key（推导出项目），或 `mcp.jira.project_key` 已配置为覆盖值；两者皆无则停止并要求补齐 |
-| 5 | Jira 认证可用（`mcp_auth` 失败即停止） |
+| 1 | Each Story has a Parent, >= 3 ACs, no missing fields |
+| 2 | No real secrets, internal domains, real member IDs, or real phone numbers anywhere |
+| 3 | **The PO has confirmed** the Story list (there must be explicit confirmation before batch creation) |
+| 4 | The target Jira project can be determined: each Story has a resolvable Parent Epic key (deriving the project), or `mcp.jira.project_key` is configured as an override; if neither, stop and require it to be completed |
+| 5 | Jira auth is available (stop if `mcp_auth` fails) |
 
-## 2. 工作流
+## 2. Workflow
 
 ```
-- S1 前置检查
-- S2 逐条查重（Parent + 摘要）
-- S3 创建工单
-- S4 填字段
-- S5 建链接（Epic + 遍历团队配置的链接集合）
-- S6 回写（需求文档附录 + 技术方案遗留回链）
-- S7 状态：停在初始状态
-- S8 回报
+- S1 Pre-checks
+- S2 Dedup one by one (Parent + summary)
+- S3 Create tickets
+- S4 Fill fields
+- S5 Establish links (Epic + go through the team-configured link set)
+- S6 Write back (requirements-doc appendix + tech-solution's leftover back-links)
+- S7 Status: leave in the initial status
+- S8 Report
 ```
 
-### S2 幂等查重
+### S2 Idempotent dedup
 
-创建前逐条查重，避免重复建单。`{project}` 取自 Parent Epic key 前缀（或 `mcp.jira.project_key` 覆盖值）：
+Dedup one by one before creating, to avoid duplicate tickets. `{project}` comes from the Parent Epic key prefix (or the `mcp.jira.project_key` override):
 
 ```text
-project = "{project}" AND summary ~ "{摘要}" AND parent = "{Epic key}"
+project = "{project}" AND summary ~ "{summary}" AND parent = "{Epic key}"
 ```
 
-| 结果 | 动作 |
+| Result | Action |
 |------|------|
-| 0 条 | 创建 |
-| 1 条 | 跳过，报告已存在的 key，不更新（避免覆盖人工修改） |
-| ≥2 条 | 停止并交用户裁决 |
+| 0 | Create |
+| 1 | Skip, report the existing key, don't update (to avoid overwriting manual edits) |
+| >=2 | Stop and hand to the user to decide |
 
-> 已存在时默认**不更新**。仅当用户明确要求更新时才进入编辑流程。
+> When one already exists, **don't update** by default. Only enter the edit flow when the user explicitly asks to update.
 
-### S3/S4 字段
+### S3/S4 Fields
 
-按 Story 模板的字段表写入：
+Write per the Story template's field table:
 
-| 字段 | 处理 |
+| Field | Handling |
 |------|------|
-| Type | 取 `mcp.jira.issue_type` |
-| Parent | 必须填 Epic |
-| Agile Team | 按 `mcp.jira.agile_team`：有值即填，为空则留空待人工填写 |
-| Component | 按 `mcp.jira.components.platform_rule`；未配置 `components` 的团队不处理 |
-| 优先级 | 不填 |
-| 标签 | 按 `mcp.jira.labels`（合法枚举、`case_sensitive`、`auto_fill` 类别、`business_domain` 门禁、`ai_provenance` 溯源标签均由该配置键定义）。**建单期强制**：`auto_apply: always` 的类别（如 `ai_provenance` → `AIGenerated`）无条件恒定打上，标记经 agent 创建/同步的工单；`business_domain.filter_gate` 为 true 时缺失该类别即停、不建单；命中枚举外标签即停并按 `labels.source` 对齐 |
-| Acceptance Criteria | 支持 Markdown；按 Story 清单里给定的 AC 原文写入（三要素：前置条件/操作/可观察结果） |
-| 描述 | 团队要求描述自成一体时须自带完整背景；排版规范见下 |
-| 估点字段 / 发布字段 | 不填（发布流程回填） |
+| Type | Take `mcp.jira.issue_type` |
+| Parent | Must fill the Epic |
+| Agile Team | Per `mcp.jira.agile_team`: fill if it has a value, leave empty for manual entry if empty |
+| Component | Per `mcp.jira.components.platform_rule`; teams without `components` configured don't handle it |
+| Priority | Don't fill |
+| Labels | Per `mcp.jira.labels` (the valid enum, `case_sensitive`, `auto_fill` categories, the `business_domain` gate, and the `ai_provenance` provenance label are all defined by this config key). **Mandatory at creation time**: categories with `auto_apply: always` (like `ai_provenance` → `AIGenerated`) are applied unconditionally, marking tickets created/synced by the agent; when `business_domain.filter_gate` is true, a missing category stops creation; hitting a label outside the enum stops, align per `labels.source` |
+| Acceptance Criteria | Supports Markdown; write the AC text as given in the Story list (three elements: precondition/action/observable result) |
+| Description | When the team requires self-contained descriptions, it must carry full background; see the layout spec below |
+| Estimation fields / Release fields | Don't fill (back-filled by the release flow) |
 
-**描述排版规范**：
+**Description layout spec**:
 
-- 用户故事句式关键词（`As a` / `When`（或 `For`）/ `I will be able to` / `So that`）与各小节标题（如 `【背景】`/`【范围】`/`【数据契约（概览）】`/`【性能】`/`【链接的工作项 / 参考文档】`）一律加粗。
-- 提交方式：Jira 描述为 ADF，纯文本里的 `**` 不会渲染为加粗。用 `editJiraIssue` / `createJiraIssue` 的 `contentFormat: "markdown"`（Jira 自动转 ADF），或直接构造 ADF `strong` mark；不要把 `**xxx**` 当纯文本提交。
+- The user-story sentence keywords (`As a` / `When` (or `For`) / `I will be able to` / `So that`) and each subsection heading (like `【背景】`/`【范围】`/`【数据契约（概览）】`/`【性能】`/`【链接的工作项 / 参考文档】`) are all bold.
+- Submission method: the Jira description is ADF, and `**` in plain text won't render as bold. Use `editJiraIssue` / `createJiraIssue` with `contentFormat: "markdown"` (Jira auto-converts to ADF), or construct the ADF `strong` mark directly; don't submit `**xxx**` as plain text.
 
-### S5 建链接
+### S5 Establish links
 
-先建 Parent（Epic，层级），再遍历团队配置的链接集合逐个建链，
-链接类型按团队配置：
+First establish the Parent (Epic, hierarchy), then go through the team-configured link set and establish each; the link types follow the team config:
 
-| link | 目标 |
+| link | Target |
 |------|------|
-| `prd` | Confluence PRD 页（仅当团队配置要求建该链接） |
-| `figma` | 设计稿 URL |
-| `tech_solution` | Confluence 技术方案页 |
+| `prd` | The Confluence PRD page (only when the team config requires this link) |
+| `figma` | The design URL |
+| `tech_solution` | The Confluence tech-solution page |
 
-> 团队配置的链接集合里没有的项自动不建链接，无需在流程中另写分支。
+> Items not in the team-configured link set are automatically not linked; no need to write a separate branch in the flow.
 
-**回链落点规范**（`prd` / `figma` / `tech_solution` 指向 Confluence 页或外部 URL，非 Jira issue）：
+**Back-link landing spec** (`prd` / `figma` / `tech_solution` point to a Confluence page or an external URL, not a Jira issue):
 
-- **Parent（Epic）**：用层级父子关系（`parent` 字段，issue↔issue），正常建。
-- **URL 回链**：写入目标工单描述的「链接的工作项 / 参考文档」小节（正文内、随工单沉淀）；`tech_solution` 回链对 detail（写入 Story）与 spike（写入 spike ticket）写入方式一致，均落在描述小节。**必须是可点击超链接**：markdown 提交写 `[显示文字](URL)`，或构造带 `link` mark 的 ADF；禁止裸 URL（仅靠前端 autolink，导出 / API 读取时退化为不可点击文本）。若 MCP 支持写 Jira Web 远程链接，可同时在 Links 区域建一条。
-- **禁止塞进评论**：评论不是正规回链落点，易被淹没；spike 结论回链同样写描述小节、不写评论；仅当描述不可写时才退而用评论并在回报说明。
-- 某类别无对应链接则写「未提供（待补充）」占位，不留空、不臆造。
+- **Parent (Epic)**: use the hierarchy parent-child relation (the `parent` field, issue<->issue), established normally.
+- **URL back-links**: write into the "链接的工作项 / 参考文档" subsection of the target ticket description (in the body, persisted with the ticket); the `tech_solution` back-link is written the same way for detail (into the Story) and spike (into the spike ticket), both in the description subsection. **Must be a clickable hyperlink**: for markdown submission write `[display text](URL)`, or construct ADF with a `link` mark; bare URLs are forbidden (relying only on frontend autolink, they degrade to non-clickable text on export / API read). If MCP supports writing Jira Web remote links, you may also add one in the Links area.
+- **Don't stuff into comments**: comments aren't a proper back-link spot and are easily buried; the spike conclusion back-link is likewise written in the description subsection, not a comment; only when the description can't be written should you fall back to a comment and note it in the report.
+- If a category has no corresponding link, write the placeholder "未提供（待补充）"; don't leave it empty, don't fabricate.
 
-### S6 回写
+### S6 Write back
 
-1. **需求文档附录 Jira link**：把本 PRD 对应的 **Epic key** 写回需求文档附录的 Jira link 字段（该字段仅放 Epic，不写 Story key）。Story 自身的回链在 S5 已挂到各条 Story 上，不反向灌入 PRD 附录。
-2. **技术方案回链**：执行技术方案发布环节留下的「待回写内容」，spike 与 detail 写入方式一致——均写进对应工单**描述**的「链接的工作项 / 参考文档」小节（可点击超链接，见 S5 回链落点规范）：
-   - （detail 场景）Story → Tech Solution 链接，写入该 Story 描述的回链小节
-   - （spike 场景）Spike → Tech Solution 链接，写入 spike ticket 描述的回链小节
+1. **Requirements-doc appendix Jira link**: write this PRD's **Epic key** back to the Jira link field in the requirements-doc appendix (that field holds only the Epic, not Story keys). Each Story's own back-link is already attached to it in S5 and isn't back-fed into the PRD appendix.
+2. **Tech-solution back-links**: execute the "pending write-back content" left by the tech-solution publishing step; spike and detail are written the same way—both into the "链接的工作项 / 参考文档" subsection of the corresponding ticket **description** (a clickable hyperlink, see the S5 back-link landing spec):
+   - (detail case) Story -> Tech Solution link, into that Story's description back-link subsection
+   - (spike case) Spike -> Tech Solution link, into the spike ticket's description back-link subsection
 
-> 回写 Confluence 需要写权限，本环节对 Confluence 为只读（R）：只产出回写内容并提示，由有 Confluence 写权限的环节执行。
+> Writing back to Confluence needs write access, and this step is read-only (R) on Confluence: it only produces the write-back content and a prompt, done by a step with Confluence write access.
 
-### S7 状态流转
+### S7 Status transition
 
-建单后停在 `mcp.jira.initial_status` 指定的初始状态。
-不自动向后流转，排期由 PO 决策。
+After creation, leave in the initial status designated by `mcp.jira.initial_status`.
+Don't auto-transition forward; the schedule is a PO decision.
 
-## 3. 规则
+## 3. Rules
 
-| 规则 | 说明 |
+| Rule | Description |
 |------|------|
-| 批量建单需 PO 确认 | 未经确认不执行 |
-| 不删除、不重构字段 | 只填值、建链接、加评论，不改字段结构 |
-| 已存在则跳过 | 不覆盖人工修改 |
-| 失败即停 | 部分失败时报告已建清单，不重试已成功的项 |
-| 敏感信息阻断 | 命中真实密钥 / 真实会员号即停，不脱敏后继续 |
-| 不估点 | 需人工估点的字段一律留空 |
-| 常量不硬编码 | 目标项目从 Parent Epic key 推导（或团队配置覆盖）；链接类型 / 初始状态取自团队配置 |
+| Batch creation needs PO confirmation | Don't execute without confirmation |
+| Don't delete or restructure fields | Only fill values, establish links, add comments; don't change field structure |
+| Skip if it exists | Don't overwrite manual edits |
+| Stop on failure | On partial failure report the created list, don't retry the succeeded ones |
+| Sensitive-info block | A hit on real secrets / real member IDs stops; don't redact and continue |
+| Don't estimate | Leave any field requiring human estimation empty |
+| Don't hardcode constants | The target project is derived from the Parent Epic key (or the team-config override); link types / initial status come from the team config |
 
-## 4. 输出回报
+## 4. Output report
 
 ```markdown
-已创建 {n} 条 Story（跳过 {m} 条重复）
+Created {n} Stories (skipped {m} duplicates)
 
-| Story | Jira Key | 状态 |
+| Story | Jira Key | Status |
 |-------|----------|------|
-| {摘要} | {key} | {初始状态} |
+| {summary} | {key} | {initial status} |
 
-- **跳过**：{摘要} 已存在 → {key}
-- **链接**：Epic 已建 / {逐项列出链接集合的状态}
-- **待回写**：{需求文档附录 Jira link 需由有 Confluence 写权限的环节写入 / 无}
-- **未填字段**：{需人工估点的字段列表}
+- **Skipped**: {summary} already exists → {key}
+- **Links**: Epic established / {list each link-set item's status}
+- **Pending write-back**: {the requirements-doc appendix Jira link needs to be written by a step with Confluence write access / none}
+- **Unfilled fields**: {the list of fields requiring human estimation}
 ```
 
-## 5. 故障处理
+## 5. Troubleshooting
 
-| 现象 | 处理 |
+| Symptom | Handling |
 |------|------|
-| Auth 失败 | `mcp_auth` 后重试一次；仍失败则报告 |
-| 必填字段缺失导致创建失败 | 停止，列出缺失字段，不猜值 |
-| 网络超时 | 报告已建清单与未建清单，不重复创建 |
-| 链接类型不存在 | 警告并跳过该链接，不阻断建单 |
-| 团队常量缺失 | 停止，说明缺失项与对应补齐责任方 |
+| Auth failure | Retry once after `mcp_auth`; if it still fails, report |
+| Creation fails due to a missing required field | Stop, list the missing fields, don't guess values |
+| Network timeout | Report the created and uncreated lists, don't create duplicates |
+| Link type doesn't exist | Warn and skip that link, don't block ticket creation |
+| Missing team constant | Stop, state the missing item and the corresponding owner to complete it |
 
-## 6. 相关
+## 6. Related
 
-- 输入格式：上游 User Story 撰写环节产出的 Story 清单（字段表见其模板）
-- 上游：user-story-authoring
-- 协作：tech-solution-publish、prd-publish
+- Input format: the Story list produced by the upstream User Story authoring step (field table in its template)
+- Upstream: user-story-authoring
+- Collaboration: tech-solution-publish, prd-publish

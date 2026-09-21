@@ -1,205 +1,205 @@
 ---
 name: tech-solution-publish
 description: >-
-  将团队技术方案发布到 Confluence 并闭环回写：prd 级同步回需求文档，
-  spike 级将结论回写到 spike 工单，story 级回链 Jira Story。
-  正文体量常超出 MCP 单次写入上限，因此统一采用 scripts/upload_confluence_v2.py 脚本上传。
-  落点、命名与路径遵循团队配置。当用户要求发布、同步或推送技术方案到 Confluence 时使用；
-  触发词：技术方案上传 / 发布技术方案 / 同步技术方案 / publish tech solution。
+  Publish a team tech solution to Confluence and close the loop with write-backs: prd level syncs
+  back to the requirements doc, spike level writes the conclusion back to the spike ticket, story
+  level back-links the Jira Story. The body often exceeds the MCP single-write limit, so it uses
+  scripts/upload_confluence_v2.py uniformly for upload. The landing spot, naming, and paths follow
+  the team config. Use when the user asks to publish, sync, or push a tech solution to Confluence;
+  triggers: 技术方案上传 / 发布技术方案 / 同步技术方案 / publish tech solution.
 metadata:
   agent: Tech Solution Agent
 ---
 
-# Tech Solution Publish — 发布与回写
+# Tech Solution Publish — publish and write back
 
-将已确认的三档技术方案写入 Confluence 指定路径，并闭环回写到需求文档或工单。
+Write the confirmed tech solution (one of the three tiers) into the designated Confluence path, and close the loop by writing back to the requirements doc or the ticket.
 
-**发布方式**：正文体量常超 MCP 单次写入上限，统一用本目录 `scripts/upload_confluence_v2.py` 经 Confluence REST 一次性提交完整正文（幂等查重、升版本、mermaid 转图、完整性统计）。
+**Publishing method**: the body often exceeds the MCP single-write limit, so use `scripts/upload_confluence_v2.py` in this directory uniformly to submit the complete body in one shot via the Confluence REST API (idempotent dedup, version bump, mermaid-to-image, completeness stats).
 
-**归档位置**：与 PRD 同处一个 `{epic}` 夹，脚本自动查 epic 在 Jira 的父项确定是否含 `{initiative}` 层，缺失夹自动创建：
+**Archive location**: in the same `{epic}` folder as the PRD; the script automatically looks up the epic's parent in Jira to decide whether an `{initiative}` level is included, and missing folders are created automatically:
 
 ```
-{folder_layout.level1}              一级根（parent_pages.root）
-└── {initiative}                    Initiative 夹，标题为「Jira key-摘要」（无父项时省略此层）
-    └── {epic}                      Epic 夹，标题为「Jira key-摘要」，如 CNAPP-5661-会员权益重构
-        ├── {epic}-PRD              → PRD 文档
-        └── {epic}-Tech Solution    → prd / spike / detail 三档文档
+{folder_layout.level1}              level-1 root (parent_pages.root)
+└── {initiative}                    Initiative folder, titled "Jira key-summary" (omitted when there's no parent)
+    └── {epic}                      Epic folder, titled "Jira key-summary", e.g. CNAPP-5661-会员权益重构
+        ├── {epic}-PRD              → PRD doc
+        └── {epic}-Tech Solution    → prd / spike / detail docs
 ```
 
-`{epic}` 取 Jira Epic key（非功能名/slug）。三档仅标题不同，落点同为 `{epic}-Tech Solution` 夹。`{initiative}` 与 `{epic}` 夹标题由脚本查 Jira 摘要自动拼为「key-摘要」，幂等查重按 Jira key 前缀匹配、命中后随最新摘要自动改名。Initiative 层可 `--initiative <key>` 覆盖、`--initiative none` 强制无此层。
+`{epic}` takes the Jira Epic key (not a feature name/slug). The three tiers differ only in title and all land in the `{epic}-Tech Solution` folder. The `{initiative}` and `{epic}` folder titles are auto-composed by the script into "key-summary" from the Jira summary; idempotent dedup matches by the Jira key prefix and auto-renames to the latest summary on a hit. The Initiative level can be overridden with `--initiative <key>` or forced off with `--initiative none`.
 
-**唯一性（标题）**：三档页面标题的**唯一键 = 固定前缀 + Jira key**（PRD 级=Epic key，spike=Spike key，detail=Story key），由 `naming.tech_solution_{prd|spike|detail}` 模板给出，如 `APP-TS-Prd-CNAPP-5661`。脚本查 Jira 取摘要，自动把标题补成「前缀-摘要」（如 `APP-TS-Prd-CNAPP-5661-会员权益重构`）：**查重只按前缀匹配**，摘要文案变动不产生新页；命中后若现标题与最新摘要不一致，脚本自动改名（rename），使标题始终最新。**日期、版本不进标题**，只在正文与 `--version-msg` 体现。因此「同一对象只有一页」由固定的「前缀+key」保证，与摘要是否变动无关。
+**Uniqueness (title)**: the unique key for the three tiers' page titles = **fixed prefix + Jira key** (PRD level = Epic key, spike = Spike key, detail = Story key), given by the `naming.tech_solution_{prd|spike|detail}` template, like `APP-TS-Prd-CNAPP-5661`. The script looks up the Jira summary and auto-appends the title into "prefix-summary" (like `APP-TS-Prd-CNAPP-5661-会员权益重构`): **dedup matches by prefix only**, so a change in the summary text produces no new page; on a hit, if the current title doesn't match the latest summary, the script auto-renames it, keeping the title current. **Dates and versions don't go into the title**, only into the body and `--version-msg`. So "one page per object" is guaranteed by the fixed "prefix+key," independent of whether the summary changes.
 
-| 维度 | 说明 |
+| Dimension | Description |
 |------|------|
-| 定位 | 按 epic 分层将技术方案发布到 `{epic}-Tech Solution` 夹，并按档位回写关联对象 |
-| 输入 | 经人工确认的技术方案（prd / spike / detail 之一）、所属 Jira Epic key 与团队 Confluence 配置 |
-| 产出 | Confluence 页面（新建或更新），返回 URL、版本、完整性统计与待回写内容 |
-| 手段 | `scripts/upload_confluence_v2.py`（REST 上传，不受 MCP 体量限制，正文完整提交） |
-| 权限 | 本 Agent 对 Jira 只读：spike 结论回写、Story 回链仅产出「待回写内容」，交由有 Jira 写权限的建单环节代写 |
+| Purpose | Publish the tech solution into the `{epic}-Tech Solution` folder layered by epic, and write back to the linked object per tier |
+| Input | The human-confirmed tech solution (one of prd / spike / detail), its Jira Epic key, and the team's Confluence config |
+| Output | A Confluence page (created or updated); returns the URL, version, completeness stats, and pending write-back content |
+| Permission | This Agent is read-only on Jira: spike-conclusion write-back and Story back-linking only produce "pending write-back content," handed to the ticket-creation step that has Jira write access |
 
-三档方案的 Confluence 落点相同（同一 epic 夹下的 `{epic}-Tech Solution`），回写目标不同：
+The three tiers land at the same Confluence spot (the `{epic}-Tech Solution` under the same epic folder), but write back to different targets:
 
-| mode | Confluence 落点 | 回写目标 |
+| mode | Confluence spot | Write-back target |
 |------|-----------------|----------|
-| `prd` | `{epic}-Tech Solution` 夹（prd 级方案页） | 需求文档（PRD 页或 Story 描述，按团队约定） |
-| `spike` | `{epic}-Tech Solution` 夹（Spike 结论页） | spike 工单结论（Jira） |
-| `detail` | `{epic}-Tech Solution` 夹（Story 详细方案页） | Jira Story 回链 |
+| `prd` | `{epic}-Tech Solution` folder (prd-level solution page) | Requirements doc (PRD page or Story description, per team convention) |
+| `spike` | `{epic}-Tech Solution` folder (Spike conclusion page) | Spike ticket conclusion (Jira) |
+| `detail` | `{epic}-Tech Solution` folder (Story detailed-solution page) | Jira Story back-link |
 
-## 0. 配置取值
+## 0. Config values
 
-`{profile}` 为当前 profile 文件名（不含扩展名，如 `app-prod` / `cms-test`），由调用方通过 `profile-select` skill 解析并传入（`profile.py resolve` 给出其绝对路径）；未传入或对应文件不存在 → 阻断，不猜测。
+`{profile}` is the current profile file name (without extension, like `app-prod` / `cms-test`), resolved and passed in by the caller via the `profile-select` skill (`profile.py resolve` gives its absolute path); if it isn't passed in or the file doesn't exist -> block, don't guess.
 
-| 用途 | 键 / 来源 |
+| Purpose | Key / source |
 |------|----|
-| Confluence 站点根 | `profiles/{profile}.yaml` → `mcp.confluence.base_url`（脚本实际从 `.cursor/mcp.json` → `confluenceRest.base_url` 读取，二者应一致） |
-| 目标 space（key） | `profiles/{profile}.yaml` → `mcp.confluence.space`，对应脚本 `--space` |
-| 一级根目录页 ID | `profiles/{profile}.yaml` → `mcp.confluence.parent_pages.root`，对应脚本 `--root`（根目录名见 `folder_layout.level1`；为 `TBD` 即阻断） |
-| 文件夹层级约定 | `profiles/{profile}.yaml` → `mcp.confluence.folder_layout`（一级根 →〔epic 有父项时〕`{initiative}` → `{epic}` → `{epic}-Tech Solution`；epic 无父项时省略 `{initiative}` 层，三档共用最内层夹） |
-| 技术方案父目录 ID（旧模式回退） | `profiles/{profile}.yaml` → `mcp.confluence.parent_pages.tech_solution`，仅未配 `root` 的团队用，对应脚本 `--parent` |
-| PRD 父目录 ID（prd 回写用） | `profiles/{profile}.yaml` → `mcp.confluence.parent_pages.prd` |
-| prd 标题模板 | `profiles/{profile}.yaml` → `mcp.confluence.naming.tech_solution_prd` |
-| spike 标题模板 | `profiles/{profile}.yaml` → `mcp.confluence.naming.tech_solution_spike` |
-| detail 标题模板 | `profiles/{profile}.yaml` → `mcp.confluence.naming.tech_solution_detail` |
-| 正文格式 | `profiles/{profile}.yaml` → `mcp.confluence.content_format` |
-| 需回链的资产 | `profiles/{profile}.yaml` → `mcp.jira.links` |
-| 发布凭证 | `.cursor/mcp.json` → `confluenceRest`（`base_url` / `email` / `api_token`，三项非空；路径不同用 `--mcp` 指定），由脚本读取，不打印、不外传 |
+| Confluence site root | `profiles/{profile}.yaml` → `mcp.confluence.base_url` (the script actually reads it from `.cursor/mcp.json` → `confluenceRest.base_url`; the two should match) |
+| Target space (key) | `profiles/{profile}.yaml` → `mcp.confluence.space`, maps to script `--space` |
+| Level-1 root page ID | `profiles/{profile}.yaml` → `mcp.confluence.parent_pages.root`, maps to script `--root` (root name in `folder_layout.level1`; a value of `TBD` blocks) |
+| Folder-layout convention | `profiles/{profile}.yaml` → `mcp.confluence.folder_layout` (level-1 root ->〔when the epic has a parent〕`{initiative}` → `{epic}` → `{epic}-Tech Solution`; when the epic has no parent, the `{initiative}` level is omitted, and the three tiers share the innermost folder) |
+| Tech-solution parent folder ID (legacy fallback) | `profiles/{profile}.yaml` → `mcp.confluence.parent_pages.tech_solution`, used only by teams without `root`, maps to script `--parent` |
+| PRD parent folder ID (for prd write-back) | `profiles/{profile}.yaml` → `mcp.confluence.parent_pages.prd` |
+| prd title template | `profiles/{profile}.yaml` → `mcp.confluence.naming.tech_solution_prd` |
+| spike title template | `profiles/{profile}.yaml` → `mcp.confluence.naming.tech_solution_spike` |
+| detail title template | `profiles/{profile}.yaml` → `mcp.confluence.naming.tech_solution_detail` |
+| Body format | `profiles/{profile}.yaml` → `mcp.confluence.content_format` |
+| Assets to back-link | `profiles/{profile}.yaml` → `mcp.jira.links` |
+| Publishing credentials | `.cursor/mcp.json` → `confluenceRest` (`base_url` / `email` / `api_token`, all three non-empty; use `--mcp` for a different path), read by the script, not printed, not leaked |
 
-任一必填落点键（`space` / `parent_pages.root`）为空或 `TBD` 时停止并要求补齐，不写到 space 根。未配 `root` 的团队回退到 `parent_pages.tech_solution` 直挂模式。
+If any required landing-spot key (`space` / `parent_pages.root`) is empty or `TBD`, stop and require it to be completed; don't write to the space root. Teams without `root` fall back to the `parent_pages.tech_solution` direct-attach mode.
 
-## 1. 前置检查
+## 1. Pre-checks
 
-| # | 检查 |
+| # | Check |
 |---|------|
-| 1 | 模板章节齐全无空章节，无 `[填写]` / `TODO` 残留 |
-| 2 | 全文无真实密钥、内网域名、真实会员号、真实手机号（命中即阻断） |
-| 3 | 人工确认已完成（prd→TL；spike→TL；detail→DEV） |
-| 4 | 目标空间、一级根目录页（`parent_pages.root`）与所属 Jira Epic key 齐备（为 TBD 即硬拦） |
-| 5 | `.cursor/mcp.json` 的 `confluenceRest` 三项非空，且 `api_token` 不会被回显到对话或日志 |
-| 6 | 技术方案已保存为本地 `.md` 文件（脚本仅以文件为发布源） |
+| 1 | Template sections complete with no empty sections, no `[填写]` / `TODO` residue |
+| 2 | No real secrets, internal domains, real member IDs, or real phone numbers anywhere (a hit blocks) |
+| 3 | Human confirmation is done (prd->TL; spike->TL; detail->DEV) |
+| 4 | The target space, level-1 root page (`parent_pages.root`), and Jira Epic key are all present (a value of TBD hard-blocks) |
+| 5 | The three `confluenceRest` items in `.cursor/mcp.json` are non-empty, and `api_token` won't be echoed to the conversation or logs |
+| 6 | The tech solution is saved as a local `.md` file (the script uses only a file as the publishing source) |
 
-## 2. 工作流
+## 2. Workflow
 
 ```
-- S1 前置检查
-- S2 解析落点（space / root / epic / kind / title）
-- S3 环境预检（--check-env：含 mermaid 时验证 Node.js/npx 就绪）
-- S4 dry-run 预检（核对 stats 与完整性）
-- S5 脚本上传 Confluence（幂等新建/更新，正文完整）
-- S6 回写（prd→需求文档 / spike→结论 / detail→回链）
-- S7 回报
+- S1 Pre-checks
+- S2 Resolve the landing spot (space / root / epic / kind / title)
+- S3 Environment pre-check (--check-env: when mermaid is present, verify Node.js/npx is ready)
+- S4 Dry-run pre-check (verify stats and completeness)
+- S5 Script upload to Confluence (idempotent create/update, complete body)
+- S6 Write back (prd->requirements doc / spike->conclusion / detail->back-link)
+- S7 Report
 ```
 
-### S2 落点解析
+### S2 Resolve the landing spot
 
 ```text
 space     : mcp.confluence.space
-root      : mcp.confluence.parent_pages.root             （一级根目录页 ID）
-epic      : 所属 Jira Epic key（如 CNAPP-5661）            （容器夹 = {epic}，叶子夹 = {epic}-Tech Solution）
-kind      : tech_solution                                 （三档共用同一叶子夹）
-title     : 按 mode 取 naming.tech_solution_{prd|spike|detail} 渲染，仅到「前缀+key」为止（唯一键），不含摘要/日期/版本
-title-key : 标题唯一键对应的 Jira key（PRD 级=Epic key，spike=Spike key，detail=Story key），供脚本查摘要拼可读尾巴
+root      : mcp.confluence.parent_pages.root             (level-1 root page ID)
+epic      : the Jira Epic key (e.g. CNAPP-5661)          (container folder = {epic}, leaf folder = {epic}-Tech Solution)
+kind      : tech_solution                                 (the three tiers share the same leaf folder)
+title     : rendered per mode from naming.tech_solution_{prd|spike|detail}, only up to "prefix+key" (the unique key), no summary/date/version
+title-key : the Jira key the title's unique key corresponds to (PRD level = Epic key, spike = Spike key, detail = Story key), for the script to look up the summary and append the readable tail
 ```
 
-脚本以 `--root/--epic/--kind tech_solution` 按开头「归档位置」定义的规则自动分层：查该 epic 的直接父项确定四级 / 三级，`{initiative}` 与 `{epic}` 夹标题拼上 Jira 摘要，缺失即建容器页，再把方案页落到最内层 `{epic}-Tech Solution` 夹下。`--initiative <key>` 手动指定 Initiative 层、`--initiative none` 强制省略该层。未配 `root` 的团队回退：改传 `--parent <parent_pages.tech_solution>` 直挂。
+The script auto-layers with `--root/--epic/--kind tech_solution` per the "Archive location" rules at the top: look up the epic's direct parent to decide four-level / three-level, append the Jira summary to the `{initiative}` and `{epic}` folder titles, create container pages if missing, then land the solution page under the innermost `{epic}-Tech Solution` folder. `--initiative <key>` sets the Initiative level manually, `--initiative none` forces it off. Teams without `root` fall back: pass `--parent <parent_pages.tech_solution>` for direct attach.
 
-`--title` 只传「前缀+key」（唯一键），`--title-key` 传该 key 用于查摘要：脚本据此把标题补成「前缀-摘要」，查重按前缀匹配、命中随摘要改名。`--title-key` 省略时文件夹模式退回用 `--epic` 的摘要，旧模式退回纯前缀。
+`--title` carries only "prefix+key" (the unique key), and `--title-key` carries that key for the summary lookup: the script appends the title into "prefix-summary," dedups by prefix, and renames to the summary on a hit. When `--title-key` is omitted, folder mode falls back to the `--epic` summary, and legacy mode falls back to a plain prefix.
 
-### S3 环境预检
+### S3 Environment pre-check
 
-含 mermaid 的方案发布前先跑 `--check-env`（不写 Confluence），确认本机能出图。脚本输出 `ready_to_publish`：为 `true` 则继续；为 `false` 时按其 `hint`（按操作系统给出的 Node.js 安装命令）引导用户安装 Node.js（含 `npx`），装好后重跑本步骤直至 `ready_to_publish` 为 `true`。无 mermaid 的方案此步恒为 `true`。
+For a solution containing mermaid, run `--check-env` before publishing (doesn't write to Confluence) to confirm the machine can render diagrams. The script outputs `ready_to_publish`: `true` -> continue; `false` -> follow its `hint` (the Node.js install command per OS) to guide the user to install Node.js (including `npx`), then rerun this step until `ready_to_publish` is `true`. For a solution without mermaid, this step is always `true`.
 
 ```bash
-python .cursor/skills/tech-solution-publish/scripts/upload_confluence_v2.py --md "<技术方案.md 路径>" --space "<space>" --root "<parent_pages.root>" --epic "<Jira Epic key，如 CNAPP-5661>" --kind tech_solution --title "<前缀+key，如 APP-TS-Prd-CNAPP-5661>" --title-key "<标题 key：PRD 级=Epic key / spike=Spike key / detail=Story key>" --check-env
+python .cursor/skills/tech-solution-publish/scripts/upload_confluence_v2.py --md "<path to tech-solution.md>" --space "<space>" --root "<parent_pages.root>" --epic "<Jira Epic key, e.g. CNAPP-5661>" --kind tech_solution --title "<prefix+key, e.g. APP-TS-Prd-CNAPP-5661>" --title-key "<title key: PRD level = Epic key / spike = Spike key / detail = Story key>" --check-env
 ```
 
-### S4 dry-run 预检
+### S4 Dry-run pre-check
 
-先执行 `--dry-run`，脚本不写入 Confluence，仅输出标题（`title` 为补全摘要后的完整标题，`title_prefix` 为唯一键前缀）、`stats`（章节 h2 数、Story 数、AC 条数、mermaid 图数）、`storage_chars` 与 `target`（root/initiative/epic/kind）。核对 `title_prefix` 为预期的「前缀+key」、`stats` 与本地确认版一致、`target.epic` 指向预期 epic，并核对 `target.initiative`（脚本自动查 Jira 得到的父项，有则四级归档、`null` 则三级）符合预期后再正式上传。
+First run `--dry-run`; the script doesn't write to Confluence and only outputs the title (`title` is the complete title after appending the summary, `title_prefix` is the unique-key prefix), `stats` (h2 section count, Story count, AC count, mermaid diagram count), `storage_chars`, and `target` (root/initiative/epic/kind). Verify that `title_prefix` is the expected "prefix+key," `stats` matches the locally confirmed version, `target.epic` points to the expected epic, and `target.initiative` (the parent the script auto-looked-up from Jira; present -> four-level archive, `null` -> three-level) meets expectations before the actual upload.
 
-> **命令写法（跨平台统一）**：命令为单行、不含续行符，可在 Windows PowerShell / CMD、macOS、Linux 直接运行。下文示例中的 `python` 是启动器占位符：macOS / Linux 用 PATH 里的 `python` / `python3`；Windows 绿色版（Python 未加入 PATH）用 `C:/AI-SDLC/runtime/python-*/python.exe`。脚本运行后会自动解析 `npx`（渲染 mermaid 用），无需在命令里指定 Node 路径。
+> **Command form (cross-platform, unified)**: the command is a single line with no line continuations, and can run directly in Windows PowerShell / CMD, macOS, and Linux. `python` in the examples below is a launcher placeholder: on macOS / Linux use the `python` / `python3` on your PATH; on the Windows portable build (Python not on PATH) use `C:/AI-SDLC/runtime/python-*/python.exe`. After running, the script auto-resolves `npx` (for rendering mermaid), so there's no need to specify a Node path in the command.
 
 ```bash
-python .cursor/skills/tech-solution-publish/scripts/upload_confluence_v2.py --md "<技术方案.md 路径>" --space "<space>" --root "<parent_pages.root>" --epic "<Jira Epic key，如 CNAPP-5661>" --kind tech_solution --title "<前缀+key，如 APP-TS-Prd-CNAPP-5661>" --title-key "<标题 key>" --dry-run
+python .cursor/skills/tech-solution-publish/scripts/upload_confluence_v2.py --md "<path to tech-solution.md>" --space "<space>" --root "<parent_pages.root>" --epic "<Jira Epic key, e.g. CNAPP-5661>" --kind tech_solution --title "<prefix+key, e.g. APP-TS-Prd-CNAPP-5661>" --title-key "<title key>" --dry-run
 ```
 
-### S5 脚本上传
+### S5 Script upload
 
-脚本按开头「归档位置」定义的规则自动分层建夹并幂等查重：查该 epic 的直接父项确保各级夹存在（返回 JSON 的 `folders` 列出各级夹 id 与是否本次新建），再在最内层 `{epic}-Tech Solution` 夹下**按标题前缀（前缀+key）查重**：命中则 `update` 并升版本、写入 `--version-msg`，且若现标题与最新摘要不一致先自动改名（结果 JSON 的 `renamed_from` 记录原标题）；未命中则以「前缀-摘要」完整标题 `create`。移除 `--dry-run` 并加 `--version-msg` 后正式发布：
+The script auto-layers folders and dedups idempotently per the "Archive location" rules at the top: look up the epic's direct parent to ensure each level's folder exists (the returned JSON's `folders` lists each level's folder id and whether it was newly created), then **dedup by title prefix (prefix+key)** under the innermost `{epic}-Tech Solution` folder: on a hit it `update`s, bumps the version, and writes `--version-msg`, and if the current title doesn't match the latest summary it auto-renames first (the result JSON's `renamed_from` records the original title); on a miss it `create`s with the complete "prefix-summary" title. After removing `--dry-run` and adding `--version-msg`, publish for real:
 
 ```bash
-python .cursor/skills/tech-solution-publish/scripts/upload_confluence_v2.py --md "<技术方案.md 路径>" --space "<space>" --root "<parent_pages.root>" --epic "<Jira Epic key，如 CNAPP-5661>" --kind tech_solution --title "<前缀+key>" --title-key "<标题 key>" --version-msg "<mode> 技术方案发布：<变更说明>"
+python .cursor/skills/tech-solution-publish/scripts/upload_confluence_v2.py --md "<path to tech-solution.md>" --space "<space>" --root "<parent_pages.root>" --epic "<Jira Epic key, e.g. CNAPP-5661>" --kind tech_solution --title "<prefix+key>" --title-key "<title key>" --version-msg "<mode> tech solution published: <change note>"
 ```
 
-- **正文完整、禁止 MCP 写页面（硬约束）**：脚本一次性提交整篇 storage，不受 MCP 体量限制。发布/更新一律走本脚本 REST；禁止手工摘要、删减章节，禁止用 Atlassian MCP 的 `updateConfluencePage`/`createConfluencePage` 写页面（单次写入受限会截断正文、丢图、破坏 storage）。脚本报错只修入参或凭证后重跑，不得改用 MCP 兜底。允许的差异仅限 mermaid 转图、markdown 转 storage HTML；MCP 只读查询不受此限。**唯一例外**见 S6：无本地源时对 PRD「技术方案链接」项做局部回写，须带写后完整性校验，仅限此场景。
-- **图表**：mermaid 由 mmdc 渲染为高分辨率图片附件内联，支持全部图类型；结果记入 `mermaid_pending`（空为全部成功）。含 mermaid 时本机须有 Node.js（`npx`），缺失即阻断（`--allow-degraded-diagrams` 可显式降级，默认不启用）。
+- **Complete body, MCP page-writes forbidden (hard constraint)**: the script submits the whole storage in one shot, not bound by the MCP size limit. Publishing/updating always goes through this script over REST; manual summarizing or trimming sections is forbidden, and writing pages via Atlassian MCP's `updateConfluencePage`/`createConfluencePage` is forbidden (the single-write limit truncates the body, drops images, and corrupts storage). On a script error, only fix the arguments or credentials and rerun—don't fall back to MCP. The only allowed differences are mermaid-to-image and markdown-to-storage-HTML; MCP read-only queries aren't subject to this. **The only exception** is in S6: a local write-back to the PRD's "技术方案链接" item when there's no local source, which must carry a post-write completeness check and is limited to this scenario.
+- **Diagrams**: mermaid is rendered by mmdc into high-resolution image attachments and inlined, supporting all diagram types; the result is recorded in `mermaid_pending` (empty means all succeeded). When mermaid is present, the machine must have Node.js (`npx`); a missing one blocks (`--allow-degraded-diagrams` explicitly degrades, off by default).
 
-### S6 回写
+### S6 Write back
 
-**prd → 需求文档**
+**prd -> requirements doc**
 
-prd 档的方案摘要 + 链接需回写到 PRD 的「技术方案链接」章节。写方案的人未必持有 PRD 本地 `.md` 源，按是否拿得到本地源分两条路径。回写遵循附录统一链接约定：填了 URL 就写成可点击超链接并去掉「（可选）」，空项才保留占位。
+The prd tier's solution summary + link needs to be written back to the PRD's "技术方案链接" section. Whoever wrote the solution may not hold the PRD's local `.md` source, so there are two paths depending on whether the local source is available. The write-back follows the appendix's unified link convention: if a URL is filled, write it as a clickable hyperlink and remove "（可选）"; only keep the placeholder for empty items.
 
-- **持有本地源**：在本地 PRD 的「技术方案链接」项写入 `[方案标题](URL)`，去掉「（可选）」，再用发布脚本对 PRD 整篇 `update`（走脚本 REST，不用 MCP）。
-- **只有链接、无本地源**（常态）：用 MCP 只读查询按 **PRD 标题前缀** `naming.prd`（前缀+Epic key，如 `APP-PRD-CNAPP-5661`）在 `{epic}-PRD` 夹下定位到那一页 PRD（PRD 标题带 Jira 摘要尾巴，故按前缀匹配、不按全名精确匹配），取其 `pageId`；用 `getConfluencePage` 读回整篇 storage，**只在「技术方案链接」项内**写入 `<a href="URL">方案标题</a>` 并去掉「（可选）」（不改其他任何章节），再 `updateConfluencePage` 写回。这是「禁止 MCP 写页面」的**唯一例外**，仅限此局部回写，禁用于新建或整篇发布。写回后**必须**用 MCP 只读复查：storage 长度未明显缩短、关键章节标题仍在、`<ri:attachment>`/`<ac:image>` 数量未减少、新链接以 `<a href>` 存在；任一不过即**回滚写前版本**，改为产出待回写内容交 PO 手动补入。
-- **无独立 PRD 页**：方案摘要写进 Story 描述的「技术方案」小节（由建单环节执行）。
+- **Have the local source**: write `[solution title](URL)` into the local PRD's "技术方案链接" item, remove "（可选）", then `update` the whole PRD with the publishing script (over REST, not MCP).
+- **Only the link, no local source** (the norm): use an MCP read-only query to locate that PRD page under the `{epic}-PRD` folder by the **PRD title prefix** `naming.prd` (prefix+Epic key, like `APP-PRD-CNAPP-5661`) (the PRD title has a Jira summary tail, so match by prefix, not full-name exact match), get its `pageId`; read back the whole storage with `getConfluencePage`, write `<a href="URL">solution title</a>` **only inside the "技术方案链接" item** and remove "（可选）" (don't touch any other section), then write back with `updateConfluencePage`. This is the **only exception** to "MCP page-writes forbidden," limited to this local write-back, forbidden for creation or whole-page publishing. After writing back, you **must** re-check via MCP read-only: the storage length isn't noticeably shorter, the key section headings are still present, the `<ri:attachment>`/`<ac:image>` counts haven't decreased, and the new link exists as `<a href>`; if any fails, **roll back to the pre-write version** and instead produce pending write-back content for the PO to add manually.
+- **No standalone PRD page**: write the solution summary into the "技术方案" subsection of the Story description (done by the ticket-creation step).
 
-**spike → spike ticket 回链**（写入 spike ticket 描述的「链接的工作项 / 参考文档」小节，可点击超链接）
+**spike -> spike ticket back-link** (written into the "链接的工作项 / 参考文档" subsection of the spike ticket description, a clickable hyperlink)
 
 ```markdown
-需要建立的链接：
+Links to establish:
 - Spike: {spike ticket key}  →  Tech Solution: {Confluence URL}
 ```
 
-**detail → Jira Story 回链**（写入 Story 描述的「链接的工作项 / 参考文档」小节，可点击超链接）
+**detail -> Jira Story back-link** (written into the "链接的工作项 / 参考文档" subsection of the Story description, a clickable hyperlink)
 
 ```markdown
-需要建立的链接：
+Links to establish:
 - Story: {key}  →  Tech Solution: {Confluence URL}
 ```
 
-spike 与 detail 的回链写入方式一致：均写进对应工单**描述**的「链接的工作项 / 参考文档」小节，只写指向 Confluence 方案页的可点击超链接（禁止裸 URL、不塞进评论、不复制方案正文）；结论要点在 Confluence 方案页内查看。两项默认交给有 Jira 写权限的建单环节执行，并在回报中列出。
+spike and detail back-links are written the same way: both into the "链接的工作项 / 参考文档" subsection of the corresponding ticket **description**, writing only a clickable hyperlink to the Confluence solution page (no bare URLs, don't stuff into comments, don't copy the solution body); the conclusion points are viewed on the Confluence solution page. Both are by default handed to the ticket-creation step that has Jira write access, and listed in the report.
 
-### S6.5 结果校验
+### S6.5 Result verification
 
-解析脚本输出 JSON，确认退出码为 0 且 `action`、`page_id`、`version`、`url` 均返回、`url` 可访问。以下门禁任一未过即视为发布未达标，须修正后重跑，不得以降级版结束；确因环境限制无法达标时在回报中标注具体项、原因与后续动作。
+Parse the script's output JSON, confirm exit code 0 and that `action`, `page_id`, `version`, and `url` are all returned and `url` is reachable. If any gate below doesn't pass, the publish counts as not meeting the bar and must be fixed and rerun—don't end on a degraded version; if the bar genuinely can't be met due to environment limits, annotate the specific item, cause, and follow-up action in the report.
 
-| 门禁 | 通过标准 | 未过时的处理 |
+| Gate | Passing criteria | Handling when it fails |
 |------|---------|-------------|
-| 正文完整性 | `stats`（章节 / Story / AC）与本地确认版一致 | 修正本地 `.md` 后重跑更新 |
-| 图表 | `mermaid_pending` 为空 | 按图号定位（mmdc 不可用 / 网络下载 / 源码语法）修正后重跑 |
-| 标题命中 | 叶子夹（`{epic}-Tech Solution`）下按标题前缀（前缀+key）唯一命中（更新，`action=update`）或无命中（新建，`action=create`）；命中改名时 `renamed_from` 记录原标题 | 前缀匹配返回多条（≥2）时停止并交用户裁决，不擅自新建重复页 |
-| 调用通道 | 全程走脚本 REST | 退出码非 0 或含 `error` 时按 HTTP 状态修正后重跑；禁止改用 MCP `updateConfluencePage` / `createConfluencePage` 兜底 |
+| Body completeness | `stats` (section / Story / AC) matches the locally confirmed version | Fix the local `.md`, then rerun the update |
+| Diagrams | `mermaid_pending` is empty | Locate by diagram number (mmdc unavailable / network download / source syntax), fix, and rerun |
+| Title hit | A unique hit by title prefix (prefix+key) under the leaf folder (`{epic}-Tech Solution`) (update, `action=update`) or no hit (create, `action=create`); on a rename hit, `renamed_from` records the original title | When the prefix match returns multiple (>=2), stop and hand to the user to decide, don't create a duplicate page on your own |
+| Call channel | Everything goes through the script over REST | On non-zero exit or containing `error`, fix per HTTP status and rerun; falling back to MCP `updateConfluencePage` / `createConfluencePage` is forbidden |
 
-## 3. 规则
+## 3. Rules
 
-- **按源文档正文发布**：逐节对应技术方案模板，不加模板外内容（如顶部 Source/Owner/Status 脚注、「上游 PRD/Jira」信息行）。链接放在模板既有位置（评审结论回写项、PRD 附录回链），不另起段落。
-- 敏感信息命中即阻断，不脱敏后继续。
-- 不删除已有页面；脚本在叶子夹下按标题前缀（前缀+key）命中即更新升版本、并随 Jira 摘要自动改名，同一对象迭代沿用同一「前缀+key」以保证只有一页，不新建重复页。
-- 不自动 commit。
-- 默认不越权写 Jira；确需写入时先确认权限矩阵已更新。
-- space / 父页 / 命名一律取自团队配置，禁止写死。
+- **Publish per the source doc body**: map section by section to the tech-solution template, adding no content beyond the template (like a top Source/Owner/Status footnote or an "upstream PRD/Jira" info line). Put links in the template's existing spots (the review-conclusion write-back item, the PRD appendix back-link), not in a separate paragraph.
+- A sensitive-info hit blocks; don't redact and continue.
+- Don't delete existing pages; the script hits by title prefix (prefix+key) under the leaf folder and updates+bumps the version, auto-renaming to the Jira summary; an object's iterations reuse the same "prefix+key" to guarantee a single page, not create a duplicate.
+- Don't auto-commit.
+- Don't over-reach to write Jira by default; if a write is genuinely needed, first confirm the permission matrix is updated.
+- space / parent page / naming all come from the team config; hardcoding is forbidden.
 
-## 4. 输出回报
+## 4. Output report
 
 ```markdown
-已发布技术方案（mode={mode}）
+Tech solution published (mode={mode})
 
-- **URL**：{Confluence URL}
-- **操作**：新建 / 更新（版本号 {version}）
-- **源文件**：{path}
-- **完整性**：章节 {h2} / Story {stories} / AC {ac}（与本地确认版一致）
-- **图表**：mermaid_pending={...}（为空表示全部渲染成功）
-- **回写**：
-  - {需求文档 | Story 描述} 技术方案章节：已更新 / 待执行
-  - Jira 回链：待有 Jira 写权限的建单环节执行（本 Agent 对 Jira 只读）
-- **待回写内容**：（附可直接粘贴的文本）
+- **URL**: {Confluence URL}
+- **Action**: create / update (version {version})
+- **Source file**: {path}
+- **Completeness**: sections {h2} / Story {stories} / AC {ac} (matches the locally confirmed version)
+- **Diagrams**: mermaid_pending={...} (empty means all rendered successfully)
+- **Write-back**:
+  - {requirements doc | Story description} tech-solution section: updated / pending
+  - Jira back-link: pending the ticket-creation step with Jira write access (this Agent is read-only on Jira)
+- **Pending write-back content**: (attach directly pasteable text)
 ```
 
-> 完整性与图表须先通过 S6.5 门禁表再回报。
+> Completeness and diagrams must first pass the S6.5 gate table before reporting.
 
-## 5. 相关
+## 5. Related
 
-- 上游：tech-solution-prd、tech-solution-spike、tech-solution-detail
-- 回写执行方：user-story-publish
-- 权限：本环节对 Jira 只读，回写一律产出「待回写内容」，交有 Jira 写权限的建单环节执行
+- Upstream: tech-solution-prd, tech-solution-spike, tech-solution-detail
+- Write-back executor: user-story-publish
+- Permission: this step is read-only on Jira; write-backs always produce "pending write-back content," handed to the ticket-creation step that has Jira write access

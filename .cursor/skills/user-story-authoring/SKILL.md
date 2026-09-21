@@ -1,241 +1,197 @@
 ---
 name: user-story-authoring
 description: >-
-  把 PRD 拆成标准 User Story，附可测的验收标准（前置条件/操作/可观察结果三要素），
-  经 INVEST 校验，并备齐建单所需的 Jira 字段值。字段集、链接集、
-  描述是否需自成一体、是否可自动估点均遵循团队配置。当用户要求拆 Story、
-  撰写 User Story、起草 AC 或从 PRD 准备 Jira 工单时使用；
-  触发词：拆 Story / 写 User Story / 用户故事 / 拆分需求 / 写 AC / user story authoring。
+  Split a PRD into standard User Stories with testable acceptance criteria (the three elements of
+  precondition/action/observable result), validated by INVEST, and with the Jira field values
+  needed for ticket creation ready. The field set, link set, whether the description must be
+  self-contained, and whether auto-estimation is allowed all follow the team config. Use when the
+  user asks to split Stories, write User Stories, draft ACs, or prepare Jira tickets from a PRD;
+  triggers: 拆 Story / 写 User Story / 用户故事 / 拆分需求 / 写 AC / user story authoring.
 metadata:
   agent: UserStory Agent
 ---
 
-# User Story Authoring — User Story 撰写
+# User Story Authoring — writing User Stories
 
-把需求文档拆成可交付、可验收、可估点的 Story 清单，供建单前逐条填齐字段。
+Split the requirements doc into a Story list that is deliverable, acceptable, and estimable, to fill in the fields one by one before ticket creation.
 
-
-| 维度   | 说明                                                     |
+| Dimension | Description |
 | ---- | ------------------------------------------------------ |
-| 定位   | 基于需求澄清结论与技术方案，把 PRD 拆成标准化 User Story 并写全 AC 与 Jira 字段值 |
-| 输入   | PRD（含 Figma 链接）；PRD 级及以上技术方案（可选，作为拆分粒度与依赖的参考） |
-| 产出   | 会话内 Story 清单（含句式、描述、AC、字段值、回链），不落地文件；交 PO 确认后供建单环节消费   |
-| 边界   | 只写 what 不写 how；AI 不估点；不建单（建单属发布环节）                     |
-| 核心判断 | 拆分质量的唯一标准：DEV 无需查阅 PRD 即可开工，QA 无需查阅 PRD 即可编写用例         |
+| Purpose | Based on the clarification conclusions and tech solution, split the PRD into standardized User Stories and write full ACs and Jira field values |
+| Input | PRD (with Figma link); PRD-level or higher tech solution (optional, as a reference for split granularity and dependencies) |
+| Output | An in-conversation Story list (with the sentence form, description, AC, field values, back-links), not saved to a file; consumed by the ticket-creation step after PO confirmation |
+| Scope | Only writes the what, not the how; the AI doesn't estimate; doesn't create tickets (that's the publishing step) |
+| Core test | The one criterion for split quality: a DEV can start work without reading the PRD, and QA can write cases without reading the PRD |
 
+## 0. Config values
 
-## 0. 配置取值
+`{profile}` is the current profile file name (without extension, like `app-prod` / `cms-test`), resolved and passed in by the caller via the `profile-select` skill (`profile.py resolve` gives its absolute path); if it isn't passed in or the file doesn't exist -> block, don't guess.
 
-`{profile}` 为当前 profile 文件名（不含扩展名，如 `app-prod` / `cms-test`），由调用方通过 `profile-select` skill 解析并传入（`profile.py resolve` 给出其绝对路径）；未传入或对应文件不存在 → 阻断，不猜测。
-
-
-| 用途             | 键                                                                               |
+| Purpose | Key |
 | -------------- | ------------------------------------------------------------------------------- |
-| 需回链的资产集合       | `profiles/{profile}.yaml` → `mcp.jira.links`                                    |
-| Agile Team 默认值 | `profiles/{profile}.yaml` → `mcp.jira.agile_team`（为空表示无默认，需人工填写）                |
-| 标签枚举与自动填充策略    | `profiles/{profile}.yaml` → `mcp.jira.labels`（含合法枚举、大小写敏感、`auto_fill` 允许自动填的类别） |
-| 是否要内容模型        | `profiles/{profile}.yaml` → `content_model.required`                            |
-| Story 模板       | 按 profile 的 `team` 选取：`APP` → `references/user-story-app.md`；`CMS` → `references/user-story-cms.md` |
+| The set of assets to back-link | `profiles/{profile}.yaml` → `mcp.jira.links` |
+| Agile Team default | `profiles/{profile}.yaml` → `mcp.jira.agile_team` (empty means no default, needs manual entry) |
+| Label enum and auto-fill policy | `profiles/{profile}.yaml` → `mcp.jira.labels` (includes the valid enum, case sensitivity, and the `auto_fill` categories allowed to be auto-filled) |
+| Whether a content model is needed | `profiles/{profile}.yaml` → `content_model.required` |
+| Story template | Pick by the profile's `team`: `APP` → `references/user-story-app.md`; `CMS` → `references/user-story-cms.md` |
 
+## 1. Prerequisites
 
-
-
-## 1. 前置条件
-
-
-| #   | 条件                        |
+| #   | Condition |
 | --- | ------------------------- |
-| 1   | 已有需求文档（PRD）               |
-| 2   | 技术方案为推荐输入，非强制：已有 PRD 级及以上技术方案时据其确定拆分粒度与依赖；缺失时不阻断，按 PRD 拆分并将受技术方案影响的粒度/依赖登记为待定项 |
+| 1   | Have a requirements doc (PRD) |
+| 2   | The tech solution is a recommended input, not mandatory: when a PRD-level or higher tech solution exists, use it to decide split granularity and dependencies; when missing, don't block—split by the PRD and log the granularity/dependencies affected by the tech solution as pending items |
 
+## 2. Splitting principles
 
+### Split by role + scenario + acceptance criteria
 
+Split by user-perceivable capability, not by functional module or technical layer.
 
-## 2. 拆分原则
-
-
-
-### 按角色 + 场景 + 验收标准拆
-
-按用户可感知的能力拆分，而非按功能模块或技术分层拆分。
-
-
-| 反例                  | 正例                    |
+| Anti-pattern | Correct |
 | ------------------- | --------------------- |
-| 前端 Story / 后端 Story | 一个用户可感知的端到端能力         |
-| 「订单模块开发」            | 「会员查看订单列表」「会员取消未支付订单」 |
+| Frontend Story / Backend Story | One user-perceivable end-to-end capability |
+| "Order module development" | "Member views the order list," "Member cancels an unpaid order" |
 
+### Vertical slice
 
+Each Story should cut through UI -> logic -> data and have user-perceivable value. When it can't be made a vertical slice (work with no direct user value), don't mark the Story Type `Functional`; mark it `Technical` or `Enabler` instead, and explain the value in the description (what it supports, what happens if it's not done) to compensate for INVEST's V (Valuable):
 
-
-### 垂直切片
-
-每个 Story 应穿过 UI → 逻辑 → 数据、具备用户可感知价值。无法做成垂直切片时（无直接用户价值的工作），Story Type 不标 `Functional`，改标 `Technical` 或 `Enabler`，并在描述中说明价值（支撑了什么、不做会怎样），以补偿 INVEST 的 V(Valuable)：
-
-
-| Story Type  | 适用                | 例                       |
+| Story Type | Applies to | Example |
 | ----------- | ----------------- | ----------------------- |
-| `Technical` | 纯技术改造，无直接用户价值     | 重构、技术债清理、性能优化、埋点接入      |
-| `Enabler`   | 为后续功能铺路的基础设施/技术准备 | 搭建 mock 数据层、引入播放内核、建 CI |
+| `Technical` | Pure technical work with no direct user value | Refactoring, tech-debt cleanup, performance optimization, tracking integration |
+| `Enabler` | Infrastructure/technical prep paving the way for later features | Building a mock data layer, introducing a playback kernel, setting up CI |
 
+### Granularity
 
+- A single Story should be deliverable within 1 Sprint; too coarse -> split further
+- Too-small items with no standalone value -> merge
+- Points are estimated by DEV/QA, not hardcoded here
 
+### Common splitting dimensions
 
-### 粒度
+General: CRUD split / role split / state split / exception-flow split / rollout split
 
-- 单个 Story 应能在 1 个 Sprint 内交付；粒度过大 → 继续拆分
-- 无独立价值的过小项 → 合并
-- 点数由 DEV/QA 评估，不在此写死数值
+- Add the team's agreed scope-splitting dimensions per the team's agreed splitting dimensions (like end split, site split, language split)
+- When the team requires the content model as a standalone item, a content-model change must be a standalone item
 
-
-
-### 常用拆分维度
-
-通用：CRUD 拆 / 角色拆 / 状态拆 / 异常流拆 / 灰度拆
-
-- 按 团队约定的拆分维度 追加团队约定的范围拆分维度（如端拆、站点拆、语言拆）
-- 当 团队要求内容模型独立成条 时，内容模型变更必须独立成条
-
-
-
-## 3. 工作流
+## 3. Workflow
 
 ```
-- S1 载入 PRD（+ 技术方案，如有）
-- S2 梳理用户旅程，标注切分点
-- S3 生成 Story 清单（标题 + 句式 + 描述）
-- S4 逐条写 AC
-- S5 [条件] 领域专项检查
-- S6 INVEST 自检
-- S7 填 Jira 字段值
-- S8 建立 Story 间依赖与优先级
-- S9 门禁校验 + 交 PO 确认
+- S1 Load the PRD (+ tech solution, if any)
+- S2 Map the user journey, mark the split points
+- S3 Generate the Story list (title + sentence form + description)
+- S4 Write ACs one by one
+- S5 [conditional] Domain-specific checks
+- S6 INVEST self-check
+- S7 Fill Jira field values
+- S8 Establish inter-Story dependencies and priorities
+- S9 Gate check + hand to the PO for confirmation
 ```
 
-
-
-### S3 句式与摘要
+### S3 Sentence form and summary
 
 ```text
-As a {角色}, for {场景}, I want to {动作}, so that {价值}.
+As a {role}, for {scenario}, I want to {action}, so that {value}.
 ```
 
-摘要（Jira Summary）单独写，≤ 80 字符，动词开头。
+Write the summary (Jira Summary) separately, <= 80 characters, starting with a verb.
 
-描述是否必须自成一体，按团队配置决定：
-要求自成一体时，描述须可脱离 PRD 独立阅读，包含背景 + 用户故事 + 需求详细描述 + 领域影响 + 设计 + 技术方案。
+Whether the description must be self-contained is decided by the team config:
+when self-containment is required, the description must be readable independently of the PRD, including background + user story + detailed requirement description + domain impact + design + tech solution.
 
-### S4 AC 规范
+### S4 AC spec
 
-AC 须表达三要素：**前置条件**（身份 / 数据状态 / 环境）、**操作**（用户做了什么）、**可观察结果**（能被断言的预期）。三要素齐全即可，不强制使用 `GIVEN/WHEN/THEN` 等特定关键词——可用关键词式，也可用自然语句，只要三要素清晰、可测。
+An AC must express three elements: **precondition** (identity / data state / environment), **action** (what the user did), and **observable result** (an assertable expectation). The three elements being complete is enough; there's no forced use of specific keywords like `GIVEN/WHEN/THEN`—keyword style or natural sentences both work, as long as the three elements are clear and testable.
 
-关键词式写法（参考，非强制）：
+Keyword style (reference, not mandatory):
 
 ```markdown
-AC 1: {一句话标题}
-GIVEN {前置条件：身份、数据状态、环境}
-WHEN  {用户操作}
-AND   {附加操作}（可选）
-THEN  {可观察的预期结果}
-AND   {附加预期}（可选）
+AC 1: {one-line title}
+GIVEN {precondition: identity, data state, environment}
+WHEN  {user action}
+AND   {additional action} (optional)
+THEN  {observable expected result}
+AND   {additional expectation} (optional)
 ```
 
-硬性要求（G4）：
+Hard requirements (G4):
 
-
-| 要求    | 说明                               |
+| Requirement | Description |
 | ----- | -------------------------------- |
-| 三要素完整 | 前置条件 / 操作 / 可观察结果缺一即不合格（不限定具体关键词） |
-| 可观察   | 禁止「体验流畅」「运行正常」「友好」               |
-| 可自动化  | 每条 AC 至少能写出 1 条测试步骤              |
-| 原子    | 一条 AC 只验一件事                      |
-| 覆盖度   | 每 Story ≥ 3 条 AC，含 ≥1 异常 + ≥1 边界 |
-| 可量化   | 涉及性能/数量/时长必须给数值                  |
+| Three elements complete | Missing any of precondition / action / observable result is unqualified (no specific keyword required) |
+| Observable | No "smooth experience," "runs fine," "friendly" |
+| Automatable | Each AC can produce at least 1 test step |
+| Atomic | One AC verifies one thing |
+| Coverage | Each Story has >= 3 ACs, including >=1 exception + >=1 boundary |
+| Quantifiable | Anything about performance/count/duration must give a number |
 
+Anti-pattern -> correct:
 
-反例 → 正例：
-
-
-| 反例          | 正例                                   |
+| Anti-pattern | Correct |
 | ----------- | ------------------------------------ |
-| THEN 页面正常显示 | THEN 订单列表在 1 秒内渲染，展示 3 条有效订单，按创建时间倒序 |
-| GIVEN 用户已登录 | GIVEN 用户使用已绑定会员卡的账号登录，且账户下有 1 条已完成订单 |
+| THEN the page displays normally | THEN the order list renders within 1 second, showing 3 valid orders, sorted by creation time descending |
+| GIVEN the user is logged in | GIVEN the user logs in with an account that has a bound membership card and 1 completed order |
 
+When the team requires a content model, add:
 
-当 团队要求内容模型 时追加：
+- At least 1 AC covering one of the editing / preview / published state transitions
+- When multilingual is involved, at least 1 AC covering language fallback
+- When a content-model change is involved, at least 1 AC covering the compatibility behavior of historical content
 
-- 至少 1 条 AC 覆盖编辑态 / 预览态 / 已发布态其中一种流转
-- 涉及多语言时至少 1 条 AC 覆盖语言回退
-- 涉及内容模型变更时至少 1 条 AC 覆盖历史内容的兼容表现
+### S5 Domain-specific checks
 
-
-
-### S5 领域专项检查
-
-
-| 开关     | 为 true 时要检查                                            |
+| Switch | When true, check |
 | ------ | ------------------------------------------------------ |
-| 内容模型要求 | 站点范围（多站点是否分期）、语言范围（zh/en 是否都覆盖、回退是否定义）、内容模型变更是否与功能实现拆开 |
+| Content-model required | Site scope (whether multi-site is phased), language scope (whether zh/en are both covered and fallback is defined), whether the content-model change is split from the feature implementation |
 
+### S7 Jira fields
 
+Fill the Story template's field table item by item.
 
-
-### S7 Jira 字段
-
-按 Story 模板的字段表逐条填。
-
-
-| 字段         | 处理                                                                                                                                                                                                                                                                       |
+| Field | Handling |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 必填字段       | 全部必填，缺一即建单失败                                                                                                                                                                                                                                                             |
-| Agile Team | 取 `mcp.jira.agile_team` 默认值填入；该键为空表示团队无默认值，留待人工填写，不臆造 |
-| 标签         | 仅从 `mcp.jira.labels` 的合法枚举中选，大小写严格照 `labels.case_sensitive`；只自动填 `labels.auto_fill` 列出的类别。`auto_apply: always` 的类别（如 `ai_provenance` → `AIGenerated`）无条件恒定打上，用于标记经 agent 创建/同步的工单。当 `labels.business_domain.filter_gate` 为 true 时该类别为过滤性硬门禁：须据 Story 所属业务域按 `business_domain.select` 从 `business_domain.values` 中选定，缺失会被下游过滤丢弃；`process_labels.auto_fill` 为 false 的过程标签只校验不自动填；枚举外的标签不臆造，需先按 `labels.source` 指南与 TL/SM 对齐。`labels` 为空的团队无此约束 |
-| Component  | 按 `mcp.jira.components.platform_rule` 填：`ios_only` 指定的平台专属票选对应 Component，`android` 为 `none` 的平台票不选 Component，跨端/与平台无关的票按需留空。未配置 `components` 的团队不处理 |
-| 优先级        | 不填                                                                                                                                                                                                                                                                       |
-| 按条件填写的字段   | 按条件填（字段名取自团队配置，如 Impacted Systems）                                                                                                                                                                                                                                       |
-| 估点字段       | **一律不填**                                                                                                                                                                                                                                                                 |
-| 发布字段       | 不填（发布流程 / CRQ 回填）                                                                                                                                                                                                                                                        |
-| `链接的工作项`   | 遍历团队配置的链接集合，逐项建立                                                                                                                                                                                                                                                         |
+| Required fields | All required; missing one fails ticket creation |
+| Agile Team | Fill from the `mcp.jira.agile_team` default; an empty key means the team has no default, leave it for manual entry, don't fabricate |
+| Labels | Choose only from the valid enum in `mcp.jira.labels`, with case strictly per `labels.case_sensitive`; auto-fill only the categories listed in `labels.auto_fill`. Categories with `auto_apply: always` (like `ai_provenance` → `AIGenerated`) are applied unconditionally, to mark tickets created/synced by the agent. When `labels.business_domain.filter_gate` is true, that category is a filtering hard-gate: select from `business_domain.values` per the Story's business domain via `business_domain.select`; a missing one is filtered out downstream. Process labels with `process_labels.auto_fill` false are only checked, not auto-filled; don't fabricate labels outside the enum—align with the TL/SM per the `labels.source` guide first. Teams with empty `labels` have no such constraint |
+| Component | Fill per `mcp.jira.components.platform_rule`: platform-specific tickets designated by `ios_only` pick the corresponding Component, platform tickets with `android` = `none` pick no Component, and cross-end/platform-agnostic tickets leave it empty as needed. Teams without `components` configured don't handle it |
+| Priority | Don't fill |
+| Conditionally filled fields | Fill by condition (field names from the team config, like Impacted Systems) |
+| Estimation fields | **Always leave empty** |
+| Release fields | Don't fill (back-filled by the release flow / CRQ) |
+| `链接的工作项` | Go through the team-configured link set and establish each |
 
+## 4. INVEST self-check
 
-
-
-## 4. INVEST 自检
-
-
-| 维度              | 判据               |
+| Dimension | Criterion |
 | --------------- | ---------------- |
-| **I**ndependent | 能否独立交付           |
-| **N**egotiable  | 是否只写 what 不写 how |
-| **V**aluable    | 是否有独立价值          |
-| **E**stimable   | 是否足够估点           |
-| **S**mall       | 是否 ≤ 1 Sprint    |
-| **T**estable    | 每条 AC 是否可测       |
+| **I**ndependent | Can it be delivered independently |
+| **N**egotiable  | Does it write only the what, not the how |
+| **V**aluable    | Does it have standalone value |
+| **E**stimable   | Is it enough to estimate |
+| **S**mall       | Is it <= 1 Sprint |
+| **T**estable    | Is each AC testable |
 
+Any failure -> re-split.
 
-任一不通过 → 重新拆分。
+## 5. Quality gates
 
-## 5. 质量门禁
+- Each Story has a Parent (Epic)
+- Each Story has >= 3 ACs, including exception and boundary
+- ACs have no vague words
+- Each Story has a Figma link
+- All back-links listed in the team-configured link set are complete
+- All six INVEST items pass
+- No field requiring human estimation is filled
+- When the team requires self-contained descriptions: each description is self-contained
+- When the team requires a content model: there are state-transition ACs, language-fallback ACs, and historical-content compatibility ACs
 
-- 每条 Story 有 Parent（Epic）
-- 每条 Story ≥ 3 条 AC，含异常与边界
-- AC 无模糊词
-- 每条 Story 挂 Figma link
-- 团队配置的链接集合列出的回链全部齐全
-- INVEST 六项通过
-- 未填任何需人工估点的字段
-- 团队要求描述自成一体时：每条描述自成一体
-- 团队要求内容模型时：有状态流转 AC、多语言回退 AC、历史内容兼容 AC
+## 6. Output
 
+Don't save intermediate files: the Story list is given in the conversation only (one complete field block per Story, with the sentence form, description, AC, Jira field values, back-links), directly serving as input to the ticket-creation step. After handoff, stop and wait for PO confirmation; don't write intermediate products like `stories-*.md`/`.yaml`.
 
+## 7. Related
 
-## 6. 输出
-
-不落地中间文件：Story 清单只在对话里给出（每条 Story 一个完整字段块，含句式、描述、AC、Jira 字段值、回链），直接作为建单环节的输入。交付后停下等 PO 确认，不写 `stories-*.md`/`.yaml` 等中间产物。
-
-## 7. 相关
-
-- 模板：references/user-story-app.md / references/user-story-cms.md（按 profile 的 `team` 取用：APP / CMS）
-- 上游：prd-authoring、tech-solution-prd、tech-solution-detail
-- 下游：user-story-publish
-
+- Templates: references/user-story-app.md / references/user-story-cms.md (pick by the profile's `team`: APP / CMS)
+- Upstream: prd-authoring, tech-solution-prd, tech-solution-detail
+- Downstream: user-story-publish
