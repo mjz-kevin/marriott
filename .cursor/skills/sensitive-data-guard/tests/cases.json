@@ -44,9 +44,12 @@
       "expect_exit": 2,
       "expect_rules": [
         "member_name_field",
+        "marriott_bonvoy_id",
         "cn_mobile_phone",
         "email_address",
         "cn_id_card",
+        "passport_field",
+        "passport_no",
         "address_field",
         "cn_address_text",
         "bank_card"
@@ -125,6 +128,78 @@
       "no_whitelist": true,
       "expect_exit": 0,
       "forbid_rules": ["bank_card"],
+      "max_findings": 0
+    },
+    {
+      "id": "passport-standalone",
+      "name": "A passport number (letter+digits) should be blocked without a keyword",
+      "inline_text": "his travel doc is E12345678 issued in 2020",
+      "no_whitelist": true,
+      "expect_exit": 2,
+      "expect_rules": ["passport_no"],
+      "min_findings": 1
+    },
+    {
+      "id": "passport-intl-formats",
+      "name": "Common international passport formats should be blocked without a keyword",
+      "inline_text": "UK passport 923456789, German C01X00T47, India L6892603, Japan TR1234567",
+      "no_whitelist": true,
+      "expect_exit": 2,
+      "expect_rules": ["passport_no"],
+      "min_findings": 2
+    },
+    {
+      "id": "passport-field-keyword",
+      "name": "A passport field assignment (incl. all-digit) should be blocked",
+      "inline_text": "passport: 123456789",
+      "no_whitelist": true,
+      "expect_exit": 2,
+      "expect_rules": ["passport_field"],
+      "min_findings": 1
+    },
+    {
+      "id": "passport-field-multilang",
+      "name": "A non-English passport keyword should be blocked",
+      "inline_text": "여권번호: M12345678",
+      "no_whitelist": true,
+      "expect_exit": 2,
+      "expect_rules": ["passport_field"],
+      "min_findings": 1
+    },
+    {
+      "id": "passport-no-false-positive",
+      "name": "A normal product code should not match passport_no",
+      "inline_text": "build artifact ROADMAP2024 shipped",
+      "no_whitelist": true,
+      "expect_exit": 0,
+      "forbid_rules": ["passport_no"],
+      "max_findings": 0
+    },
+    {
+      "id": "bonvoy-id-keyword",
+      "name": "A Marriott Bonvoy member number should be blocked",
+      "inline_text": "Bonvoy member number: 123456789",
+      "no_whitelist": true,
+      "expect_exit": 2,
+      "expect_rules": ["marriott_bonvoy_id"],
+      "min_findings": 1
+    },
+    {
+      "id": "bonvoy-id-chinese",
+      "name": "A Chinese 万豪旅享家 member number should be blocked",
+      "inline_text": "会员号码：987654321",
+      "no_whitelist": true,
+      "expect_exit": 2,
+      "expect_rules": ["marriott_bonvoy_id"],
+      "min_findings": 1
+    },
+    {
+      "id": "bonvoy-id-false-positive",
+      "name": "A plain 9-digit number without a member keyword should not match marriott_bonvoy_id",
+      "inline_text": "order id 123456789 processed at remember 987654321",
+      "no_whitelist": true,
+      "expect_exit": 0,
+      "forbid_rules": ["marriott_bonvoy_id"],
       "max_findings": 0
     }
   ]
