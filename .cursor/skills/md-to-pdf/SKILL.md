@@ -29,10 +29,11 @@ Convert a finished local PRD / tech-solution `.md` (along with its referenced lo
 
 ## 0. Config values
 
-This skill doesn't read the team profile; conversion is a purely local operation that depends only on how `npx` resolves.
+This skill doesn't read the team profile; conversion is a purely local operation that depends only on how the Python interpreter and `npx` resolve (both from `.cursor/profiles/setup.json`).
 
 | Purpose | Key / source |
 | ------ | ------ |
+| python path | Prefer the `python` in the current platform's (`windows` / `macos` / `linux`) / `common` section of `.cursor/profiles/setup.json` (expand a leading `~`); otherwise fall back to the system `python` / `python3` on `PATH` |
 | npx path | Prefer the `npx` in the current platform's / `common` section of `.cursor/profiles/setup.json`; otherwise the system `PATH`; otherwise scan `node-*` under the runtime directory `AI_SDLC_RUNTIME` (default `C:/AI-SDLC/runtime`) |
 
 A missing `npx` blocks the run; follow the install guidance the script prints, then retry.
@@ -62,7 +63,7 @@ Conversion progress:
 
 ### Step 3: Run the conversion
 
-> **Command form (cross-platform, unified)**: the command is a single line with no line continuations, and can run directly in Windows PowerShell / CMD, macOS, and Linux. `python` is a launcher placeholder: on macOS / Linux use the `python` / `python3` on your `PATH`; on the Windows portable build (Python not on PATH) use the interpreter path from the env-setup self-check output. The script resolves `npx` automatically, so there's no need to specify a Node path in the command.
+> **Command form (cross-platform, unified)**: the command is a single line with no line continuations, and can run directly in Windows PowerShell / CMD, macOS, and Linux. `python` is a placeholder for the interpreter resolved from `.cursor/profiles/setup.json`: before running, read that short file and take the `python` field from the section matching the current platform (`windows` / `macos` / `linux`), falling back to the `common` section (expand a leading `~`); only when both leave it empty (or the file is missing) fall back to the `python` / `python3` on your `PATH`. The script resolves `npx` automatically from the same `setup.json`, so there's no need to specify a Node path in the command.
 
 ```bash
 python .cursor/skills/md-to-pdf/scripts/export_pdf.py --md "<absolute or relative path to the .md>"
