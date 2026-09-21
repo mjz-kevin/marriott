@@ -63,6 +63,7 @@ fields to a whitelist or a custom rule.
 | `cn_id_card` | China resident ID card number (18 digits, with date validation) |
 | `bank_card` | 13-19 digit bank/credit card number (passes Luhn mod-10) |
 | `member_name_field` | `member_name` / `会员名` / `姓名` = value |
+| `marriott_bonvoy_id` | Marriott Bonvoy / 万豪旅享家 9-digit member number (with a loyalty/member keyword) |
 | `address_field` | `address` / `地址` = value |
 | `cn_address_text` | Chinese street address (province/city/district + road/number/room/building…) |
 | `passport_field` | passport keyword (多语言 `passport`/`护照`/`パスポート`/`여권`…) = value |

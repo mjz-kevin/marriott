@@ -47,7 +47,8 @@ If you're only reading, searching, or just displaying to the user in the convers
 - **Secrets:** password/passwd/pwd, token / api_key / access_token, AK/SK
   (access key + secret key), AWS keys, GitHub/Slack/Google/Alibaba Cloud keys, Bearer
   tokens, JWTs, PEM private keys.
-- **Personally identifiable information (PII):** member/customer name fields, phone numbers (China mobile +
+- **Personally identifiable information (PII):** member/customer name fields, Marriott Bonvoy member
+  numbers, phone numbers (China mobile +
   international numbers), emails, ID card numbers, passport numbers, bank/credit card numbers, address fields and Chinese street addresses.
 
 For the full rule list and config format, see [reference.md](reference.md).

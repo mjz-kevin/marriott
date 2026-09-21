@@ -188,6 +188,17 @@ PII_RULES = [
         ),
     },
     {
+        "id": "marriott_bonvoy_id",
+        "category": "pii",
+        "severity": "high",
+        "desc": "Marriott Bonvoy member number (9-digit)",
+        # 9-digit Marriott Bonvoy / 万豪旅享家 member number, matched only when a
+        # loyalty/member keyword is nearby, to avoid false positives on other 9-digit numbers.
+        "regex": re.compile(
+            r"(?i)(?:\b(?:bonvoy|marriott|member(?:ship)?[_-]?(?:id|no|number|num)?|loyalty[_-]?(?:id|no|number|num)?|rewards[_-]?(?:id|no|number|num)?)|旅享家|万豪(?:会员)?|会员号(?:码)?|会员编号)[^\n\d]{0,20}?(?<!\d)\d{9}(?!\d)"
+        ),
+    },
+    {
         "id": "address_field",
         "category": "pii",
         "severity": "medium",
