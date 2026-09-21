@@ -80,7 +80,7 @@ zip 里已内置安装脚本、角色 README、Windows 运行时（`AI-SDLC.zip`
 ```
 
 安装脚本做的事：
-1. 把 `agents/` → `~/.cursor/agents/`，`skills/` → `~/.cursor/skills/`，`profiles/` → `~/.cursor/profiles/`；
+1. 把 `agents/` → `~/.cursor/agents/`，`skills/` → `~/.cursor/skills/`，`profiles/` → `~/.cursor/profiles/`（其中 `setup.json` 已存在则保留用户本地内容，不覆盖）；
 2. 把 mcp 示例 → `~/.cursor/`；
 3. **仅 Windows**：把随包的 `AI-SDLC.zip` 解压到 `C:\`，得到 `C:\AI-SDLC\runtime\`（绿色版 Python/Node）；
 4. **自检 npx** 并**生成 `~/.cursor/mcp.json`**（Windows 自动填入 `npx.cmd` 绝对路径，macOS/Linux 用 `npx`；删除注释、凭证字段留空；已存在则保留已填凭证）；

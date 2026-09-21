@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # AI SDLC 角色分发包 · macOS / Linux 安装脚本
 # 把本包内的 agents / skills / profiles / mcp 示例落到 ~/.cursor/。
-# 幂等：重复运行会覆盖同名资产。凭证不代填。
+# 幂等：重复运行会覆盖同名资产（profiles/setup.json 与已填凭证的 mcp.json 除外）。凭证不代填。
 set -euo pipefail
 
 # 脚本所在目录（即解压后的包根）
@@ -34,7 +34,20 @@ echo "--> 安装 skills"
 copy_dir_contents "$PKG_DIR/skills" "$CURSOR_HOME/skills"
 
 echo "--> 安装 profiles"
-copy_dir_contents "$PKG_DIR/profiles" "$CURSOR_HOME/profiles"
+# profile 的 *.yaml 无条件覆盖（团队统一配置，无用户修改场景）；
+# setup.json 是用户本地运行时路径配置，已存在则保留，不覆盖。
+if [ -d "$PKG_DIR/profiles" ]; then
+  mkdir -p "$CURSOR_HOME/profiles"
+  ( cd "$PKG_DIR/profiles" && find . -mindepth 1 -maxdepth 1 -print0 ) | \
+  while IFS= read -r -d '' item; do
+    name="$(basename "$item")"
+    if [ "$name" = "setup.json" ] && [ -f "$CURSOR_HOME/profiles/setup.json" ]; then
+      echo "    保留已有 setup.json（用户本地运行时配置，未覆盖）"
+      continue
+    fi
+    cp -R "$PKG_DIR/profiles/$name" "$CURSOR_HOME/profiles/"
+  done
+fi
 
 echo "--> 安装 mcp 示例到 $CURSOR_HOME"
 if [ -d "$PKG_DIR/cursor-files" ]; then

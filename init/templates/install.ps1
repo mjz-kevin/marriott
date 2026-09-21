@@ -1,7 +1,7 @@
 # AI SDLC 角色分发包 · Windows 安装脚本 (PowerShell)
 # 把本包内的 agents / skills / profiles / mcp 示例落到 %USERPROFILE%\.cursor\，
 # 并把随包的 AI-SDLC.zip 解压到 C:\（得到 C:\AI-SDLC\runtime\）。
-# 幂等：重复运行会覆盖同名资产。凭证不代填。
+# 幂等：重复运行会覆盖同名资产（profiles\setup.json 与已填凭证的 mcp.json 除外）。凭证不代填。
 #
 # 首次运行若被执行策略拦截，先执行：
 #   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
@@ -42,7 +42,20 @@ Write-Host "--> 安装 skills"
 Copy-Contents (Join-Path $PkgDir "skills") (Join-Path $CursorHome "skills")
 
 Write-Host "--> 安装 profiles"
-Copy-Contents (Join-Path $PkgDir "profiles") (Join-Path $CursorHome "profiles")
+# profile 的 *.yaml 无条件覆盖（团队统一配置，无用户修改场景）；
+# setup.json 是用户本地运行时路径配置，已存在则保留，不覆盖。
+$profilesSrc = Join-Path $PkgDir "profiles"
+$profilesDst = Join-Path $CursorHome "profiles"
+if (Test-Path $profilesSrc) {
+    New-Item -ItemType Directory -Force -Path $profilesDst | Out-Null
+    Get-ChildItem -Path $profilesSrc -Force | ForEach-Object {
+        if ($_.Name -eq "setup.json" -and (Test-Path (Join-Path $profilesDst "setup.json"))) {
+            Write-Host "    保留已有 setup.json（用户本地运行时配置，未覆盖）"
+        } else {
+            Copy-Item -Path $_.FullName -Destination $profilesDst -Recurse -Force
+        }
+    }
+}
 
 Write-Host "--> 安装 mcp 示例到 $CursorHome"
 Copy-Contents (Join-Path $PkgDir "cursor-files") $CursorHome
