@@ -1,20 +1,19 @@
 {
-    "_comment": "AI SDLC 工具链可执行文件路径配置。多数情况留空即可——脚本会自动按顺序解析：1) 本文件当前平台段的绝对路径；2) 系统 PATH；3) 自动扫描固定运行时目录 C:/AI-SDLC/runtime/ 下的 python-*/node-* （Windows 绿色版零配置）。只有当你把运行时放在非默认位置、或要锁定特定版本时，才在对应平台段填绝对路径。",
-    "_auto_scan": "Windows 绿色版：把 python 与 node 解压到 C:/AI-SDLC/runtime/ 下（形如 runtime/python-3.13.x-embed-amd64/ 与 runtime/node-vXX.X.X-win-x64/），脚本会自动定位 python.exe / node.exe / npm.cmd / npx.cmd，无需填写本文件。若运行时不在 C:/AI-SDLC/runtime，可设环境变量 AI_SDLC_RUNTIME 指向实际根目录，或在下方 windows 段填绝对路径。",
-    "_usage": "路径统一用正斜杠 /（Windows 下也有效）。留空字符串=跳过该项、按上述顺序回退。填了绝对路径=最高优先级、覆盖自动解析。",
+    "_comment": "AI SDLC 工具链可执行文件路径配置。windows / macos 段已按固定运行时布局写死绝对路径（win 以 C:/AI-SDLC/runtime、macOS 以 ~/.cursor/AI-SDLC/runtime 为准，node v26.9.0 / python 3.13.15）。若你的运行时版本或位置不同，改这里对应字段即可；留空则回退到系统 PATH。",
+    "_usage": "路径统一用正斜杠 /（Windows 下也有效）。macOS 用 ~ 表示用户主目录，脚本会自动展开。填了绝对路径=最高优先级；留空=按 平台段→common→系统PATH→扫描运行时目录 的顺序回退。",
     "windows": {
-        "_comment": "一般留空即可（走自动扫描）。仅当运行时在非默认位置且未设 AI_SDLC_RUNTIME 时才填。示例：C:/AI-SDLC/runtime/node-v26.9.0-win-x64/npx.cmd",
-        "python": "",
-        "node": "",
-        "npm": "",
-        "npx": ""
+        "_comment": "Windows 绿色版运行时解压到 C:/AI-SDLC/runtime/。以下为该布局下的固定路径（node v26.9.0-win-x64 / python 3.13.15-embed-amd64）。",
+        "python": "C:/AI-SDLC/runtime/python-3.13.15-embed-amd64/python.exe",
+        "node": "C:/AI-SDLC/runtime/node-v26.9.0-win-x64/node.exe",
+        "npm": "C:/AI-SDLC/runtime/node-v26.9.0-win-x64/npm.cmd",
+        "npx": "C:/AI-SDLC/runtime/node-v26.9.0-win-x64/npx.cmd"
     },
     "macos": {
-        "_comment": "macOS 一般已通过 Homebrew/官方安装包把 python3/node/npx 加入 PATH，留空走 PATH。仅锁定特定版本时才填绝对路径。",
-        "python": "",
-        "node": "",
-        "npm": "",
-        "npx": ""
+        "_comment": "macOS（Apple Silicon）绿色版运行时铺到 ~/.cursor/AI-SDLC/runtime/。以下为该布局下的固定路径（node v26.9.0-darwin-arm64 / python 3.13.15-darwin-arm64）。Intel 机型请把 arm64 改为 x64。",
+        "python": "~/.cursor/AI-SDLC/runtime/python-3.13.15-darwin-arm64/bin/python3",
+        "node": "~/.cursor/AI-SDLC/runtime/node-v26.9.0-darwin-arm64/bin/node",
+        "npm": "~/.cursor/AI-SDLC/runtime/node-v26.9.0-darwin-arm64/bin/npm",
+        "npx": "~/.cursor/AI-SDLC/runtime/node-v26.9.0-darwin-arm64/bin/npx"
     },
     "linux": {
         "_comment": "Linux 通常走 PATH，留空即可。",
