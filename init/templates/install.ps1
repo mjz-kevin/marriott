@@ -1,6 +1,6 @@
 # AI SDLC 角色分发包 · Windows 安装脚本 (PowerShell)
 # 把本包内的 agents / skills / profiles / mcp 示例落到 %USERPROFILE%\.cursor\，
-# 并把随包的 AI-SDLC.zip 解压到 C:\（得到 C:\AI-SDLC\runtime\）。
+# 并把随包的 AI-SDLC-windows.zip 解压到 C:\（得到 C:\AI-SDLC\runtime\）。
 # 幂等：重复运行会覆盖同名资产（profiles\setup.json 与已填凭证的 mcp.json 除外）。凭证不代填。
 #
 # 首次运行若被执行策略拦截，先执行：
@@ -61,23 +61,23 @@ Write-Host "--> 安装 mcp 示例到 $CursorHome"
 Copy-Contents (Join-Path $PkgDir "cursor-files") $CursorHome
 
 # ---- Windows 专属：解压运行时到 C:\ ----
-$runtimeZip = Join-Path $PkgDir "AI-SDLC.zip"
+$runtimeZip = Join-Path $PkgDir "AI-SDLC-windows.zip"
 $runtimeRoot = "C:\AI-SDLC\runtime"
 if (Test-Path $runtimeZip) {
     if (Test-Path $runtimeRoot) {
         Write-Host "--> 检测到 $runtimeRoot 已存在，跳过运行时解压（如需重装请先删除 C:\AI-SDLC）"
     } else {
-        Write-Host "--> 解压运行时 AI-SDLC.zip 到 C:\ ..."
+        Write-Host "--> 解压运行时 AI-SDLC-windows.zip 到 C:\ ..."
         try {
             Expand-Archive -Path $runtimeZip -DestinationPath "C:\" -Force
             Write-Host "    运行时已解压到 C:\AI-SDLC\"
         } catch {
-            Write-Warning "解压到 C:\ 失败（可能无写入权限）。请手动把 AI-SDLC.zip 解压到 C:\，得到 C:\AI-SDLC\runtime\。"
+            Write-Warning "解压到 C:\ 失败（可能无写入权限）。请手动把 AI-SDLC-windows.zip 解压到 C:\，得到 C:\AI-SDLC\runtime\。"
             Write-Warning $_.Exception.Message
         }
     }
 } else {
-    Write-Warning "本包未包含 AI-SDLC.zip，跳过运行时解压。请另行获取绿色版运行时并解压到 C:\AI-SDLC\runtime\。"
+    Write-Warning "本包未包含 AI-SDLC-windows.zip，跳过运行时解压。请另行获取绿色版运行时并解压到 C:\AI-SDLC\runtime\。"
 }
 
 # ---- 自检：定位 npx.cmd（绿色版运行时 → 系统 PATH）----

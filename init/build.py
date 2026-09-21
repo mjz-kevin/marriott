@@ -145,6 +145,44 @@ def copy_skill(name: str, dst_skills: Path, warnings: list[str]) -> bool:
     return True
 
 
+def _copy_runtime_dir(src: Path, dst: Path) -> None:
+    """复制运行时目录（node / python），对单个文件复制失败容错。
+
+    运行时目录里含大量文件、符号链接，且 python 的 venv 等文件在某些环境（受限文件
+    系统 / 沙箱）下无法按原样复制（报 “Operation not permitted”）。shutil.copytree 会把
+    这些错误聚合后抛 Error 中断整包构建。这里手写递归复制：
+      - 保留符号链接（npx -> ../lib/... 等）；
+      - 用 copy_function=copy（只复制内容+权限位，不碰 flags/时间戳）；
+      - 单个文件复制失败仅记录并跳过，不中断（返回失败文件数由调用方决定是否告警）。
+    """
+    errors: list[str] = []
+
+    def _walk(s: Path, d: Path) -> None:
+        d.mkdir(parents=True, exist_ok=True)
+        for entry in s.iterdir():
+            if entry.name in (".DS_Store", "__pycache__"):
+                continue
+            target = d / entry.name
+            try:
+                if entry.is_symlink():
+                    linkto = os.readlink(entry)
+                    if target.exists() or target.is_symlink():
+                        target.unlink()
+                    os.symlink(linkto, target)
+                elif entry.is_dir():
+                    _walk(entry, target)
+                else:
+                    shutil.copy(entry, target)   # 内容+权限，不复制 flags
+            except OSError as e:
+                errors.append(f"{entry}: {e}")
+
+    _walk(src, dst)
+    if errors:
+        # 只告警，不中断——个别受限文件（如 venv 元数据）缺失不影响运行时可用性
+        print(f"[build]   ⚠️ 运行时 {src.name} 有 {len(errors)} 个文件复制失败（已跳过），"
+              f"首条：{errors[0]}")
+
+
 def build_role(role: str, cfg: dict, common: dict, version: str) -> dict:
     """构建单个角色的分发目录，返回构建摘要。"""
     warnings: list[str] = []
@@ -190,14 +228,81 @@ def build_role(role: str, cfg: dict, common: dict, version: str) -> dict:
         else:
             warnings.append(f"公共文件『{fname}』不存在，已跳过")
 
-    # 5) Windows 运行时包（若存在则一并带上，供离线解压到 C:\）
-    runtime_zip = INIT_DIR / "res" / "AI-SDLC.zip"
-    bundled_runtime = False
-    if runtime_zip.is_file():
-        shutil.copy2(runtime_zip, role_dir / "AI-SDLC.zip")
-        bundled_runtime = True
+    # 5) 离线绿色运行时（若存在则一并带上，供 install 脚本离线铺开）
+    #    Windows：res/AI-SDLC-windows.zip → 解压到 C:\（得到 C:\AI-SDLC\runtime\）
+    #    macOS  ：res/AI-SDLC-macos.zip 或 .tar.gz，或已解开的 res/AI-SDLC/runtime/（darwin 部分）
+    #             → install.sh 铺到 ~/.cursor/AI-SDLC/runtime/
+    res_dir = INIT_DIR / "res"
+    bundled_runtime = False          # 兼容旧字段：任一平台运行时随包即为 True
+    bundled_runtime_win = False
+    bundled_runtime_mac = False
+
+    # 5a) Windows 运行时（AI-SDLC-windows.zip）
+    win_zip = res_dir / "AI-SDLC-windows.zip"
+    if win_zip.is_file():
+        shutil.copy2(win_zip, role_dir / "AI-SDLC-windows.zip")
+        bundled_runtime_win = True
     else:
-        warnings.append("res/AI-SDLC.zip 不存在，Windows 运行时未随包分发")
+        warnings.append("res/AI-SDLC-windows.zip 不存在，Windows 运行时未随包分发")
+
+    # 5b) macOS 运行时。优先级：
+    #     ① 架构分包（推荐，与 AI-SDLC-windows.zip 对齐）：AI-SDLC-macOS-Silicon.zip / AI-SDLC-macOS-Intel.zip
+    #        —— 存在几个就带几个，一个角色包可同时支持 M 系列与 Intel，install.sh 按架构选。
+    #     ② 通用压缩包：AI-SDLC-macos.zip / .tar.gz
+    #     ③ 已解开目录：res/AI-SDLC/runtime/ 下的 node-*-darwin-* 等
+    mac_arch_zips = [
+        res_dir / "AI-SDLC-macOS-Silicon.zip",
+        res_dir / "AI-SDLC-macOS-Intel.zip",
+    ]
+    mac_zip = res_dir / "AI-SDLC-macos.zip"
+    mac_tgz = next(
+        (res_dir / n for n in ("AI-SDLC-macos.tar.gz", "AI-SDLC-macos.tgz")
+         if (res_dir / n).is_file()),
+        None,
+    )
+    # 已解开的 darwin 运行时：res/AI-SDLC/runtime/ 下存在 node-*-darwin-* 目录
+    mac_runtime_dir = res_dir / "AI-SDLC" / "runtime"
+    mac_has_dir = mac_runtime_dir.is_dir() and any(
+        p.is_dir() and p.name.startswith("node-") and "darwin" in p.name
+        for p in mac_runtime_dir.iterdir()
+    )
+
+    present_arch_zips = [z for z in mac_arch_zips if z.is_file()]
+    if present_arch_zips:
+        for z in present_arch_zips:
+            shutil.copy2(z, role_dir / z.name)
+        bundled_runtime_mac = True
+    elif mac_zip.is_file():
+        shutil.copy2(mac_zip, role_dir / "AI-SDLC-macos.zip")
+        bundled_runtime_mac = True
+    elif mac_tgz is not None:
+        shutil.copy2(mac_tgz, role_dir / mac_tgz.name)
+        bundled_runtime_mac = True
+    elif mac_has_dir:
+        # 只拷贝 macOS 相关目录（darwin node + 非 Windows 的 python），
+        # 避免把 Windows 二进制（node-*-win-*、python-*-amd64/win）塞进 mac 包。
+        dst_runtime = role_dir / "AI-SDLC" / "runtime"
+        dst_runtime.mkdir(parents=True, exist_ok=True)
+        for p in mac_runtime_dir.iterdir():
+            if not p.is_dir():
+                continue
+            nm = p.name
+            # 注意：不能用 "win" in nm 判断 Windows —— "darwin" 里含 "win"！
+            # Windows 目录名形如 node-*-win-x64 / python-*-embed-amd64。
+            is_win = ("-win-" in nm) or nm.endswith("-win") or ("amd64" in nm) or ("embed" in nm)
+            is_darwin_node = nm.startswith("node-") and "darwin" in nm
+            is_mac_python = nm.startswith("python-") and not is_win
+            if is_darwin_node or is_mac_python:
+                _copy_runtime_dir(p, dst_runtime / nm)
+        bundled_runtime_mac = True
+    else:
+        warnings.append(
+            "res 下未找到 macOS 运行时（AI-SDLC-macOS-Silicon.zip / AI-SDLC-macOS-Intel.zip、"
+            "AI-SDLC-macos.zip/.tar.gz 或 AI-SDLC/runtime/node-*-darwin-*），"
+            "macOS 运行时未随包分发（install.sh 将回退到系统 PATH）"
+        )
+
+    bundled_runtime = bundled_runtime_win or bundled_runtime_mac
 
     # 6) 安装脚本（从 init/templates 拷入每个包）
     #    install.sh 直接复制（保持 LF）。
@@ -222,6 +327,8 @@ def build_role(role: str, cfg: dict, common: dict, version: str) -> dict:
         "profiles": common.get("profiles", []),
         "cursor_files": common.get("files", []),
         "bundled_runtime": bundled_runtime,
+        "bundled_runtime_win": bundled_runtime_win,
+        "bundled_runtime_mac": bundled_runtime_mac,
         "warnings": warnings,
     }
     with (role_dir / "manifest.json").open("w", encoding="utf-8") as f:
@@ -254,8 +361,9 @@ def _write_role_readme(role_dir: Path, role: str, cfg: dict, manifest: dict) -> 
     a("安装脚本会：")
     a("- 把 agents 复制到 `~/.cursor/agents/`，skills 复制到 `~/.cursor/skills/`；")
     a("- 把 profiles 复制到 `~/.cursor/profiles/`，mcp 示例复制到 `~/.cursor/`；")
-    a("- **Windows** 额外把随包的 `AI-SDLC.zip` 解压到 `C:\\`（得到 `C:\\AI-SDLC\\runtime\\`）；")
-    a("- 自检 npx 并生成 `~/.cursor/mcp.json`（凭证字段留空，已存在则保留已填凭证）。\n")
+    a("- **Windows** 额外把随包的 `AI-SDLC-windows.zip` 解压到 `C:\\`（得到 `C:\\AI-SDLC\\runtime\\`）；")
+    a("- **macOS** 额外把随包的绿色运行时铺到 `~/.cursor/AI-SDLC/runtime/`（按机型自动选 Silicon / Intel，离线，无需 brew / sudo）；")
+    a("- 自检 npx（运行时优先，回退系统 PATH）并生成 `~/.cursor/mcp.json`（凭证字段留空，已存在则保留已填凭证）。\n")
     a("安装完成后：打开 `~/.cursor/mcp.json` 填入凭证，再在 Cursor 的 MCP 设置里确认 server 已连接即可。agents / skills 由 Cursor 自动识别，无需重启。\n")
     a("## 本包包含的 Agent\n")
     for item in manifest["agents"]:
@@ -328,9 +436,11 @@ def main() -> int:
     for m in summaries:
         n_ph = sum(1 for x in m["agents"] if x["placeholder"])
         n_missing = sum(1 for x in m["skills"] if not x["present"])
+        rt_win = "✓" if m.get("bundled_runtime_win") else "✗"
+        rt_mac = "✓" if m.get("bundled_runtime_mac") else "✗"
         log(
             f"  {m['role']:<4} agents={len(m['agents'])}(占位{n_ph}) "
-            f"skills={len(m['skills'])}(缺失{n_missing}) runtime={'✓' if m['bundled_runtime'] else '✗'}"
+            f"skills={len(m['skills'])}(缺失{n_missing}) runtime[win={rt_win} mac={rt_mac}]"
         )
     if not args.no_zip:
         log(f"产物目录 {DIST_DIR.relative_to(REPO_ROOT)}/ 下仅保留 zip：")
