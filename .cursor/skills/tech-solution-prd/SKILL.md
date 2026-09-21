@@ -48,7 +48,7 @@ Template: [tech-solution-prd.md](references/tech-solution-prd.md)
 > Before writing, first clarify open questions in the conversation and understand the PRD and code context, then write per the template.
 
 ```
-- S1 Document Information + version-history table (A/M/D)
+- S1 Document Information + version-history table (A/M/D); the `Description` column stays concise (a short phrase summarizing the change, e.g. `Initial version`), not a full paragraph
 - S2 Chapter 1 Background and business goals (continuing from the PRD, state "why now")
 - S3 Chapter 2 Scope (In Scope / key scenarios / constraints)
 - S4 Chapter 3 Core tech solution (architecture diagram + main flow + contract overview)
@@ -107,13 +107,14 @@ Undecidable technical points are logged as a spike ticket for research (state th
 | Don't write business rules | Business rules belong to the PRD; the solution only writes the technical implementation |
 | Don't delete sections | For an optional item/section not involved, keep the heading and write `—` (a checklist trace meaning "assessed, not needed this cycle"); when a full sentence is needed use "Not applicable this cycle"; don't delete the section |
 | No fabricated optional content | Don't proactively generate content for an optional item without a requirement/clarification basis; write it only when the requirement, clarification conclusion, or user explicitly calls for it, otherwise write `—` |
-| Faithful to the template | The body starts from "## Document Information"; fill only the template's existing sections and fields, don't add explanatory sentences, lead-ins, comments, or subsections not defined by the template. Never copy `{guidance blocks}`, `> **`Example`**` block quotes, or HTML comments into the product; the template file's title and author notes are not part of the product |
+| Faithful to the template | The body starts from "## Document Information"; **strip the author-facing ` (optional)` marker from every heading and field/row label in the product** (it is a writing note meaning "may be omitted," not visible title text—e.g. `## 6. Risks and Open Items (optional)` → `## 6. Risks and Open Items`, `STB / ARB Trigger Assessment (optional)` → `STB / ARB Trigger Assessment`); fill only the template's existing sections and fields, don't add explanatory sentences, lead-ins, comments, or subsections not defined by the template. Never copy `{guidance blocks}`, `> **`Example`**` block quotes, or HTML comments into the product; the template file's title and author notes are not part of the product |
 
 ## 4. Quality gates
 
 - All 7 chapters complete, no empty sections
 - The body starts from "## Document Information," with no explanatory sentences, lead-ins, or subsections added beyond the template
 - No `{guidance block}` residue, no `> **`Example`**` block-quote residue, and no HTML-comment residue; **do not** treat business-domain terms alone (Bonvoy, Marriott, etc.) as leakage
+- No author-facing ` (optional)` marker left in any heading or field/row label (it is stripped from the product, e.g. `## 6. Risks and Open Items`, `STB / ARB Trigger Assessment`)
 - No `[Enter ...]` / `{feature_name}` / `{author}` / `TODO` placeholder residue
 - An architecture diagram exists (mermaid or a Confluence reference)
 - The STB/ARB trigger-decision row has a clear conclusion (if unsure, treat as triggered)

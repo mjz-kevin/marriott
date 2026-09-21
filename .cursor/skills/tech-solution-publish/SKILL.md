@@ -36,15 +36,15 @@ Write the confirmed tech solution (one of the three tiers) into the designated C
 | Purpose | Publish the tech solution into the `{epic}-Tech Solution` folder layered by epic, and write back to the linked object per tier |
 | Input | The human-confirmed tech solution (one of prd / spike / detail), its Jira Epic key, and the team's Confluence config |
 | Output | A Confluence page (created or updated); returns the URL, version, completeness stats, and pending write-back content |
-| Permission | This Agent is read-only on Jira: spike-conclusion write-back and Story back-linking only produce "pending write-back content," handed to the ticket-creation step that has Jira write access |
+| Permission | This Agent is read-only on Jira for tickets (no create/edit/transition/comment). **One exception**: after publishing detail/spike, it writes the tech-solution back-link itself as a Jira **Web remote link** via the script's `--jira-remote-link` REST mode (idempotent by `globalId`); this is the only Jira write it performs. Ticket fields/status stay untouched and are the ticket-creation step's job |
 
 The three tiers land at the same Confluence spot (the `{epic}-Tech Solution` under the same epic folder), but write back to different targets:
 
 | mode | Confluence spot | Write-back target |
 |------|-----------------|----------|
 | `prd` | `{epic}-Tech Solution` folder (prd-level solution page) | Requirements doc (PRD page or Story description, per team convention) |
-| `spike` | `{epic}-Tech Solution` folder (Spike conclusion page) | Spike ticket conclusion (Jira) |
-| `detail` | `{epic}-Tech Solution` folder (Story detailed-solution page) | Jira Story back-link |
+| `spike` | `{epic}-Tech Solution` folder (Spike conclusion page) | Jira Web remote link on the Spike ticket (written by this Agent) |
+| `detail` | `{epic}-Tech Solution` folder (Story detailed-solution page) | Jira Web remote link on the Story (written by this Agent) |
 
 ## 0. Config values
 
@@ -63,7 +63,7 @@ The three tiers land at the same Confluence spot (the `{epic}-Tech Solution` und
 | detail title template | `profiles/{profile}.yaml` → `mcp.confluence.naming.tech_solution_detail` |
 | Body format | `profiles/{profile}.yaml` → `mcp.confluence.content_format` |
 | Assets to back-link | `profiles/{profile}.yaml` → `mcp.jira.links` |
-| Publishing credentials | `.cursor/mcp.json` → `confluenceRest` (`base_url` / `email` / `api_token`, all three non-empty; use `--mcp` for a different path), read by the script, not printed, not leaked |
+| Publishing credentials | `.cursor/mcp.json` → `confluenceRest` (`base_url` / `email` / `api_token`, all three non-empty; use `--mcp` for a different path), read by the script, not printed, not leaked. The same account/token also covers the Jira REST used by `--jira-remote-link` (site root = `base_url` minus trailing `/wiki`, Jira REST at `<site>/rest/api/3`) |
 
 If any required landing-spot key (`space` / `parent_pages.root`) is empty or `TBD`, stop and require it to be completed; don't write to the space root. Teams without `root` fall back to the `parent_pages.tech_solution` direct-attach mode.
 
@@ -86,7 +86,7 @@ If any required landing-spot key (`space` / `parent_pages.root`) is empty or `TB
 - S3 Environment pre-check (--check-env: when mermaid is present, verify Node.js/npx is ready)
 - S4 Dry-run pre-check (verify stats and completeness)
 - S5 Script upload to Confluence (idempotent create/update, complete body)
-- S6 Write back (prd->requirements doc / spike->conclusion / detail->back-link)
+- S6 Write back (prd->requirements doc link-write-back / spike & detail->Jira Web remote link, this Agent writes it via --jira-remote-link)
 - S7 Report
 ```
 
@@ -131,36 +131,41 @@ The script auto-layers folders and dedups idempotently per the "Archive location
 python .cursor/skills/tech-solution-publish/scripts/upload_confluence_v2.py --md "<path to tech-solution.md>" --space "<space>" --root "<parent_pages.root>" --epic "<Jira Epic key, e.g. CNAPP-5661>" --kind tech_solution --title "<prefix+key>" --title-key "<title key>" --version-msg "<mode> tech solution published: <change note>"
 ```
 
-- **Complete body, MCP page-writes forbidden (hard constraint)**: the script submits the whole storage in one shot, not bound by the MCP size limit. Publishing/updating always goes through this script over REST; manual summarizing or trimming sections is forbidden, and writing pages via Atlassian MCP's `updateConfluencePage`/`createConfluencePage` is forbidden (the single-write limit truncates the body, drops images, and corrupts storage). On a script error, only fix the arguments or credentials and rerun—don't fall back to MCP. The only allowed differences are mermaid-to-image and markdown-to-storage-HTML; MCP read-only queries aren't subject to this. **The only exception** is in S6: a local write-back to the PRD's "技术方案链接" item when there's no local source, which must carry a post-write completeness check and is limited to this scenario.
+- **Complete body, MCP page-writes forbidden (hard constraint, no exception)**: the script submits the whole storage in one shot, not bound by the MCP size limit. Publishing/updating always goes through this script over REST; manual summarizing or trimming sections is forbidden, and writing pages via Atlassian MCP's `updateConfluencePage`/`createConfluencePage` is forbidden **in every scenario, including the S6 write-back** (the whole-page replace truncates the body, drops images, and corrupts storage — an observed incident wiped a full PRD to one table via a single MCP write-back). On a script error, only fix the arguments or credentials and rerun—don't fall back to MCP. The only allowed differences are mermaid-to-image and markdown-to-storage-HTML; MCP read-only queries (locating the page, reading it back for verification) aren't subject to this.
 - **Diagrams**: mermaid is rendered by mmdc into high-resolution image attachments and inlined, supporting all diagram types; the result is recorded in `mermaid_pending` (empty means all succeeded). When mermaid is present, the machine must have Node.js (`npx`); a missing one blocks (`--allow-degraded-diagrams` explicitly degrades, off by default).
 
 ### S6 Write back
 
 **prd -> requirements doc**
 
-The prd tier's solution summary + link needs to be written back to the PRD's "技术方案链接" section. Whoever wrote the solution may not hold the PRD's local `.md` source, so there are two paths depending on whether the local source is available. The write-back follows the appendix's unified link convention: if a URL is filled, write it as a clickable hyperlink and remove "（可选）"; only keep the placeholder for empty items.
+The prd tier's solution summary + link needs to be written back to the PRD Appendix's `• Technical solution links:` item (the template's exact label is English — see `prd-template.md`, `• Technical solution links (Optional): {link}` — the script matches on this English label, not a Chinese one). Whoever wrote the solution may not hold the PRD's local `.md` source; the norm is the no-local-source path below, with the local-source path as the exception. The write-back follows the appendix's unified link convention: if a URL is filled, write it as a clickable hyperlink and remove "（可选）" / "(Optional)"; only keep the placeholder for empty items.
 
-- **Have the local source**: write `[solution title](URL)` into the local PRD's "技术方案链接" item, remove "（可选）", then `update` the whole PRD with the publishing script (over REST, not MCP).
-- **Only the link, no local source** (the norm): use an MCP read-only query to locate that PRD page under the `{epic}-PRD` folder by the **PRD title prefix** `naming.prd` (prefix+Epic key, like `APP-PRD-CNAPP-5661`) (the PRD title has a Jira summary tail, so match by prefix, not full-name exact match), get its `pageId`; read back the whole storage with `getConfluencePage`, write `<a href="URL">solution title</a>` **only inside the "技术方案链接" item** and remove "（可选）" (don't touch any other section), then write back with `updateConfluencePage`. This is the **only exception** to "MCP page-writes forbidden," limited to this local write-back, forbidden for creation or whole-page publishing. After writing back, you **must** re-check via MCP read-only: the storage length isn't noticeably shorter, the key section headings are still present, the `<ri:attachment>`/`<ac:image>` counts haven't decreased, and the new link exists as `<a href>`; if any fails, **roll back to the pre-write version** and instead produce pending write-back content for the PO to add manually.
+- **Only the link, no local source** (the norm — the tech-solution author usually does not hold the PRD's `.md`, which belongs to the PO/BA): **write back through the publishing script's link-write-back mode over REST, never overwrite the page via MCP.** Given a PRD `pageId`, the script fetches the whole PRD storage by that id, replaces only the Appendix "Technical solution links" item programmatically, and writes the whole page back — no local source needed, lossless (diagrams/images/other sections are kept verbatim), idempotent (`noop` when the link is already present). It guards with a **pre-write integrity check** (aborts unless the new storage's length and `<h2>`/`<ri:attachment>`/`<ac:image>` counts are all ≥ the original) and a **post-write read-back verification** (re-reads the page and confirms the target link is present and no structural count dropped, else `ok=false`). The script takes only `--page-id` (it does not look the page up), so first resolve the PRD `pageId` yourself via an MCP read-only query, matching the **PRD title prefix** `naming.prd` (prefix+Epic key, like `APP-PRD-CNAPP-5661`; match by prefix, not full-name, because the title has a Jira summary tail), then run:
+
+```bash
+python .cursor/skills/tech-solution-publish/scripts/upload_confluence_v2.py --writeback-link --page-id "<PRD pageId>" --link-url "<tech-solution Confluence URL>" --link-title "<tech-solution page title>"
+```
+
+  Check the result JSON: `action=update, ok=true` (written), `action=noop, ok=true` (link already present), or `ok=false` (integrity check failed / item not found — do not retry blindly; fall through to manual write-back below).
+- **Have the local PRD source** (only when the same author also holds the PRD `.md`): write `[solution title](URL)` into the local PRD's `• Technical solution links:` item, remove "（可选）" / "(Optional)", then `update` the whole PRD with the publishing script (over REST, not MCP). This is lossless too, but is the exception rather than the norm because the tech-solution author usually lacks the PRD source.
+- **On failure, hand off — never MCP whole-page write**: the MCP page-write ban (see S5) applies here too, with no exception — do not hand-assemble a page `body` or do a "small test write" (an observed incident: a single-item MCP write-back with a truncated body wiped a full PRD down to one table). If the script's link-write-back returns `ok=false` and it can't be resolved (e.g. the Appendix item is missing from the page), stop and produce **pending write-back content** (the ready-to-paste `[solution title](URL)` plus the target PRD page URL and the exact appendix item) for the PO to add manually.
 - **No standalone PRD page**: write the solution summary into the "技术方案" subsection of the Story description (done by the ticket-creation step).
 
-**spike -> spike ticket back-link** (written into the "链接的工作项 / 参考文档" subsection of the spike ticket description, a clickable hyperlink)
+**spike / detail -> Jira Web remote link (this Agent writes it directly)**
 
-```markdown
-Links to establish:
-- Spike: {spike ticket key}  →  Tech Solution: {Confluence URL}
+The spike (onto the spike ticket) and detail (onto the Story) back-links land the same way: **a Jira native Web remote link** to the Confluence solution page. Rationale: the external URL belongs in Jira's **Web links** area, not "Linked Work Items" (Issue Links only accept issue↔issue) and not the description subsection. Atlassian MCP exposes no write tool for remote links, so this Agent creates it over Jira REST via the publish script's `--jira-remote-link` mode (credentials reused from `confluenceRest`, idempotent by `globalId`):
+
+```bash
+python .cursor/skills/tech-solution-publish/scripts/upload_confluence_v2.py --jira-remote-link --issue "<Story key (detail) / Spike key (spike)>" --link-url "<Confluence solution URL>" --link-title "<solution page title>" --relationship "Tech Solution" --icon-url "https://<site>/wiki/favicon.ico"
 ```
 
-**detail -> Jira Story back-link** (written into the "链接的工作项 / 参考文档" subsection of the Story description, a clickable hyperlink)
+Check the result JSON: `ok=true` with `action=create` (new) or `action=update` (same `globalId` re-run, no duplicate). On `ok=false`, fix per the HTTP status in the result and rerun (idempotent, safe to repeat); only if it still fails after fixing credentials/key, fall back to **pending write-back content** for the ticket-creation step to add manually, and note the gap in the report. Don't stuff the link into comments, don't copy the solution body, and don't write it into the description subsection; the conclusion points are viewed on the Confluence solution page.
 
-```markdown
-Links to establish:
-- Story: {key}  →  Tech Solution: {Confluence URL}
-```
-
-spike and detail back-links are written the same way: both into the "链接的工作项 / 参考文档" subsection of the corresponding ticket **description**, writing only a clickable hyperlink to the Confluence solution page (no bare URLs, don't stuff into comments, don't copy the solution body); the conclusion points are viewed on the Confluence solution page. Both are by default handed to the ticket-creation step that has Jira write access, and listed in the report.
+> This is the **only** Jira write this Agent performs. It never creates/edits/transitions tickets, changes fields, or adds comments — those stay with the ticket-creation step.
 
 ### S6.5 Result verification
+
+This gate table verifies the **S5 publish** result. (The S6 link-write-back is verified inline in S6 by its own `ok=true/false` — the script already runs pre-write and post-write integrity checks; on `ok=false` fall through to manual pending write-back.)
 
 Parse the script's output JSON, confirm exit code 0 and that `action`, `page_id`, `version`, and `url` are all returned and `url` is reachable. If any gate below doesn't pass, the publish counts as not meeting the bar and must be fixed and rerun—don't end on a degraded version; if the bar genuinely can't be met due to environment limits, annotate the specific item, cause, and follow-up action in the report.
 
@@ -177,7 +182,7 @@ Parse the script's output JSON, confirm exit code 0 and that `action`, `page_id`
 - A sensitive-info hit blocks; don't redact and continue.
 - Don't delete existing pages; the script hits by title prefix (prefix+key) under the leaf folder and updates+bumps the version, auto-renaming to the Jira summary; an object's iterations reuse the same "prefix+key" to guarantee a single page, not create a duplicate.
 - Don't auto-commit.
-- Don't over-reach to write Jira by default; if a write is genuinely needed, first confirm the permission matrix is updated.
+- Jira writes are limited to the tech-solution **Web remote link** (spike/detail, via `--jira-remote-link`); this is the authorized exception. Never create/edit/transition tickets, change fields, or add comments — that's over-reach and stays with the ticket-creation step.
 - space / parent page / naming all come from the team config; hardcoding is forbidden.
 
 ## 4. Output report
@@ -191,9 +196,9 @@ Tech solution published (mode={mode})
 - **Completeness**: sections {h2} / Story {stories} / AC {ac} (matches the locally confirmed version)
 - **Diagrams**: mermaid_pending={...} (empty means all rendered successfully)
 - **Write-back**:
-  - {requirements doc | Story description} tech-solution section: updated / pending
-  - Jira back-link: pending the ticket-creation step with Jira write access (this Agent is read-only on Jira)
-- **Pending write-back content**: (attach directly pasteable text)
+  - (prd) requirements-doc appendix tech-solution link: updated / noop / pending
+  - (spike/detail) Jira Web remote link: action=create/update, id={remote link id} (written by this Agent via --jira-remote-link) / pending on failure
+- **Pending write-back content**: (only when a write-back failed; attach directly pasteable text)
 ```
 
 > Completeness and diagrams must first pass the S6.5 gate table before reporting.
@@ -201,5 +206,5 @@ Tech solution published (mode={mode})
 ## 5. Related
 
 - Upstream: tech-solution-prd, tech-solution-spike, tech-solution-detail
-- Write-back executor: user-story-publish
-- Permission: this step is read-only on Jira; write-backs always produce "pending write-back content," handed to the ticket-creation step that has Jira write access
+- Write-back executor: this step writes the spike/detail Jira Web remote link itself via `--jira-remote-link`; the prd-tier requirements-doc appendix link-write-back is likewise done here over REST. Ticket create/edit/status stays with the ticket-creation step (user-story-publish)
+- Permission: read-only on Jira tickets, with the single exception of writing the tech-solution Web remote link (remote link only, never ticket fields/status/comments)

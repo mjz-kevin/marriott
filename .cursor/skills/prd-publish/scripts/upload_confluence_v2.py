@@ -68,7 +68,13 @@ def _repo_root():
 
 
 def _configured_npx():
-    """从 setup.json 读当前平台段或 common 段的 npx 绝对路径。"""
+    """从 setup.json 读当前平台段或 common 段的 npx 绝对路径。
+
+    只有当配置路径实际存在时才返回它（存在即最高优先级）；若配置了但该路径在
+    本机不存在（例如换了运行时版本/位置、或填的绿色版路径尚未铺开），则视同未配置
+    返回空串，交给上层继续回退系统 PATH / 扫描运行时目录，避免一个失效的固定路径
+    把本机明明可用的 npx 挡在门外。
+    """
     p = os.path.join(_repo_root(), ".cursor", "profiles", "setup.json")
     if not os.path.isfile(p):
         return ""
@@ -84,7 +90,9 @@ def _configured_npx():
         if isinstance(seg, dict):
             val = seg.get("npx")
             if isinstance(val, str) and val.strip():
-                return os.path.expanduser(val.strip())
+                cand = os.path.expanduser(val.strip())
+                if os.path.isfile(cand) or os.access(cand, os.X_OK):
+                    return cand
     return ""
 
 
@@ -122,9 +130,9 @@ def _resolve_npx():
 
 def _npx_available():
     """npx 是否真的可用（setup 配置绝对路径存在、PATH 命中、或运行时目录扫到）。"""
-    configured = _configured_npx()
-    if configured:
-        return os.path.isfile(configured) or os.access(configured, os.X_OK)
+    # _configured_npx() 已保证返回的配置路径存在，故命中即可用。
+    if _configured_npx():
+        return True
     if shutil.which("npx"):
         return True
     return bool(_scan_runtime_npx())
@@ -384,9 +392,11 @@ def jira_browse_url(base_url, key):
 def inject_epic_link(body, epic, epic_url):
     """把附录「Jira link」项的占位替换为指向该 Jira Epic 的链接（storage 格式）。
 
-    定位正文中形如 `<strong>Jira link</strong>：<占位>` 的列表项，把冒号后到该 <li> 结束
-    之间的内容替换为 `<a href=epic_url>epic</a>`，并去掉「（可选）」占位。这样 Epic 回链落在
-    附录「Jira link」项，与技术方案回链落在附录「技术方案链接」项保持一致，不再另加顶部信息条。
+    按模板生成的附录项是普通段落 `<p>&bull; Jira link: {占位}</p>`（模板行首是字面「•」），
+    主匹配即按此真实结构，把冒号后到该 <p> 结束之间的内容替换为 `<a href=epic_url>epic</a>`，
+    并去掉「（可选）/(Optional)」占位；再兼容历史可能的 `<li><strong>Jira link</strong>` 结构。
+    这样 Epic 回链落在附录「Jira link」项，与技术方案回链落在附录「Technical solution links」项
+    保持一致，不再另加顶部信息条。
 
     幂等：该项若已含指向同一 Epic（同 URL 或 /browse/<KEY>）的链接，则不改动，避免重复。
     找不到「Jira link」项时（PRD 无标准附录）为稳妥回退到正文顶部注入一条信息条。
@@ -398,14 +408,25 @@ def inject_epic_link(body, epic, epic_url):
     if epic_url in body or re.search(r'href="[^"]*/browse/' + re.escape(epic) + r'(?:["/?#])', body):
         return body, False
     anchor = f'<a href="{html.escape(epic_url, quote=True)}">{html.escape(epic)}</a>'
-    # 匹配附录「Jira link」列表项：<li>…<strong>Jira link</strong>：<占位></p></li>
-    # 冒号兼容中英文（：/:），占位（如「（可选）」或空）整体替换为锚点。
-    pat = re.compile(
+    # 附录「Jira link」项在按模板生成的正文里是普通段落 <p>&bull; Jira link: {占位}</p>
+    # （模板行首是字面「•」，md_to_storage 产出 <p>&bull; ...</p>，不是 <li>/<strong> 列表）。
+    # 主匹配即按此真实结构；再兼容历史可能出现的 <li><strong>Jira link</strong> 结构。
+    # 冒号兼容中英文（：/:），项目符号兼容字面「•」与实体「&bull;」，label 与冒号间的
+    # 「（可选）/(Optional)」标注一并吃掉丢弃、重建时统一补「: 」。
+    pat_p = re.compile(
+        r'(<p>\s*(?:•|&bull;)?\s*Jira link)'
+        r'\s*(?:（可选）|\(可选\)|\(optional\)|\(Optional\))?\s*[：:]'
+        r'(.*?)(</p>)', re.I | re.S)
+    m = pat_p.search(body)
+    if m:
+        new_body = body[:m.start()] + m.group(1) + ': ' + anchor + m.group(3) + body[m.end():]
+        return new_body, True
+    pat_li = re.compile(
         r'(<li>\s*<p>\s*<strong>\s*Jira link\s*</strong>\s*[：:])(.*?)(</p>\s*</li>)',
         re.I | re.S,
     )
-    if pat.search(body):
-        new_body = pat.sub(lambda m: m.group(1) + anchor + m.group(3), body, count=1)
+    if pat_li.search(body):
+        new_body = pat_li.sub(lambda mm: mm.group(1) + anchor + mm.group(3), body, count=1)
         return new_body, True
     # 回退：无标准附录项时，在正文顶部加一条信息条，保证 Epic 回链不丢
     bar = (f'<p><strong>Jira Epic：</strong>{anchor}</p>')

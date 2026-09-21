@@ -46,7 +46,7 @@ Fill chapter by chapter in the section order of the team's detail template; don'
 ## 2. Workflow
 
 ```
-- S1 Document Information + version-history table
+- S1 Document Information + version-history table; the `Description` column stays concise (a short phrase summarizing the change, e.g. `Initial version`), not a full paragraph
 - S2 Background
 - S3 Main flow
 - S4 Contracts and dependencies
@@ -133,14 +133,14 @@ Fill the template's special sections item by item:
 | No missing states | Every screen state the design defines needs a handling note |
 | Don't delete sections | For an optional item/section not involved, keep the heading and write `—` (a checklist trace meaning "assessed, not needed this cycle"); when a full sentence is needed use "Not applicable this cycle"; don't delete the section |
 | No fabricated optional content | Don't proactively generate content for an optional item without a requirement/clarification basis; write it only when the requirement, clarification conclusion, or user explicitly calls for it, otherwise write `—` |
-| Faithful to the template | The body starts from "## Document Information"; fill only the template's existing sections and fields, don't add explanatory sentences, lead-ins, comments, or subsections not defined by the template. Never copy `{guidance blocks}`, `> **`Example`**` block quotes, or HTML comments into the product; the template file's title and author notes are not part of the product |
+| Faithful to the template | The body starts from "## Document Information"; **strip the author-facing ` (optional)` marker from every heading and field/row label in the product** (it is a writing note meaning "may be omitted," not visible title text—e.g. `## 5. Key Alignment Items (optional)` → `## 5. Key Alignment Items`, `### 3.4 Data Migration (optional)` → `### 3.4 Data Migration`); fill only the template's existing sections and fields, don't add explanatory sentences, lead-ins, comments, or subsections not defined by the template. Never copy `{guidance blocks}`, `> **`Example`**` block quotes, or HTML comments into the product; the template file's title and author notes are not part of the product |
 
 ## 4. Quality gates
 
 - Template sections complete, no empty sections
 - The body starts from "## Document Information," with no explanatory sentences, lead-ins, or subsections added beyond the template
 - No `{guidance block}` residue, no `> **`Example`**` block-quote residue, and no HTML-comment residue; **do not** treat business-domain terms alone (Bonvoy, Marriott, etc.) as leakage
-- No placeholder residue
+- No author-facing ` (optional)` marker left in any heading or field/row label (it is stripped from the product, e.g. `## 5. Key Alignment Items`, `### 3.4 Data Migration`)
 - Interface contracts include request/response/error-code mocks, with null and failure fallbacks stated
 - The Feature Flag table includes "behavior on read failure"
 - Every task has acceptance criteria

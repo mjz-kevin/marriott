@@ -61,7 +61,13 @@ def _repo_root():
 
 
 def _configured_npx():
-    """从 setup.json 读当前平台段或 common 段的 npx 绝对路径。"""
+    """从 setup.json 读当前平台段或 common 段的 npx 绝对路径。
+
+    只有当配置路径实际存在时才返回它（存在即最高优先级）；若配置了但该路径在
+    本机不存在（例如换了运行时版本/位置、或填的绿色版路径尚未铺开），则视同未配置
+    返回空串，交给上层继续回退系统 PATH / 扫描运行时目录，避免一个失效的固定路径
+    把本机明明可用的 npx 挡在门外。
+    """
     p = os.path.join(_repo_root(), ".cursor", "profiles", "setup.json")
     if not os.path.isfile(p):
         return ""
@@ -77,7 +83,9 @@ def _configured_npx():
         if isinstance(seg, dict):
             val = seg.get("npx")
             if isinstance(val, str) and val.strip():
-                return os.path.expanduser(val.strip())
+                cand = os.path.expanduser(val.strip())
+                if os.path.isfile(cand) or os.access(cand, os.X_OK):
+                    return cand
     return ""
 
 
@@ -115,9 +123,9 @@ def _resolve_npx():
 
 def _npx_available():
     """npx 是否真的可用（setup 配置绝对路径存在、PATH 命中、或运行时目录扫到）。"""
-    configured = _configured_npx()
-    if configured:
-        return os.path.isfile(configured) or os.access(configured, os.X_OK)
+    # _configured_npx() 已保证返回的配置路径存在，故命中即可用。
+    if _configured_npx():
+        return True
     if shutil.which("npx"):
         return True
     return bool(_scan_runtime_npx())
@@ -767,10 +775,167 @@ def _find_leaf_page_by_prefix(base_url, auth, parent, prefix):
 
 
 # ============================= 主流程 =============================
+def get_page_storage(base_url, auth, page_id):
+    """按 pageId 拉回整页 storage 与版本（REST，只读）。返回 (title, storage_html, version)。"""
+    st, data = api("GET", f"{base_url}/rest/api/content/{page_id}?expand=body.storage,version", auth)
+    if st != 200 or not isinstance(data, dict):
+        raise SystemExit(f"读取页面失败：{st} {data}")
+    return data["title"], data["body"]["storage"]["value"], data["version"]["number"]
+
+
+def _writeback_link_in_storage(storage, item_label, link_url, link_title):
+    """在附录某链接条目内写入超链接，仅改这一处，不碰其余 storage（无损、不动图/mermaid）。
+
+    幂等：条目已有该链接则不重复写；条目为空占位则填充。返回 (new_storage, changed, note)。
+    item_label 例如 "Technical solution links"。同时去除紧随其后的「（可选）/ (optional)」标注。
+    """
+    esc_title = html.escape(link_title)
+    anchor = f'<a href="{html.escape(link_url)}">{esc_title}</a>'
+    # 目标条目形如：<p>• Technical solution links (Optional):</p> 或已含内容。项目符号在 storage 里
+    # 可能是字面 • 或 HTML 实体 &bull;；label 与冒号之间可能夹「（可选）/(Optional)」标注（模板写法）。
+    # 组1=项目符号+label（保留）；中间的可选标注与冒号一并吃掉（丢弃标注），重建时统一补「: 」。
+    pat = re.compile(
+        r'(<p>\s*(?:•|&bull;)?\s*' + re.escape(item_label) + r')'           # 组1：<p>+项目符号+label（保留）
+        r'\s*(?:（可选）|\(可选\)|\(optional\)|\(Optional\))?\s*[:：]'         # 可选标注+冒号（丢弃、统一重建）
+        r'(.*?)'                                                             # 组2：条目已有内容（可能为空/含旧链接）
+        r'(</p>)',                                                           # 组3：段落收尾
+        re.DOTALL)
+    m = pat.search(storage)
+    if not m:
+        return storage, False, f"未找到附录条目「{item_label}」，无法写回"
+    existing = m.group(2)
+    if link_url in existing:
+        return storage, False, "该链接已存在于条目内，无需重复写回"
+    # 已有内容里若残留「（可选）」等标注也一并去除后再追加链接
+    cleaned = re.sub(r'\s*(（可选）|\(可选\)|\(optional\)|\(Optional\))', '', existing).strip()
+    new_segment = m.group(1) + ': ' + (cleaned + ' ' if cleaned else '') + anchor + m.group(3)
+    new_storage = storage[:m.start()] + new_segment + storage[m.end():]
+    return new_storage, True, "已写入链接"
+
+
+def writeback_tech_solution_link(base_url, auth, page_id, link_url, link_title, version_msg,
+                                 item_label="Technical solution links"):
+    """按 pageId 把技术方案链接写回 PRD 附录指定条目（REST 整页读回→仅替换条目→整页写回）。
+
+    不需本地源、无损（storage 原样保留，只改附录一行）、绝不经 MCP。含写回后完整性校验：
+    storage 长度未明显缩短、h2 数不减、附件/图片引用数不减、目标链接确已存在。
+    item_label 指定目标附录条目（默认 Technical solution links）。返回结果 dict。
+    """
+    result = {"mode": "writeback_tech_solution_link", "page_id": str(page_id), "item_label": item_label}
+    title, storage, ver = get_page_storage(base_url, auth, page_id)
+    result["title"] = title
+    before = {"len": len(storage), "h2": storage.count("<h2"),
+              "attachment": storage.count("ri:attachment"), "image": storage.count("ac:image")}
+    new_storage, changed, note = _writeback_link_in_storage(
+        storage, item_label, link_url, link_title)
+    result["note"] = note
+    if not changed:
+        # 未改动（已存在或未找到条目）：不写回。未找到条目时报错供上层改走人工待办。
+        result["action"] = "noop"
+        result["ok"] = (link_url in storage)
+        if "未找到" in note:
+            result["error"] = note
+        return result
+    # 完整性预校验（写回前）：新旧仅应增加链接标记，长度不减、结构计数不减。
+    after = {"len": len(new_storage), "h2": new_storage.count("<h2"),
+             "attachment": new_storage.count("ri:attachment"), "image": new_storage.count("ac:image")}
+    if (after["len"] < before["len"] or after["h2"] < before["h2"]
+            or after["attachment"] < before["attachment"] or after["image"] < before["image"]):
+        result["action"] = "aborted"; result["ok"] = False
+        result["error"] = f"完整性预校验失败，放弃写回：before={before} after={after}"
+        return result
+    st, data = update_page(base_url, auth, page_id, title, new_storage, ver, version_msg)
+    if st not in (200, 201):
+        result["action"] = "update_failed"; result["ok"] = False
+        result["error"] = f"update failed: {st} {data}"
+        return result
+    # 写回后只读复查：确认链接确已存在、结构未被破坏。
+    _, verify_storage, new_ver = get_page_storage(base_url, auth, page_id)
+    ver_after = {"len": len(verify_storage), "h2": verify_storage.count("<h2"),
+                 "attachment": verify_storage.count("ri:attachment"), "image": verify_storage.count("ac:image")}
+    ok = (link_url in verify_storage and ver_after["len"] >= before["len"]
+          and ver_after["h2"] >= before["h2"] and ver_after["attachment"] >= before["attachment"]
+          and ver_after["image"] >= before["image"])
+    result.update({"action": "update", "ok": ok, "version": new_ver,
+                   "url": base_url + (data.get("_links", {}) or {}).get("webui", ""),
+                   "before": before, "after": ver_after})
+    if not ok:
+        result["error"] = "写回后完整性复查未通过（链接缺失或结构计数下降），请人工核对"
+    return result
+
+
+def create_jira_remote_link(base_url, auth, issue_key, link_url, link_title,
+                            relationship="Tech Solution", global_id=None, icon_url=None):
+    """把外部 URL（如 Confluence 技术方案页）作为 Jira 原生 Web 链接（remote link）挂到工单。
+
+    背景：Jira 的「链接的工作项」(Issue Links) 仅支持 issue↔issue，外部 URL 归属
+    右侧的 Web links（远程链接）。Atlassian MCP 未暴露 remote link 的写工具（只有
+    只读的读取与 issue↔issue 的 createIssueLink），故此处走 Jira REST：
+    POST <site>/rest/api/3/issue/{key}/remotelink。凭证复用 confluenceRest（同一
+    Atlassian 账号与 api_token 通用），base_url 去掉末尾 /wiki 得站点根。
+
+    幂等：以 globalId 作幂等键（同 URL 重复执行只更新同一条，不产生重复）。默认
+    globalId 由 link_url 推导（confluence-page-{pageId} 或 URL 本身）。返回结果 dict：
+    action=create/update（Jira 对同 globalId 的 POST 天然 upsert），ok=True/False。
+    """
+    site = re.sub(r"/wiki/?$", "", base_url)
+    key = urllib.parse.quote(issue_key)
+    result = {"mode": "jira_remote_link", "issue": issue_key, "link_url": link_url}
+    if not global_id:
+        m = re.search(r"/pages/(\d+)", link_url)
+        global_id = f"confluence-page-{m.group(1)}" if m else link_url
+    result["global_id"] = global_id
+    # 先查现有远程链接，判断本次是新建还是覆盖已有同 globalId 条目（仅为报告 action，不影响幂等）。
+    existed = False
+    try:
+        st0, data0 = api("GET", f"{site}/rest/api/3/issue/{key}/remotelink", auth)
+        if st0 == 200 and isinstance(data0, list):
+            existed = any(isinstance(x, dict) and x.get("globalId") == global_id for x in data0)
+    except Exception:
+        pass
+    obj = {"url": link_url, "title": link_title}
+    if icon_url:
+        obj["icon"] = {"url16x16": icon_url, "title": "Confluence"}
+    payload = {"globalId": global_id, "relationship": relationship, "object": obj}
+    try:
+        st, data = api("POST", f"{site}/rest/api/3/issue/{key}/remotelink", auth, body=payload)
+    except urllib.error.HTTPError as e:
+        result["action"] = "failed"; result["ok"] = False
+        result["error"] = f"remotelink POST failed: {e.code} {e.read().decode('utf-8', 'ignore')}"
+        return result
+    except Exception as e:
+        result["action"] = "failed"; result["ok"] = False
+        result["error"] = f"remotelink POST error: {e}"
+        return result
+    if st not in (200, 201):
+        result["action"] = "failed"; result["ok"] = False
+        result["error"] = f"remotelink POST unexpected status: {st} {data}"
+        return result
+    link_id = data.get("id") if isinstance(data, dict) else None
+    # 写后只读复查：确认该 globalId 的链接确已存在且 URL/标题正确。
+    verified = False
+    try:
+        st2, data2 = api("GET", f"{site}/rest/api/3/issue/{key}/remotelink", auth)
+        if st2 == 200 and isinstance(data2, list):
+            for x in data2:
+                if isinstance(x, dict) and x.get("globalId") == global_id:
+                    o = x.get("object") or {}
+                    verified = (o.get("url") == link_url)
+                    break
+    except Exception:
+        pass
+    result.update({"action": "update" if existed else "create", "id": link_id,
+                   "relationship": relationship, "title": link_title,
+                   "status": st, "ok": bool(verified)})
+    if not verified:
+        result["error"] = "写后复查未通过（未回读到该 globalId 的远程链接或 URL 不符），请人工核对"
+    return result
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--md", required=True)
-    ap.add_argument("--space", required=True)
+    ap.add_argument("--md", default=None)
+    ap.add_argument("--space", default=None)
     ap.add_argument("--parent", default=None,
                     help="直接指定父页 ID（旧模式）。与 --root/--epic/--kind 二选一。")
     ap.add_argument("--root", default=None,
@@ -782,7 +947,7 @@ def main():
                          "值为 none 时强制无父项，退回三级结构。")
     ap.add_argument("--kind", default=None, choices=["prd", "tech_solution"],
                     help="决定三级文件夹：prd→{epic}-PRD，tech_solution→{epic}-Tech Solution。")
-    ap.add_argument("--title", required=True,
+    ap.add_argument("--title", default=None,
                     help="标题前缀（唯一键），取 profile 的 naming 模板替换 key 后的值，"
                          "如 APP-TS-Prd-CNAPP-5661 / APP-TS-Spike-CNAPP-1234 / APP-TS-Detail-CNAPP-5678。"
                          "脚本按此前缀查重，并自动追加「-Jira 摘要」拼成完整标题；命中已有页时按最新摘要改名。不含日期/版本。")
@@ -799,7 +964,72 @@ def main():
     ap.add_argument("--check-env", action="store_true",
                     help="仅环境预检：检查凭证与（文档含 mermaid 时）Node.js/npx 是否就绪，"
                          "报告结果后退出，不发布。缺失时打印按操作系统的安装指引。")
+    # 回链模式：把技术方案链接写回 PRD 附录，按 pageId 直改（REST 整页读回→仅替换附录条目→整页写回），
+    # 不需本地 md 源、无损（不动图/mermaid）、绝不经 MCP。用于「写技术方案的人没有 PRD 本地源」的常态。
+    ap.add_argument("--writeback-link", action="store_true",
+                    help="回链模式：把技术方案链接写回 PRD 附录「Technical solution links」条目。"
+                         "需配套 --page-id / --link-url / --link-title；此模式不使用 --md/--space。")
+    ap.add_argument("--page-id", dest="page_id", default=None,
+                    help="回链模式：目标 PRD 页面 ID（直接指定，避免反向查找歧义）。")
+    ap.add_argument("--link-url", dest="link_url", default=None,
+                    help="回链模式：要写入的技术方案 Confluence 页面 URL。")
+    ap.add_argument("--link-title", dest="link_title", default=None,
+                    help="回链模式：链接显示文字（通常为技术方案页标题）。")
+    ap.add_argument("--item-label", dest="item_label", default="Technical solution links",
+                    help="回链模式：目标附录条目 label（默认 Technical solution links；"
+                         "如需写到其它条目可指定，例如 Reference document links）。")
+    # ---- Jira 远程链接（Web link）模式：把外部 URL 挂到 Jira 工单的 Web links 区 ----
+    # Jira 的「链接的工作项」只支持 issue↔issue，外部 URL（如 Confluence 技术方案页）归属
+    # Web links（远程链接）；Atlassian MCP 未暴露该写接口，故走 Jira REST（凭证复用 confluenceRest）。
+    ap.add_argument("--jira-remote-link", action="store_true",
+                    help="Jira 远程链接模式：把技术方案等外部 URL 作为 Web link 挂到工单。"
+                         "需配套 --issue 与 --link-url / --link-title；此模式不使用 --md/--space。")
+    ap.add_argument("--issue", dest="issue", default=None,
+                    help="Jira 远程链接模式：目标工单 key（如 CNAPP-7005）。")
+    ap.add_argument("--relationship", dest="relationship", default="Tech Solution",
+                    help="Jira 远程链接模式：关系文案（默认 Tech Solution）。")
+    ap.add_argument("--global-id", dest="global_id", default=None,
+                    help="Jira 远程链接模式：幂等键（默认由 link-url 的 pageId 推导为 confluence-page-{id}）。")
+    ap.add_argument("--icon-url", dest="icon_url", default=None,
+                    help="Jira 远程链接模式：链接小图标 URL（可选，如 Confluence favicon）。")
     args = ap.parse_args()
+
+    # ---- 回链模式：独立分支，尽早返回，不走发布主流程 ----
+    if args.writeback_link:
+        missing = [k for k, v in (("--page-id", args.page_id), ("--link-url", args.link_url),
+                                  ("--link-title", args.link_title)) if not v]
+        if missing:
+            raise SystemExit(f"回链模式需提供 {', '.join(missing)}")
+        here = os.path.dirname(os.path.abspath(__file__))
+        mcp_path = args.mcp or os.path.abspath(os.path.join(here, "..", "..", "..", "mcp.json"))
+        base_url, email, token = load_creds(mcp_path)
+        auth = auth_header(email, token)
+        msg = args.version_msg if args.version_msg != "Publish from local doc" \
+            else f"Write back link into Appendix ({args.item_label})"
+        res = writeback_tech_solution_link(base_url, auth, args.page_id, args.link_url,
+                                           args.link_title, msg, args.item_label)
+        print(json.dumps(res, ensure_ascii=False, indent=2))
+        return 0 if res.get("ok") else 1
+
+    # ---- Jira 远程链接（Web link）模式：独立分支，尽早返回，不走发布主流程 ----
+    if args.jira_remote_link:
+        missing = [k for k, v in (("--issue", args.issue), ("--link-url", args.link_url),
+                                  ("--link-title", args.link_title)) if not v]
+        if missing:
+            raise SystemExit(f"Jira 远程链接模式需提供 {', '.join(missing)}")
+        here = os.path.dirname(os.path.abspath(__file__))
+        mcp_path = args.mcp or os.path.abspath(os.path.join(here, "..", "..", "..", "mcp.json"))
+        base_url, email, token = load_creds(mcp_path)
+        auth = auth_header(email, token)
+        res = create_jira_remote_link(base_url, auth, args.issue, args.link_url, args.link_title,
+                                      args.relationship, args.global_id, args.icon_url)
+        print(json.dumps(res, ensure_ascii=False, indent=2))
+        return 0 if res.get("ok") else 1
+
+    if not args.md or not args.space:
+        raise SystemExit("发布模式需提供 --md 与 --space（回链模式请用 --writeback-link）")
+    if not args.title:
+        raise SystemExit("发布模式需提供 --title（回链模式请用 --writeback-link）")
 
     use_folder = bool(args.root or args.epic or args.kind)
     if use_folder:

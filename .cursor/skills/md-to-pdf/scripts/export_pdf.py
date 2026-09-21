@@ -51,7 +51,13 @@ def _repo_root():
 
 
 def _configured_npx():
-    """从 setup.json 读当前平台段或 common 段的 npx 绝对路径。"""
+    """从 setup.json 读当前平台段或 common 段的 npx 绝对路径。
+
+    只有当配置路径实际存在时才返回它（存在即最高优先级）；若配置了但该路径在
+    本机不存在（例如换了运行时版本/位置、或填的绿色版路径尚未铺开），则视同未配置
+    返回空串，交给上层继续回退系统 PATH / 扫描运行时目录，避免一个失效的固定路径
+    把本机明明可用的 npx 挡在门外。
+    """
     p = os.path.join(_repo_root(), ".cursor", "profiles", "setup.json")
     if not os.path.isfile(p):
         return ""
@@ -67,7 +73,9 @@ def _configured_npx():
         if isinstance(seg, dict):
             val = seg.get("npx")
             if isinstance(val, str) and val.strip():
-                return os.path.expanduser(val.strip())
+                cand = os.path.expanduser(val.strip())
+                if os.path.isfile(cand) or os.access(cand, os.X_OK):
+                    return cand
     return ""
 
 
@@ -102,9 +110,9 @@ def _resolve_npx():
 
 
 def _npx_available():
-    configured = _configured_npx()
-    if configured:
-        return os.path.isfile(configured) or os.access(configured, os.X_OK)
+    # _configured_npx() 已保证返回的配置路径存在，故命中即可用。
+    if _configured_npx():
+        return True
     if shutil.which("npx"):
         return True
     return bool(_scan_runtime_npx())
