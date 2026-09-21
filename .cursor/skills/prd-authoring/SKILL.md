@@ -47,7 +47,7 @@ If condition 1 isn't met, return to the requirement-clarification step; don't sk
 - S1  Load prd-template.md
 - S2  Gather and read through the inputs
 - S3  Write 1. Business Overview
-- S4  Write 1.3 Scope
+- S4  Write Scope (Optional)
 - S5  Write 2. Feature Explanation
 - S6  Write 3. User Story List
 - S7  Write chapters 4–10
@@ -62,7 +62,7 @@ Read [prd-template.md](references/prd-template.md). Treat only "## Document Info
 
 The section hierarchy and wording follow Part 1 of the official "PRD Template." The authoring constraints (quantifiable, no placeholder residue, sensitive info) are enforced only in this skill's quality gates.
 
-**Version-history fill-in constraint**: the template's "## Change Log" table records only **requirement-level changes**—one PRD corresponds to one requirement, only one PRD page is kept in Confluence, and only the latest version is uploaded when publishing.
+**Version-history fill-in constraint**: the template's "## Version Change Log" table records only **requirement-level changes**—one PRD corresponds to one requirement, only one PRD page is kept in Confluence, and only the latest version is uploaded when publishing.
 
 - Initial version: one row `A (Add) · Initial version`.
 - Only after publishing, when a **real requirement change** occurs (business-level changes to scope/goals/rules/Story additions or removals), add an `M` or `D` row; one requirement change corresponds to one row.
@@ -89,9 +89,9 @@ When the input contains Figma links, you must read the design content via Figma 
 - 1.1 Background: current problem -> business impact -> why now
 - 1.2 Purpose: each goal must give current value -> target value -> measurement method -> measurement point in time; don't use unquantified phrasing like "improve efficiency"
 
-### S4 Write 1.3 Scope
+### S4 Write Scope (Optional)
 
-Split by the team-configured scope dimensions; for any dimension not involved, keep the row and write `—` (or "Not applicable this cycle"); priorities use only P1 / P2.
+Fill the **Android / iOS / Mini Program** sub-tables under `### Scope (Optional)` per the team-configured scope dimensions; for any platform not involved, keep the row and write `—` (or "Not applicable this cycle"); priorities use only P1 / P2.
 
 ### S5 Write 2. Feature Explanation
 
@@ -104,7 +104,7 @@ Split by the team-configured scope dimensions; for any dimension not involved, k
 
 Fill per the `## 3. User Story List` skeleton of prd-template.md: the template's built-in block quote (`> Stories are broken down by role + scenario + acceptance criteria.`) must be **kept verbatim, copied as-is**; you must not append, concatenate, or rewrite any wording after it—including stable-numbering rules, "don't reuse/renumber on revision," "leave estimation empty," etc. Such rules only govern writing behavior and must not be written into that block quote or anywhere in the product; don't add explanatory sentences, lead-ins, or subsections not defined by the template.
 
-Each Story fills only the template's existing fields: `User story description` (form `As a {role}, for {scenario}, I want to {action}, so that {value}.`), `Detailed requirement description`, `Identify and insert the Figma design and link`, and `Acceptance Criteria`. ACs must express the three elements of precondition/action/observable result and be reducible to test cases; a fixed keyword format is not required. The `Identify and insert the Figma design and link` field inserts the design images and link of the screens this Story covers, per "Figma design handling."
+Each Story fills only the fields defined in its template block. **Story 1** includes `User story description` (form `As a {role}, for {scenario}, I want to {action}, so that {value}.`), `Detailed requirement description`, `Identify and insert the Figma design and link`, and `Acceptance Criteria`. **Story 2+** follow the slimmer skeleton in the template (no `Detailed requirement description` unless the template block includes it). ACs must express the three elements of precondition/action/observable result and be reducible to test cases; a fixed keyword format is not required. The `Identify and insert the Figma design and link` field inserts the design images and link of the screens this Story covers, per "Figma design handling."
 
 ### S7 Write chapters 4–10
 
