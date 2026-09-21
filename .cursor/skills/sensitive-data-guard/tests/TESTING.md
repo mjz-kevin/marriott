@@ -120,7 +120,7 @@ python scripts/scan.py --file tests/fixtures/04-block-pii.txt --no-whitelist --j
 | `clean-normal` | `01-clean-normal.txt` | none | `0` | a normal doc, no sensitive info |
 | `block-password` | `02-block-password.txt` | none | `2` | detects `password_assignment` |
 | `block-aksk` | `03-block-aksk.txt` | none | `2` | AWS/Alibaba Cloud AK/SK |
-| `block-pii` | `04-block-pii.txt` | none | `2` | member name, phone, email, ID card, address, bank card |
+| `block-pii` | `04-block-pii.txt` | none | `2` | member name, Bonvoy id, phone, email, ID card, passport, address, bank card |
 | `block-tokens` | `05-block-tokens.txt` | none | `2` | GitHub/Bearer/JWT/Slack token |
 | `whitelist-placeholders` | `06-whitelist-placeholders.txt` | `default` | `0` | placeholders and sample values all pass |
 | `block-partial-whitelist` | `07-block-partial-whitelist.txt` | `default` | `2` | placeholders pass, real values still blocked |
