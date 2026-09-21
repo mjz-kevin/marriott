@@ -21,10 +21,13 @@ AI SDLC 角色分发包构建脚本。
   - 纯标准库实现，绿色版 Python 也能跑；不联网、不装依赖。
 
 用法：
-  python init/build.py                # 构建全部角色（交互决定版本号）
+  python init/build.py                # 构建全部角色（交互决定版本号），默认不打包运行时
   python init/build.py PO TL          # 只构建指定角色
   python init/build.py --version 1.0.0   # 指定版本，跳过询问
   python init/build.py --yes             # 非交互，用默认版本号
+  python init/build.py --with-runtime win                 # 只打包 Windows 运行时
+  python init/build.py --with-runtime mac-silicon         # 只打包 macOS Apple 芯片运行时
+  python init/build.py --with-runtime mac-intel           # 只打包 macOS Intel 运行时
 """
 from __future__ import annotations
 
@@ -183,8 +186,17 @@ def _copy_runtime_dir(src: Path, dst: Path) -> None:
               f"首条：{errors[0]}")
 
 
-def build_role(role: str, cfg: dict, common: dict, version: str) -> dict:
-    """构建单个角色的分发目录，返回构建摘要。"""
+def build_role(role: str, cfg: dict, common: dict, version: str,
+               runtime: set[str] | None = None) -> dict:
+    """构建单个角色的分发目录，返回构建摘要。
+
+    runtime：需要随包分发的运行时集合，取值 {"win", "mac-intel", "mac-silicon"} 的子集。
+      - None 或空集合：不打包任何 res 下的运行时 zip（默认行为）。
+      - 含 "win"：打包 res/AI-SDLC-windows.zip。
+      - 含 "mac-silicon"：打包 res/AI-SDLC-macOS-Silicon.zip。
+      - 含 "mac-intel"：打包 res/AI-SDLC-macOS-Intel.zip。
+    """
+    runtime = runtime or set()
     warnings: list[str] = []
     role_dir = DIST_DIR / role
     if role_dir.exists():
@@ -237,70 +249,31 @@ def build_role(role: str, cfg: dict, common: dict, version: str) -> dict:
     bundled_runtime_win = False
     bundled_runtime_mac = False
 
-    # 5a) Windows 运行时（AI-SDLC-windows.zip）
-    win_zip = res_dir / "AI-SDLC-windows.zip"
-    if win_zip.is_file():
-        shutil.copy2(win_zip, role_dir / "AI-SDLC-windows.zip")
-        bundled_runtime_win = True
-    else:
-        warnings.append("res/AI-SDLC-windows.zip 不存在，Windows 运行时未随包分发")
+    # 5a) Windows 运行时（AI-SDLC-windows.zip）——仅当 runtime 含 "win" 时才打包
+    if "win" in runtime:
+        win_zip = res_dir / "AI-SDLC-windows.zip"
+        if win_zip.is_file():
+            shutil.copy2(win_zip, role_dir / "AI-SDLC-windows.zip")
+            bundled_runtime_win = True
+        else:
+            warnings.append("res/AI-SDLC-windows.zip 不存在，Windows 运行时未随包分发")
 
-    # 5b) macOS 运行时。优先级：
-    #     ① 架构分包（推荐，与 AI-SDLC-windows.zip 对齐）：AI-SDLC-macOS-Silicon.zip / AI-SDLC-macOS-Intel.zip
-    #        —— 存在几个就带几个，一个角色包可同时支持 M 系列与 Intel，install.sh 按架构选。
-    #     ② 通用压缩包：AI-SDLC-macos.zip / .tar.gz
-    #     ③ 已解开目录：res/AI-SDLC/runtime/ 下的 node-*-darwin-* 等
-    mac_arch_zips = [
-        res_dir / "AI-SDLC-macOS-Silicon.zip",
-        res_dir / "AI-SDLC-macOS-Intel.zip",
-    ]
-    mac_zip = res_dir / "AI-SDLC-macos.zip"
-    mac_tgz = next(
-        (res_dir / n for n in ("AI-SDLC-macos.tar.gz", "AI-SDLC-macos.tgz")
-         if (res_dir / n).is_file()),
-        None,
-    )
-    # 已解开的 darwin 运行时：res/AI-SDLC/runtime/ 下存在 node-*-darwin-* 目录
-    mac_runtime_dir = res_dir / "AI-SDLC" / "runtime"
-    mac_has_dir = mac_runtime_dir.is_dir() and any(
-        p.is_dir() and p.name.startswith("node-") and "darwin" in p.name
-        for p in mac_runtime_dir.iterdir()
-    )
-
-    present_arch_zips = [z for z in mac_arch_zips if z.is_file()]
-    if present_arch_zips:
-        for z in present_arch_zips:
-            shutil.copy2(z, role_dir / z.name)
-        bundled_runtime_mac = True
-    elif mac_zip.is_file():
-        shutil.copy2(mac_zip, role_dir / "AI-SDLC-macos.zip")
-        bundled_runtime_mac = True
-    elif mac_tgz is not None:
-        shutil.copy2(mac_tgz, role_dir / mac_tgz.name)
-        bundled_runtime_mac = True
-    elif mac_has_dir:
-        # 只拷贝 macOS 相关目录（darwin node + 非 Windows 的 python），
-        # 避免把 Windows 二进制（node-*-win-*、python-*-amd64/win）塞进 mac 包。
-        dst_runtime = role_dir / "AI-SDLC" / "runtime"
-        dst_runtime.mkdir(parents=True, exist_ok=True)
-        for p in mac_runtime_dir.iterdir():
-            if not p.is_dir():
-                continue
-            nm = p.name
-            # 注意：不能用 "win" in nm 判断 Windows —— "darwin" 里含 "win"！
-            # Windows 目录名形如 node-*-win-x64 / python-*-embed-amd64。
-            is_win = ("-win-" in nm) or nm.endswith("-win") or ("amd64" in nm) or ("embed" in nm)
-            is_darwin_node = nm.startswith("node-") and "darwin" in nm
-            is_mac_python = nm.startswith("python-") and not is_win
-            if is_darwin_node or is_mac_python:
-                _copy_runtime_dir(p, dst_runtime / nm)
-        bundled_runtime_mac = True
-    else:
-        warnings.append(
-            "res 下未找到 macOS 运行时（AI-SDLC-macOS-Silicon.zip / AI-SDLC-macOS-Intel.zip、"
-            "AI-SDLC-macos.zip/.tar.gz 或 AI-SDLC/runtime/node-*-darwin-*），"
-            "macOS 运行时未随包分发（install.sh 将回退到系统 PATH）"
-        )
+    # 5b) macOS 运行时——按架构分别打包，仅当 runtime 含对应架构时才带上。
+    #     Silicon（Apple M 系列）→ res/AI-SDLC-macOS-Silicon.zip
+    #     Intel                 → res/AI-SDLC-macOS-Intel.zip
+    #     install.sh 会按本机架构选择解压对应包。
+    mac_arch_map = {
+        "mac-silicon": res_dir / "AI-SDLC-macOS-Silicon.zip",
+        "mac-intel": res_dir / "AI-SDLC-macOS-Intel.zip",
+    }
+    for arch, zip_path in mac_arch_map.items():
+        if arch not in runtime:
+            continue
+        if zip_path.is_file():
+            shutil.copy2(zip_path, role_dir / zip_path.name)
+            bundled_runtime_mac = True
+        else:
+            warnings.append(f"res/{zip_path.name} 不存在，{arch} 运行时未随包分发")
 
     bundled_runtime = bundled_runtime_win or bundled_runtime_mac
 
@@ -403,7 +376,18 @@ def main() -> int:
                         help="非交互：版本号直接取默认（当前 tag，否则时间戳）")
     parser.add_argument("--no-zip", action="store_true",
                         help="只生成角色目录、不打 zip，也不做打包后清理")
+    parser.add_argument(
+        "--with-runtime", dest="with_runtime",
+        choices=["win", "mac-intel", "mac-silicon"],
+        default=None,
+        metavar="{win,mac-intel,mac-silicon}",
+        help="随包分发 res 下的运行时 zip（默认不打包）。"
+             "指定其一：win / mac-intel / mac-silicon",
+    )
     args = parser.parse_args()
+
+    # 未传 --with-runtime → 空集合（不打包）；否则为指定的单个运行时。
+    runtime: set[str] = {args.with_runtime} if args.with_runtime else set()
 
     data = load_roles()
     common = data["common"]
@@ -417,12 +401,13 @@ def main() -> int:
 
     version = resolve_version(args.version, args.yes)
     log(f"使用版本号：{version}")
+    log(f"运行时打包：{'、'.join(sorted(runtime)) if runtime else '不打包（默认）'}")
 
     DIST_DIR.mkdir(exist_ok=True)
     summaries = []
     for role in targets:
         log(f"构建角色 {role} ...")
-        manifest = build_role(role, roles[role], common, version)
+        manifest = build_role(role, roles[role], common, version, runtime)
         for w in manifest["warnings"]:
             log(f"  ⚠️ {w}")
         if not args.no_zip:
