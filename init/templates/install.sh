@@ -36,7 +36,7 @@ copy_dir_contents "$PKG_DIR/skills" "$CURSOR_HOME/skills"
 echo "--> 安装 profiles"
 copy_dir_contents "$PKG_DIR/profiles" "$CURSOR_HOME/profiles"
 
-echo "--> 安装 mcp 示例与环境配置流程到 $CURSOR_HOME"
+echo "--> 安装 mcp 示例到 $CURSOR_HOME"
 if [ -d "$PKG_DIR/cursor-files" ]; then
   ( cd "$PKG_DIR/cursor-files" && find . -mindepth 1 -maxdepth 1 -exec cp -R {} "$CURSOR_HOME/" \; )
 fi
@@ -117,5 +117,5 @@ echo "  1) 打开 $CURSOR_HOME/mcp.json，填入 Atlassian / Figma / GitHub 凭�
 echo "     - Confluence/Jira: email + api_token  https://id.atlassian.com/manage-profile/security/api-tokens"
 echo "     - Figma: FIGMA_API_KEY                Figma 设置 → Security → Personal access tokens"
 echo "     - GitHub: GITHUB_TOKEN                git.marriott.com → Developer settings → Personal access tokens"
-echo "  2) 在 Cursor 里执行命令： Developer: Reload Window"
-echo "  3) 在 Cursor 的 MCP 设置里确认 Atlassian / figma / marriott-github 三个 server 已连接"
+echo "  2) 在 Cursor 的 MCP 设置里确认 Atlassian / figma / marriott-github 三个 server 已连接"
+echo "     （agents / skills 已放入 ~/.cursor/，Cursor 会自动识别，无需重启）"

@@ -188,12 +188,48 @@ PII_RULES = [
         ),
     },
     {
+        "id": "marriott_bonvoy_id",
+        "category": "pii",
+        "severity": "high",
+        "desc": "Marriott Bonvoy member number (9-digit)",
+        # 9-digit Marriott Bonvoy / 万豪旅享家 member number, matched only when a
+        # loyalty/member keyword is nearby, to avoid false positives on other 9-digit numbers.
+        "regex": re.compile(
+            r"(?i)(?:\b(?:bonvoy|marriott|member(?:ship)?[_-]?(?:id|no|number|num)?|loyalty[_-]?(?:id|no|number|num)?|rewards[_-]?(?:id|no|number|num)?)|旅享家|万豪(?:会员)?|会员号(?:码)?|会员编号)[^\n\d]{0,20}?(?<!\d)\d{9}(?!\d)"
+        ),
+    },
+    {
         "id": "address_field",
         "category": "pii",
         "severity": "medium",
         "desc": "Address field",
         "regex": re.compile(
             r"(?i)\b(?:address|addr|home[_-]?address|地址|住址|收货地址|联系地址)\b\s*[:=：]\s*['\"]?[^\n'\"]{4,}['\"]?"
+        ),
+    },
+    {
+        "id": "passport_field",
+        "category": "pii",
+        "severity": "high",
+        "desc": "Passport number field (any country)",
+        # a passport keyword (multi-language) followed by a passport-number-like value.
+        # Allows all-digit values here (e.g. US 9-digit) since the keyword makes intent clear.
+        "regex": re.compile(
+            r"(?i)\b(?:passport(?:[_-]?(?:no|number|num|id))?|passeport|reisepass|pasaporte|passaporto|パスポート|여권(?:번호)?|护照(?:号(?:码)?)?|護照(?:號(?:碼)?)?)\b\s*[:=：]?\s*['\"]?[A-Za-z0-9]{6,12}['\"]?"
+        ),
+    },
+    {
+        "id": "passport_no",
+        "category": "pii",
+        "severity": "high",
+        "desc": "Passport number (letter(s)+digits, common international formats incl. China)",
+        # Keyword-free detection of alphanumeric passport numbers used by many countries:
+        #   - 1 letter + 6-8 digits  (China E/G/D/S/P + 8; UK/EU/JP 1 letter + 7-8, etc.)
+        #   - 2 letters + 6-7 digits (China new series, Japan, India, Korea, many EU states)
+        # Pure-digit passports (e.g. US 9-digit) are intentionally NOT matched here to
+        # avoid false positives on order/serial numbers; they are caught by passport_field.
+        "regex": re.compile(
+            r"(?<![A-Za-z0-9])(?:[A-Za-z]\d{6,8}|[A-Za-z]{2}\d{6,7})(?![A-Za-z0-9])"
         ),
     },
     {

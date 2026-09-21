@@ -3,7 +3,7 @@ name: sensitive-data-guard
 description: >-
   Before writing content to any persistent or external destination, scan it for secrets
   (username, password, token, API key, AK/SK, private key, JWT) and personally sensitive
-  information (member/customer name, phone number, address, ID card, bank card, email),
+  information (member/customer name, phone number, address, ID card, passport number, bank card, email),
   and block the write if it isn't safe. Supports maintaining multiple whitelists and
   remembers the selected whitelist locally. Use before writing to local files, Jira,
   Confluence, source code, a commit, or any external system. Works on both macOS and Windows.
@@ -47,8 +47,9 @@ If you're only reading, searching, or just displaying to the user in the convers
 - **Secrets:** password/passwd/pwd, token / api_key / access_token, AK/SK
   (access key + secret key), AWS keys, GitHub/Slack/Google/Alibaba Cloud keys, Bearer
   tokens, JWTs, PEM private keys.
-- **Personally identifiable information (PII):** member/customer name fields, phone numbers (China mobile +
-  international numbers), emails, ID card numbers, bank/credit card numbers, address fields and Chinese street addresses.
+- **Personally identifiable information (PII):** member/customer name fields, Marriott Bonvoy member
+  numbers, phone numbers (China mobile +
+  international numbers), emails, ID card numbers, passport numbers, bank/credit card numbers, address fields and Chinese street addresses.
 
 For the full rule list and config format, see [reference.md](reference.md).
 
