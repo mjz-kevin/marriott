@@ -197,6 +197,31 @@ PII_RULES = [
         ),
     },
     {
+        "id": "passport_field",
+        "category": "pii",
+        "severity": "high",
+        "desc": "Passport number field (any country)",
+        # a passport keyword (multi-language) followed by a passport-number-like value.
+        # Allows all-digit values here (e.g. US 9-digit) since the keyword makes intent clear.
+        "regex": re.compile(
+            r"(?i)\b(?:passport(?:[_-]?(?:no|number|num|id))?|passeport|reisepass|pasaporte|passaporto|パスポート|여권(?:번호)?|护照(?:号(?:码)?)?|護照(?:號(?:碼)?)?)\b\s*[:=：]?\s*['\"]?[A-Za-z0-9]{6,12}['\"]?"
+        ),
+    },
+    {
+        "id": "passport_no",
+        "category": "pii",
+        "severity": "high",
+        "desc": "Passport number (letter(s)+digits, common international formats incl. China)",
+        # Keyword-free detection of alphanumeric passport numbers used by many countries:
+        #   - 1 letter + 6-8 digits  (China E/G/D/S/P + 8; UK/EU/JP 1 letter + 7-8, etc.)
+        #   - 2 letters + 6-7 digits (China new series, Japan, India, Korea, many EU states)
+        # Pure-digit passports (e.g. US 9-digit) are intentionally NOT matched here to
+        # avoid false positives on order/serial numbers; they are caught by passport_field.
+        "regex": re.compile(
+            r"(?<![A-Za-z0-9])(?:[A-Za-z]\d{6,8}|[A-Za-z]{2}\d{6,7})(?![A-Za-z0-9])"
+        ),
+    },
+    {
         "id": "cn_address_text",
         "category": "pii",
         "severity": "medium",

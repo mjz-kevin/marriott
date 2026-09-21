@@ -65,6 +65,8 @@ fields to a whitelist or a custom rule.
 | `member_name_field` | `member_name` / `会员名` / `姓名` = value |
 | `address_field` | `address` / `地址` = value |
 | `cn_address_text` | Chinese street address (province/city/district + road/number/room/building…) |
+| `passport_field` | passport keyword (多语言 `passport`/`护照`/`パスポート`/`여권`…) = value |
+| `passport_no` | passport number, common international formats (1-2 letters + digits), incl. China |
 
 ## Whitelist file format
 
