@@ -18,8 +18,11 @@ init/
 │   ├── install.sh        # 会被拷进每个包（macOS/Linux 安装器）
 │   └── install.ps1       # 会被拷进每个包（Windows 安装器，含运行时解压）
 ├── placeholders/         # 尚未落地的 Agent 占位（dev/verify/code-review/test）
-├── res/
-│   └── AI-SDLC.zip       # Windows 绿色运行时包（体积大，git 忽略，另行分发放入）
+├── res/                  # 离线绿色运行时（体积大，git 忽略，另行准备放入）
+│   ├── AI-SDLC-windows.zip             # Windows 运行时包 → 解压到 C:\
+│   ├── AI-SDLC-macOS-Silicon.zip       # macOS Apple Silicon(M系列) 运行时包
+│   └── AI-SDLC-macOS-Intel.zip         # macOS Intel 运行时包
+│       # 均含 AI-SDLC/runtime/<对应架构 node + python>，install.sh 按机型自动选并铺到 ~/.cursor/AI-SDLC/runtime/
 └── dist/                 # 构建产物（git 忽略）
     └── mrt-sdlc-<role>-<ver>.zip     # 每角色一个压缩包（含安装脚本 + README + 运行时）
 ```
@@ -62,7 +65,7 @@ python init/build.py --no-zip
 - 拒绝默认值时可手输自定义版本号；`--yes` 则一律取默认、不询问。
 
 产物在 `init/dist/`：**每角色一个 zip**（打包过程中的临时角色目录会在打完后删除）。
-zip 里已内置安装脚本、角色 README、Windows 运行时（`AI-SDLC.zip`，来源 `init/res/AI-SDLC.zip`，若存在则打入）。
+zip 里已内置安装脚本、角色 README、离线运行时（Windows `AI-SDLC-windows.zip` / macOS `AI-SDLC-macOS-Silicon.zip` + `AI-SDLC-macOS-Intel.zip`，来源 `init/res/`，若存在则打入）。
 
 ## 分发与安装（发给最终用户）
 
@@ -80,13 +83,31 @@ zip 里已内置安装脚本、角色 README、Windows 运行时（`AI-SDLC.zip`
 ```
 
 安装脚本做的事：
-1. 把 `agents/` → `~/.cursor/agents/`，`skills/` → `~/.cursor/skills/`，`profiles/` → `~/.cursor/profiles/`；
+1. 把 `agents/` → `~/.cursor/agents/`，`skills/` → `~/.cursor/skills/`，`profiles/` → `~/.cursor/profiles/`（其中 `setup.json` 已存在则保留用户本地内容，不覆盖）；
 2. 把 mcp 示例 → `~/.cursor/`；
-3. **仅 Windows**：把随包的 `AI-SDLC.zip` 解压到 `C:\`，得到 `C:\AI-SDLC\runtime\`（绿色版 Python/Node）；
-4. **自检 npx** 并**生成 `~/.cursor/mcp.json`**（Windows 自动填入 `npx.cmd` 绝对路径，macOS/Linux 用 `npx`；删除注释、凭证字段留空；已存在则保留已填凭证）；
+3. **铺开离线绿色运行时**（无需联网 / brew / sudo）：
+   - **Windows**：把随包 `AI-SDLC-windows.zip` 解压到 `C:\`，得到 `C:\AI-SDLC\runtime\`；
+   - **macOS**：按机型自动选架构分包铺到 `~/.cursor/AI-SDLC/runtime/`（Apple Silicon → `AI-SDLC-macOS-Silicon.zip`，Intel → `AI-SDLC-macOS-Intel.zip`；也兼容通用 `AI-SDLC-macos.zip`/`.tar.gz` 或包内已解开的 `AI-SDLC/runtime/`）；已存在则幂等跳过；
+4. **自检 npx**（**运行时优先**，回退系统 PATH）并**生成 `~/.cursor/mcp.json`**：把 `figma` / `marriott-github` 的 `command` 填成 npx 绝对路径（Windows 用 `npx.cmd`，macOS 用运行时 `node-*/bin/npx`；删除注释、凭证字段留空；已存在则保留已填凭证）；
 5. 提示用户填 `~/.cursor/mcp.json` 凭证，再在 Cursor MCP 设置里确认三个 server 已连接（agents/skills 自动识别，无需重启）。
 
-> 安装脚本在用户级 `~/.cursor/` 完成运行时自检与 mcp.json 生成，用户装完只需填凭证，无需任何额外配置步骤。
+> 安装脚本在用户级 `~/.cursor/` 完成运行时铺开与 mcp.json 生成，用户装完只需填凭证，无需任何额外配置步骤。
+
+## 离线运行时准备（放入 `res/`）
+
+运行时二进制体积大、已被 git 忽略，需**另行准备后放入 `init/res/`**，`build.py` 会在构建时打进每个角色包：
+
+| 平台 | 运行时载荷（放到 `init/res/`） | 版本要求 | 安装脚本落地位置 |
+| --- | --- | --- | --- |
+| Windows | `AI-SDLC-windows.zip`（内含 `AI-SDLC/runtime/node-v26.9.0-win-x64/` + `python-3.13.15-embed-amd64/`） | node 26.9.0 / python 3.13.15 | `C:\AI-SDLC\runtime\` |
+| macOS (Apple Silicon / M 系列) | `AI-SDLC-macOS-Silicon.zip`（内含 `AI-SDLC/runtime/node-v26.9.0-darwin-arm64/` + `python-3.13.15-darwin-arm64/`） | node 26.9.0 / python 3.13.15 | `~/.cursor/AI-SDLC/runtime/` |
+| macOS (Intel) | `AI-SDLC-macOS-Intel.zip`（内含 `AI-SDLC/runtime/node-v26.9.0-darwin-x64/` + `python-3.13.15-darwin-x64/`） | node 26.9.0 / python 3.13.15 | `~/.cursor/AI-SDLC/runtime/` |
+
+- macOS 的 node 用官方发行名（`node-v26.9.0-darwin-arm64` / `-x64`）；python 用 [python-build-standalone](https://github.com/astral-sh/python-build-standalone) 的 install_only 独立构建（CPython 3.13.15 对应 release tag `20260807`），解压后**须把顶层 `python/` 目录改名为 `python-3.13.15-darwin-arm64` / `python-3.13.15-darwin-x64`**（与 node 的 `-darwin-<arch>` 命名对齐，`install.sh` 据此按架构挑选）。
+- 两个架构包的准备可用 `init/res/fetch_macos_python.sh` 拉取 python、node 用官方 tar.gz，再各自打成上表两个 zip（顶层为 `AI-SDLC/`，与 `AI-SDLC-windows.zip` 一致）。
+- `install.sh` 按 `uname -m`（`arm64` / `x86_64`）自动选对应架构分包；分包缺失时回退通用包，再无则回退系统 PATH。
+- macOS 上 python 仅用于生成 `mcp.json`（可被系统 `python3` 替代）；真正需要随运行时分发的是 **node/npx**。若既无运行时也无系统 node，figma / marriott-github 两个 MCP server 将无法启动。
+- 若某平台运行时缺失，`build.py` 会告警但不阻断，对应平台的 `install` 脚本会回退到系统 PATH 上的 node/npx。
 
 ## 凭证与安全
 
