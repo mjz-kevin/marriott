@@ -1,5 +1,5 @@
 {
-    "_comment": "【Windows 版】复制本文件为同目录 mcp.json 后填写凭证。绿色版 Node 未加入系统 PATH，command 必须用 npx.cmd 的绝对路径（正斜杠）。路径里的版本号按实际解压目录替换，或运行 python .cursor/skills/env-setup/scripts/env-setup.py 用自检输出的 npx 路径。API token 获取地址：https://id.atlassian.com/manage-profile/security/api-tokens。填好后可删除所有 _comment 键。",
+    "_comment": "【Windows 版】复制本文件为同目录 mcp.json 后填写凭证。绿色版 Node 未加入系统 PATH，command 必须用 npx.cmd 的绝对路径（正斜杠）。路径里的版本号按实际解压目录替换。API token 获取地址：https://id.atlassian.com/manage-profile/security/api-tokens。",
     "confluenceRest": {
         "base_url": "https://marriottcloud.atlassian.net/wiki",
         "email": "",

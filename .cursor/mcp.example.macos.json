@@ -1,5 +1,5 @@
 {
-    "_comment": "【macOS / Linux 版】复制本文件为同目录 mcp.json 后填写凭证。npx 已在系统 PATH，command 直接用 'npx'。API token 获取地址：https://id.atlassian.com/manage-profile/security/api-tokens。填好后可删除所有 _comment 键。",
+    "_comment": "【macOS / Linux 版】复制本文件为同目录 mcp.json 后填写凭证。npx 已在系统 PATH，command 直接用 'npx'。API token 获取地址：https://id.atlassian.com/manage-profile/security/api-tokens。",
     "confluenceRest": {
         "base_url": "https://marriottcloud.atlassian.net/wiki",
         "email": "",

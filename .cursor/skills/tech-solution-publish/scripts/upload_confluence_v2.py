@@ -31,7 +31,7 @@ from collections import deque
 
 # ============================= npx 解析（自包含、跨平台） =============================
 # 本段不依赖任何外部模块，随脚本一起分发。解析 npx 的优先级：
-#   1) <repo>/.cursor/setup.json 当前平台段/common 段的绝对路径
+#   1) <repo>/.cursor/profiles/setup.json 当前平台段/common 段的绝对路径
 #   2) 系统 PATH
 #   3) 自动扫描固定运行时目录 C:/AI-SDLC/runtime（可用环境变量 AI_SDLC_RUNTIME 覆盖）下的 node-*
 #   4) 默认名 "npx"
@@ -60,7 +60,7 @@ def _repo_root():
 
 def _configured_npx():
     """从 setup.json 读当前平台段或 common 段的 npx 绝对路径。"""
-    p = os.path.join(_repo_root(), ".cursor", "setup.json")
+    p = os.path.join(_repo_root(), ".cursor", "profiles", "setup.json")
     if not os.path.isfile(p):
         return ""
     try:

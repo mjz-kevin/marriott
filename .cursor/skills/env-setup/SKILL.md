@@ -26,7 +26,7 @@ description: >-
 |---|---|---|
 | 运行时根目录 | `C:/AI-SDLC/runtime/`（Windows 默认，可用环境变量 `AI_SDLC_RUNTIME` 覆盖） | 存放绿色版 python-*/node-* |
 | 自检/解析脚本 | `.cursor/skills/env-setup/scripts/env-setup.py` | 自动定位可执行文件、输出诊断 |
-| 可执行文件路径配置 | `.cursor/setup.json` | 仅非默认位置/锁版本时才填绝对路径 |
+| 可执行文件路径配置 | `.cursor/profiles/setup.json` | 仅非默认位置/锁版本时才填绝对路径 |
 | MCP 模板 | `.cursor/mcp.example.macos.json`（macOS/Linux）、`.cursor/mcp.example.windows.json`（Windows） | 按平台复制为 `mcp.json` 的来源 |
 | MCP 配置 | `.cursor/mcp.json` | 本机 MCP server 与凭证（不入库） |
 
@@ -122,7 +122,7 @@ python .cursor/skills/env-setup/scripts/env-setup.py
 
 ### 步骤 4：手动覆盖（仅在步骤 2.2 出现 default 时）
 
-直接编辑已入库的 `.cursor/setup.json`，在当前平台段填入 `python` / `node` / `npm` / `npx` 的绝对路径（正斜杠）。填完重跑步骤 2.2 自检，确认来源变为 `configured`。
+直接编辑已入库的 `.cursor/profiles/setup.json`，在当前平台段填入 `python` / `node` / `npm` / `npx` 的绝对路径（正斜杠）。填完重跑步骤 2.2 自检，确认来源变为 `configured`。
 
 > 注意：`setup.json` 团队共享入库，只填对全员都成立的路径；仅本机有效的路径不要写入此文件。
 

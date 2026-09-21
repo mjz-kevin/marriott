@@ -5,7 +5,7 @@
 供环境准备阶段自检与排障。在 Windows 绿色版运行时（未加入系统 PATH）也能零配置识别。
 
 解析优先级（对每个工具依次尝试，命中即返回）：
-  1. <repo>/.cursor/setup.json 中「当前平台段」或 common 段的绝对路径（手动覆盖用）
+  1. <repo>/.cursor/profiles/setup.json 中「当前平台段」或 common 段的绝对路径（手动覆盖用）
   2. 系统 PATH 中的默认名（python→python3、node、npm、npx）
   3. 自动扫描固定运行时目录：默认 C:/AI-SDLC/runtime（可用环境变量 AI_SDLC_RUNTIME 覆盖），
      匹配其下 python-* 与 node-* 目录里的可执行文件——这是 Windows 绿色版的零配置路径
@@ -58,8 +58,8 @@ def find_repo_root(start=None) -> str:
 
 
 def _load_config() -> dict:
-    """读 <repo>/.cursor/setup.json；缺失或解析失败则返回空。"""
-    p = os.path.join(find_repo_root(), ".cursor", "setup.json")
+    """读 <repo>/.cursor/profiles/setup.json；缺失或解析失败则返回空。"""
+    p = os.path.join(find_repo_root(), ".cursor", "profiles", "setup.json")
     if os.path.isfile(p):
         try:
             with open(p, "r", encoding="utf-8") as f:
