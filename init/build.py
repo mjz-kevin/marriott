@@ -7,12 +7,12 @@ AI SDLC 分发包构建脚本。
 
   1) 角色包（默认）：读取 init/roles.json，按角色（PO / TL / Dev / QA）把 .cursor 下的
      agents、skills 及公共资产（profiles、mcp 示例）收集起来，每个角色产出一个压缩包：
-       dist/mrt-sdlc-<role>-<ver>.zip
+       dist/AI-SDLC-Role-<role>-<ver>.zip
      内含 install.sh / install.ps1、角色 README。**角色包不含运行时**。
 
   2) 运行时初始化包（加 --runtime <平台>）：只把 res 下对应平台的绿色运行时 zip 连同一份
      精简安装脚本打成一个包，专门用于初始化运行时（不含 agents/skills/profiles/mcp）：
-       dist/AI-SDLC-runtime-<platform>-<ver>.zip
+       dist/AI-SDLC-Runtime-<platform>-<ver>.zip
      平台取值：win / mac-intel / mac-silicon。
 
 版本号（--version 未指定时交互决定）：
@@ -303,7 +303,7 @@ def _write_role_readme(role_dir: Path, role: str, cfg: dict, manifest: dict) -> 
     a("- 把 profiles 复制到 `~/.cursor/profiles/`，mcp 示例复制到 `~/.cursor/`；")
     a("- 自检 npx（运行时优先，回退系统 PATH）并生成 `~/.cursor/mcp.json`（凭证字段留空，已存在则保留已填凭证）。\n")
     a("> 运行时（node / python）不随角色包分发。若尚未安装，请先运行独立的**运行时初始化包**"
-      "（`AI-SDLC-runtime-<平台>-<版本>.zip`）把绿色运行时铺到 `~/.cursor/AI-SDLC/runtime/`（Windows 为 `C:\\AI-SDLC\\runtime\\`）；"
+      "（`AI-SDLC-Runtime-<平台>-<版本>.zip`）把绿色运行时铺到 `~/.cursor/AI-SDLC/runtime/`（Windows 为 `C:\\AI-SDLC\\runtime\\`）；"
       "否则安装脚本会回退到系统 PATH 上的 node/npx。\n")
     a("安装完成后：打开 `~/.cursor/mcp.json` 填入凭证，再在 Cursor 的 MCP 设置里确认 server 已连接即可。agents / skills 由 Cursor 自动识别，无需重启。\n")
     a("## 本包包含的 Agent\n")
@@ -322,9 +322,9 @@ def _write_role_readme(role_dir: Path, role: str, cfg: dict, manifest: dict) -> 
 
 
 def zip_role(role: str, version: str) -> Path:
-    """把 dist/<role>/ 打成 dist/<role>-<version>.zip。"""
+    """把 dist/<role>/ 打成 dist/AI-SDLC-Role-<role>-<version>.zip。"""
     role_dir = DIST_DIR / role
-    zip_path = DIST_DIR / f"mrt-sdlc-{role}-{version}.zip"
+    zip_path = DIST_DIR / f"AI-SDLC-Role-{role}-{version}.zip"
     if zip_path.exists():
         zip_path.unlink()
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -339,7 +339,7 @@ def build_runtime_pkg(platform: str, version: str) -> Path:
     """构建一个「运行时初始化包」：只含 res 下对应平台的运行时 zip + 精简安装脚本。
 
     platform 取值：win / mac-intel / mac-silicon。
-    产物：dist/AI-SDLC-runtime-<platform>-<version>.zip，解压后目录含：
+    产物：dist/AI-SDLC-Runtime-<platform>-<version>.zip，解压后目录含：
       - 对应平台的运行时 zip（win → AI-SDLC-windows.zip；mac → AI-SDLC-macOS-*.zip）
       - install-runtime.sh（macOS）/ install-runtime.ps1（Windows）：只铺运行时，不碰 agents/mcp
       - manifest.json（标记 kind=runtime）
@@ -352,7 +352,7 @@ def build_runtime_pkg(platform: str, version: str) -> Path:
             f"res/{zip_name} 不存在，无法构建 {platform} 运行时初始化包"
         )
 
-    pkg_name = f"AI-SDLC-runtime-{platform}"
+    pkg_name = f"AI-SDLC-Runtime-{platform}"
     pkg_dir = DIST_DIR / pkg_name
     if pkg_dir.exists():
         shutil.rmtree(pkg_dir)
@@ -417,7 +417,7 @@ def build_runtime_pkg(platform: str, version: str) -> Path:
     (pkg_dir / "README.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     # 5) 打 zip
-    zip_path = DIST_DIR / f"AI-SDLC-runtime-{platform}-{version}.zip"
+    zip_path = DIST_DIR / f"AI-SDLC-Runtime-{platform}-{version}.zip"
     if zip_path.exists():
         zip_path.unlink()
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
