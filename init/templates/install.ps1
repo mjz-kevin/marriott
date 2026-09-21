@@ -44,7 +44,7 @@ Copy-Contents (Join-Path $PkgDir "skills") (Join-Path $CursorHome "skills")
 Write-Host "--> 安装 profiles"
 Copy-Contents (Join-Path $PkgDir "profiles") (Join-Path $CursorHome "profiles")
 
-Write-Host "--> 安装 mcp 示例与环境配置流程到 $CursorHome"
+Write-Host "--> 安装 mcp 示例到 $CursorHome"
 Copy-Contents (Join-Path $PkgDir "cursor-files") $CursorHome
 
 # ---- Windows 专属：解压运行时到 C:\ ----
@@ -144,5 +144,5 @@ Write-Host "  1) 打开 $CursorHome\mcp.json，填入 Atlassian / Figma / GitHub
 Write-Host "     - Confluence/Jira: email + api_token  https://id.atlassian.com/manage-profile/security/api-tokens"
 Write-Host "     - Figma: FIGMA_API_KEY                Figma 设置 -> Security -> Personal access tokens"
 Write-Host "     - GitHub: GITHUB_TOKEN                git.marriott.com -> Developer settings -> Personal access tokens"
-Write-Host "  2) 在 Cursor 里执行命令： Developer: Reload Window"
-Write-Host "  3) 在 Cursor 的 MCP 设置里确认 Atlassian / figma / marriott-github 三个 server 已连接"
+Write-Host "  2) 在 Cursor 的 MCP 设置里确认 Atlassian / figma / marriott-github 三个 server 已连接"
+Write-Host "     （agents / skills 已放入 ~/.cursor/，Cursor 会自动识别，无需重启）"
