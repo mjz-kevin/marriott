@@ -37,34 +37,26 @@ mcp:
     space: CMI
     parent_pages:
       # 文件夹模式（当前）：一级根目录「Mobile Team Requirement Materials」folder 页 ID。
-      # 发布脚本在此根下自动建/找 二级 {epic_parent} → 三级 {epic} → 四级 {epic}-PRD / {epic}-Tech Solution。
-      # {epic_parent} 取 Epic 的父级 Jira key（Initiative/计划，如 PORT-352）；{epic} 取 Jira Epic key（如 CNAPP-5661）。
-      # 一律用 Jira key，不用功能名或中文 slug，保证归档夹稳定可检索。
+      # 发布脚本在此根下自动建/找 {initiative} → {epic} → {epic}-PRD / {epic}-Tech Solution。
+      # {initiative} 取 Epic 的父级 Jira key（Initiative/计划，如 PORT-1301）；{epic} 取 Jira Epic key（如 CNAPP-5661）。
+      # {initiative} 与 {epic} 夹标题由脚本查 Jira 摘要拼为「key-摘要」（如 CNAPP-5661-会员权益重构），
+      # 幂等查重按 Jira key 前缀匹配，摘要文案变动不会重复建夹。
       root: "4198957209"             # 一级根目录页 ID（Mobile Team Requirement Materials，prod/CMI，folder 类型）
       # 旧模式回退（直接父页，仅当未走文件夹模式时使用）：
       prd: "4191912061"
       tech_solution: "4192731190"
-    folder_layout:                   # 文件夹层级约定（供 skill 说明用；实际由脚本 --root/--epic-parent/--epic/--kind 落地）
+    folder_layout:                   # 文件夹层级约定（供 skill 说明用；实际由脚本 --root/--initiative/--epic/--kind 落地）
       level1: "Mobile Team Requirement Materials"   # 一级：固定根目录（即 parent_pages.root）
-      level2: "{epic_parent}"                       # 二级：Epic 的父级 Jira key（Initiative/计划，如 PORT-352）
-      level3: "{epic}"                              # 三级：Jira Epic key（如 CNAPP-5661）
+      level2: "{initiative}"                        # 二级：Initiative（Epic 父级）夹，标题「key-摘要」，无父项时省略
+      level3: "{epic}"                              # 三级：Epic 夹，标题「key-摘要」，如 CNAPP-5661-会员权益重构
       level4_prd: "{epic}-PRD"                      # 四级：PRD 归档夹
       level4_tech_solution: "{epic}-Tech Solution"  # 四级：技术方案归档夹
-    naming:
-      prd: "APP-PRD-{feature_name}-{date}-{version}"
-      tech_solution_prd: "APP-TS-Prd-{feature_name}-{date}-{version}"
-      tech_solution_spike: "APP-TS-Spike-{spike_key}-{topic}-{date}"
-      tech_solution_detail: "APP-TS-Detail-{story_key}-{title}-{date}"
+    naming:                            # 标题前缀（唯一键=前缀+Jira key）；脚本自动追加「-Jira 摘要」为可读尾巴，日期/版本不进标题
+      prd: "APP-PRD-{epic}"
+      tech_solution_prd: "APP-TS-Prd-{epic}"
+      tech_solution_spike: "APP-TS-Spike-{spike_key}"
+      tech_solution_detail: "APP-TS-Detail-{story_key}"
     content_format: markdown
-
-  github:
-    default_branch: develop
-
-# ---------------------------------------------------------------- 产物模板
-artifacts:
-  prd_kind: prd
-  prd_template: references/prd-template.md
-  user_story_template: references/user-story-app.md
 
 # ---------------------------------------------------------------- 内容模型
 content_model:
@@ -74,4 +66,3 @@ content_model:
 doc:
   body_language: en-US
   ac_language: en-US
-  ac_format: GIVEN/WHEN/AND/THEN

@@ -9,15 +9,17 @@ upload_confluence_v2.py — 将本地 Markdown 发布到 Confluence（storage �
   - Markdown -> Confluence storage HTML（标题/表格/列表/引用/代码/mermaid 占位/行内格式）
   - 按标题在指定父目录下幂等查重：无则新建，有则更新并升版本
   - 目录层级（文件夹模式，--root/--epic/--kind）：查询 epic 的 Jira 父项自适应分层，
-    有父项为 root → {epic_parent} → {epic} → {epic}-PRD | {epic}-Tech Solution（四级），
-    无父项省略 {epic_parent} 层（三级）；缺失文件夹自动建容器页。--epic-parent 可覆盖
+    有父项为 root → {initiative} → {epic} → {epic}-PRD | {epic}-Tech Solution（四级），
+    无父项省略 {initiative} 层（三级）；缺失文件夹自动建容器页。--initiative 可覆盖。
+    initiative 与 epic 文件夹标题拼为「Jira key-摘要」（如 PORT-1301-会员权益重构），
+    容器夹的幂等查重按 Jira key 前缀匹配，避免摘要文案变动导致重复建夹
   - mermaid flowchart -> SVG（纯标准库自绘，Windows/macOS/Linux 通用），作附件 + <ac:image> 内联；
     渲染失败时退化为 code 宏加文字兜底，并在结果中标注 mermaid_pending
   - 完整性统计：章节数(h2)/Story 数/AC 条数，供 skill 与本地对照
   - 全程 UTF-8
 
 用法:
-  # 文件夹模式（推荐）：自动建 epic 二级夹与 PRD/Tech Solution 三级夹
+  # 文件夹模式（推荐）：自动建 initiative → epic 容器夹与 PRD/Tech Solution 叶子夹
   python upload_confluence_v2.py --md <md> --space CMI --root <根页ID> --epic <Jira Epic key，如 CNAPP-5661> --kind prd --title <标题>
   # 旧模式：直接指定父页
   python upload_confluence_v2.py --md <md> --space CMI --parent <id> --title <标题>
@@ -551,15 +553,6 @@ def replace_mermaid(body, mermaid_blocks, page_id, base_url, auth, workdir, feat
     return body, pending
 
 
-def find_page(base_url, auth, space, parent, title):
-    cql = f'ancestor = {parent} AND type = page AND title = "{title}" AND space = {space}'
-    url = f"{base_url}/rest/api/content/search?cql=" + urllib.parse.quote(cql) + "&limit=5"
-    st, data = api("GET", url, auth)
-    if st == 200 and isinstance(data, dict) and data.get("results"):
-        return data["results"][0]["id"]
-    return None
-
-
 def _find_direct_child(base_url, auth, parent, title):
     """在 parent 的直接子项中按精确标题查找（区别于 find_page 的 ancestor 递归查找）。
 
@@ -595,6 +588,37 @@ def ensure_child_page(base_url, auth, space, parent, title):
     raise SystemExit(f"创建容器页失败：parent={parent} title={title} -> {st} {data}")
 
 
+def _sanitize_summary(summary):
+    """把 Jira 摘要清洗为可用于 Confluence 页面标题的一段文本。
+
+    去掉换行、折叠连续空白、剔除 Confluence 标题禁用的字符，并截断到合理长度，
+    避免摘要过长或含特殊符号导致建页失败。返回清洗后的字符串（可能为空）。
+    """
+    s = re.sub(r"\s+", " ", (summary or "")).strip()
+    s = re.sub(r'[<>:"/\\|?#\[\]{}]', "", s)
+    return s[:80].strip()
+
+
+def get_jira_issue_title(base_url, auth, key):
+    """查询 Jira issue 的摘要并拼成文件夹标题「key-摘要」。
+
+    复用 Confluence 站点与凭证（base_url 去掉末尾 /wiki 得站点根，Jira REST 位于
+    <site>.atlassian.net/rest/api/3，email 与 api_token 通用）。摘要查询失败或为空时
+    退回纯 key，不因此中断发布。返回 (folder_title, summary_ok)。
+    """
+    site = re.sub(r"/wiki/?$", "", base_url)
+    url = f"{site}/rest/api/3/issue/{urllib.parse.quote(key)}?fields=summary"
+    try:
+        st, data = api("GET", url, auth)
+    except Exception:
+        return key, False
+    if st == 200 and isinstance(data, dict):
+        summary = _sanitize_summary((data.get("fields") or {}).get("summary"))
+        if summary:
+            return f"{key}-{summary}", True
+    return key, False
+
+
 def get_jira_parent(base_url, auth, epic):
     """查询 Jira Epic 的直接父项 key（仅上溯一级）。
 
@@ -618,16 +642,58 @@ def get_jira_parent(base_url, auth, epic):
     return None
 
 
-def resolve_parent(base_url, auth, space, root, epic, kind, epic_parent=None):
-    """解析目标父页 ID：root →（可选 {epic_parent}）→ {epic} → {epic}-{PRD|Tech Solution}。
+def ensure_container_by_key(base_url, auth, space, parent, key, title):
+    """确保 parent 下存在归档容器夹；以 Jira key 前缀幂等匹配，缺失则以 title 新建。
+
+    容器夹标题为「key-摘要」，摘要文案可能随迭代变动。为保证幂等，先在 parent 的直接
+    子项中查标题以「key」或「key-」开头者命中已有夹（不因摘要变动重复建夹）；命中后若
+    现标题与最新 title 不一致则自动改名，使夹标题随 Jira 摘要保持最新；未命中再按
+    完整 title 新建。返回 (page_id, created)。
+    """
+    existing_id, existing_title = _find_child_by_key_prefix(base_url, auth, parent, key)
+    if existing_id:
+        if existing_title and existing_title != title:
+            rename_page(base_url, auth, existing_id, title)
+        return existing_id, False
+    return ensure_child_page(base_url, auth, space, parent, title)
+
+
+def _find_child_by_key_prefix(base_url, auth, parent, key):
+    """在 parent 的直接子项中查找标题以 Jira key 前缀开头的容器夹。
+
+    命中条件：标题等于 key，或以「key-」开头（如 key=CNAPP-5661 命中
+    「CNAPP-5661-会员权益重构」）。同时覆盖 v1 page 子页与 v2 folder 子项。
+    返回 (id, 现标题)；未命中返回 (None, None)。
+    """
+    def _match(title):
+        return title == key or title.startswith(f"{key}-")
+
+    url = f"{base_url}/rest/api/content/{parent}/child/page?limit=200"
+    st, data = api("GET", url, auth)
+    if st == 200 and isinstance(data, dict):
+        for it in data.get("results", []):
+            if _match(it.get("title", "")):
+                return it["id"], it.get("title", "")
+    url2 = f"{base_url}/api/v2/folders/{parent}/direct-children?limit=200"
+    st2, data2 = api("GET", url2, auth)
+    if st2 == 200 and isinstance(data2, dict):
+        for it in data2.get("results", []):
+            if _match(it.get("title", "")):
+                return it["id"], it.get("title", "")
+    return None, None
+
+
+def resolve_parent(base_url, auth, space, root, epic, kind, initiative=None):
+    """解析目标父页 ID：root →（可选 {initiative}）→ {epic} → {epic}-{PRD|Tech Solution}。
 
     层级随 epic 父项自适应（有父项四级 / 无父项三级）：
       root（一级根目录页 ID）
-        [{epic_parent}]             仅当 epic 有父项时插入
-          {epic}
+        [{initiative}]              仅当 epic 有父项时插入，标题为「initiative key-摘要」
+          {epic}                    标题为「epic key-摘要」
             {epic}-PRD              kind=prd
             {epic}-Tech Solution    kind=tech_solution
-    epic_parent 为已解析的父项 key，None 表示无父项、退回三级。
+    initiative 为已解析的父项 key，None 表示无父项、退回三级。initiative 与 epic 容器夹
+    的标题拼上 Jira 摘要，幂等查重按 key 前缀匹配。叶子夹后缀挂在 epic key 之后。
     缺失的各级文件夹自动创建。返回 (parent_id, ensured)。
     """
     kind_suffix = {"prd": "PRD", "tech_solution": "Tech Solution"}
@@ -636,13 +702,15 @@ def resolve_parent(base_url, auth, space, root, epic, kind, epic_parent=None):
     ensured = []
     container = root
     level = 2
-    if epic_parent:
-        ep_id, c0 = ensure_child_page(base_url, auth, space, root, epic_parent)
-        ensured.append({"level": level, "title": epic_parent, "id": ep_id, "created": c0})
+    if initiative:
+        init_title, _ = get_jira_issue_title(base_url, auth, initiative)
+        ep_id, c0 = ensure_container_by_key(base_url, auth, space, root, initiative, init_title)
+        ensured.append({"level": level, "title": init_title, "id": ep_id, "created": c0})
         container = ep_id
         level += 1
-    epic_id, c1 = ensure_child_page(base_url, auth, space, container, epic)
-    ensured.append({"level": level, "title": epic, "id": epic_id, "created": c1})
+    epic_title, _ = get_jira_issue_title(base_url, auth, epic)
+    epic_id, c1 = ensure_container_by_key(base_url, auth, space, container, epic, epic_title)
+    ensured.append({"level": level, "title": epic_title, "id": epic_id, "created": c1})
     leaf_title = f"{epic}-{kind_suffix[kind]}"
     leaf_id, c2 = ensure_child_page(base_url, auth, space, epic_id, leaf_title)
     ensured.append({"level": level + 1, "title": leaf_title, "id": leaf_id, "created": c2})
@@ -669,6 +737,35 @@ def update_page(base_url, auth, page_id, title, body, ver, msg):
     return api("PUT", f"{base_url}/rest/api/content/{page_id}", auth, body=payload)
 
 
+def rename_page(base_url, auth, page_id, new_title):
+    """仅改标题、不动正文：读当前 title 与版本，不一致时升版本 PUT 新标题。
+
+    用于容器夹与叶子文档随 Jira 摘要变动而改名。返回 True 表示已改或无需改，
+    False 表示改名失败（不中断主流程，由调用方决定是否记录）。
+    """
+    st, data = api("GET", f"{base_url}/rest/api/content/{page_id}?expand=version", auth)
+    if st != 200 or not isinstance(data, dict):
+        return False
+    cur_title = data.get("title")
+    ver = (data.get("version") or {}).get("number", 1)
+    if cur_title == new_title:
+        return True
+    payload = {"type": "page", "title": new_title,
+               "version": {"number": ver + 1, "message": f"Rename to {new_title}"}}
+    st2, _ = api("PUT", f"{base_url}/rest/api/content/{page_id}", auth, body=payload)
+    return st2 in (200, 201)
+
+
+def _find_leaf_page_by_prefix(base_url, auth, parent, prefix):
+    """在叶子夹 parent 的直接子页中，按标题前缀查找目标文档页。
+
+    命中条件：标题等于 prefix，或以「prefix-」开头（如 prefix=APP-TS-Prd-CNAPP-5661
+    命中「APP-TS-Prd-CNAPP-5661-会员权益重构」）。返回 (id, 现标题)；未命中返回 (None, None)。
+    唯一键落在 prefix（固定前缀+Jira key），摘要尾巴变动不会重复建页。
+    """
+    return _find_child_by_key_prefix(base_url, auth, parent, prefix)
+
+
 # ============================= 主流程 =============================
 def main():
     ap = argparse.ArgumentParser()
@@ -678,13 +775,21 @@ def main():
                     help="直接指定父页 ID（旧模式）。与 --root/--epic/--kind 二选一。")
     ap.add_argument("--root", default=None,
                     help="一级根目录页 ID（Mobile Team Requirement Materials）。与 --epic/--kind 配套。")
-    ap.add_argument("--epic", default=None, help="二级 epic 文件夹名，取 Jira Epic key（如 CNAPP-5661），不用功能名或中文 slug。")
-    ap.add_argument("--epic-parent", dest="epic_parent", default=None,
-                    help="Epic 父项 key，作为 epic 之上一级的归档文件夹（如 PORT-1301）。"
-                         "省略时查询 Jira 取直接父项；值为 none 时强制无父项，退回三级结构。")
+    ap.add_argument("--epic", default=None, help="Epic 容器夹对应的 Jira Epic key（如 CNAPP-5661），不用功能名或中文 slug；夹标题自动拼为「key-摘要」。")
+    ap.add_argument("--initiative", dest="initiative", default=None,
+                    help="Initiative（Epic 父项）key，作为 epic 之上一级的归档文件夹（如 PORT-1301），"
+                         "文件夹标题自动拼为「key-Jira 摘要」。省略时查询 Jira 取直接父项；"
+                         "值为 none 时强制无父项，退回三级结构。")
     ap.add_argument("--kind", default=None, choices=["prd", "tech_solution"],
                     help="决定三级文件夹：prd→{epic}-PRD，tech_solution→{epic}-Tech Solution。")
-    ap.add_argument("--title", required=True)
+    ap.add_argument("--title", required=True,
+                    help="标题前缀（唯一键），取 profile 的 naming 模板替换 key 后的值，"
+                         "如 APP-TS-Prd-CNAPP-5661 / APP-TS-Spike-CNAPP-1234 / APP-TS-Detail-CNAPP-5678。"
+                         "脚本按此前缀查重，并自动追加「-Jira 摘要」拼成完整标题；命中已有页时按最新摘要改名。不含日期/版本。")
+    ap.add_argument("--title-key", dest="title_key", default=None,
+                    help="标题唯一键对应的 Jira key，用于查摘要拼可读尾巴："
+                         "PRD 级技术方案=Epic key，Spike=Spike 工单 key，Detail=Story 工单 key。"
+                         "省略时文件夹模式退回用 --epic，旧模式退回纯前缀。")
     ap.add_argument("--mcp", default=None)
     ap.add_argument("--version-msg", default="Publish from local doc")
     ap.add_argument("--dry-run", action="store_true")
@@ -732,38 +837,53 @@ def main():
     if mermaid_blocks and not args.allow_degraded_diagrams:
         ensure_mermaid_available()
 
-    # 解析 epic 父项以确定归档层级：--epic-parent 显式指定优先，值为 none 时强制无父项；
-    # 未指定则查询 Jira 取直接父项。有父项时在归档路径插入一级 {epic_parent} 文件夹，否则维持三级。
-    epic_parent = None
+    # 解析 initiative（Epic 父项）以确定归档层级：--initiative 显式指定优先，值为 none 时强制无父项；
+    # 未指定则查询 Jira 取直接父项。有父项时在归档路径插入一级 {initiative} 文件夹，否则维持三级。
+    initiative = None
     if use_folder:
-        if args.epic_parent:
-            epic_parent = None if args.epic_parent.strip().lower() == "none" else args.epic_parent.strip()
+        if args.initiative:
+            initiative = None if args.initiative.strip().lower() == "none" else args.initiative.strip()
         else:
-            epic_parent = get_jira_parent(base_url, auth, args.epic)
+            initiative = get_jira_parent(base_url, auth, args.epic)
 
-    result = {"title": args.title, "stats": stats, "base_url": base_url}
+    # 标题 = 前缀（唯一键，如 APP-TS-Prd-CNAPP-5661）+「-Jira 摘要」可读尾巴。
+    # 摘要由脚本查 Jira 取（--title-key 指定：PRD 级=epic，spike=spike_key，detail=story_key；
+    # 省略时文件夹模式退回 --epic，旧模式退回纯前缀）。查重按前缀匹配，命中后按最新完整标题改名。
+    title_prefix = args.title
+    summary_key = args.title_key or (args.epic if use_folder else None)
+    summary_tail = ""
+    if summary_key:
+        kt, _ = get_jira_issue_title(base_url, auth, summary_key)
+        summary_tail = kt[len(summary_key):] if kt.startswith(summary_key) else ""
+    full_title = title_prefix + summary_tail
+
+    result = {"title": full_title, "title_prefix": title_prefix, "stats": stats, "base_url": base_url}
 
     if args.dry_run:
         result.update({"dry_run": True, "storage_chars": len(body),
-                       "target": ({"mode": "folder", "root": args.root, "epic_parent": epic_parent,
+                       "target": ({"mode": "folder", "root": args.root, "initiative": initiative,
                                    "epic": args.epic, "kind": args.kind}
                                   if use_folder else {"mode": "parent", "parent": args.parent})})
         print(json.dumps(result, ensure_ascii=False, indent=2)); return 0
 
     if use_folder:
-        parent, ensured = resolve_parent(base_url, auth, args.space, args.root, args.epic, args.kind, epic_parent)
+        parent, ensured = resolve_parent(base_url, auth, args.space, args.root, args.epic, args.kind, initiative)
         result["folders"] = ensured
-        # 文件夹模式下 PRD 页是三级夹的直接子页，用直接子级精确匹配查重
-        # （比 CQL ancestor 更可靠，且父级可能是 folder 类型）
-        existing = _find_direct_child(base_url, auth, parent, args.title)
+        # 文件夹模式下方案页是叶子夹的直接子页，按标题前缀（前缀+Jira key）查重；摘要尾巴变动不重复建页。
+        existing_id, existing_title = _find_leaf_page_by_prefix(base_url, auth, parent, title_prefix)
     else:
         parent = args.parent
-        existing = find_page(base_url, auth, args.space, parent, args.title)
+        # 旧模式：在固定父页下按标题前缀查子页（与文件夹模式一致，避免摘要尾巴变动重复建页）。
+        existing_id, existing_title = _find_child_by_key_prefix(base_url, auth, parent, title_prefix)
 
-    if existing:
-        page_id = existing; result["action"] = "update"
+    if existing_id:
+        page_id = existing_id; result["action"] = "update"
+        # 命中后若现标题与最新完整标题不一致，先改名再更新正文（rename 走独立 PUT）。
+        if existing_title and existing_title != full_title:
+            rename_page(base_url, auth, page_id, full_title)
+            result["renamed_from"] = existing_title
     else:
-        st, data = create_page(base_url, auth, args.space, parent, args.title, body)
+        st, data = create_page(base_url, auth, args.space, parent, full_title, body)
         if st not in (200, 201):
             result["error"] = f"create failed: {st} {data}"
             print(json.dumps(result, ensure_ascii=False, indent=2)); return 1
@@ -771,7 +891,7 @@ def main():
 
     body, pending = replace_mermaid(body, mermaid_blocks, page_id, base_url, auth, workdir, feature)
     ver = get_version(base_url, auth, page_id)
-    st, data = update_page(base_url, auth, page_id, args.title, body, ver, args.version_msg)
+    st, data = update_page(base_url, auth, page_id, full_title, body, ver, args.version_msg)
     if st not in (200, 201):
         result["error"] = f"update failed: {st} {data}"
         print(json.dumps(result, ensure_ascii=False, indent=2)); return 1

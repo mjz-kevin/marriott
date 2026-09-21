@@ -1,7 +1,7 @@
 ---
 name: user-story-authoring
 description: >-
-  把 PRD 拆成标准 User Story，附 GIVEN/WHEN/THEN 验收标准，
+  把 PRD 拆成标准 User Story，附可测的验收标准（前置条件/操作/可观察结果三要素），
   经 INVEST 校验，并备齐建单所需的 Jira 字段值。字段集、链接集、
   描述是否需自成一体、是否可自动估点均遵循团队配置。当用户要求拆 Story、
   撰写 User Story、起草 AC 或从 PRD 准备 Jira 工单时使用；
@@ -18,7 +18,7 @@ metadata:
 | 维度   | 说明                                                     |
 | ---- | ------------------------------------------------------ |
 | 定位   | 基于需求澄清结论与技术方案，把 PRD 拆成标准化 User Story 并写全 AC 与 Jira 字段值 |
-| 输入   | PRD（含 Figma 链接）、PRD 级及以上技术方案                          |
+| 输入   | PRD（含 Figma 链接）；PRD 级及以上技术方案（可选，作为拆分粒度与依赖的参考） |
 | 产出   | 会话内 Story 清单（含句式、描述、AC、字段值、回链），不落地文件；交 PO 确认后供建单环节消费   |
 | 边界   | 只写 what 不写 how；AI 不估点；不建单（建单属发布环节）                     |
 | 核心判断 | 拆分质量的唯一标准：DEV 无需查阅 PRD 即可开工，QA 无需查阅 PRD 即可编写用例         |
@@ -35,8 +35,7 @@ metadata:
 | Agile Team 默认值 | `profiles/{profile}.yaml` → `mcp.jira.agile_team`（为空表示无默认，需人工填写）                |
 | 标签枚举与自动填充策略    | `profiles/{profile}.yaml` → `mcp.jira.labels`（含合法枚举、大小写敏感、`auto_fill` 允许自动填的类别） |
 | 是否要内容模型        | `profiles/{profile}.yaml` → `content_model.required`                            |
-| AC 书写格式        | `profiles/{profile}.yaml` → `doc.ac_format`                                     |
-| Story 模板       | `profiles/{profile}.yaml` → `artifacts.user_story_template`                     |
+| Story 模板       | 按 profile 的 `team` 选取：`APP` → `references/user-story-app.md`；`CMS` → `references/user-story-cms.md` |
 
 
 
@@ -47,7 +46,7 @@ metadata:
 | #   | 条件                        |
 | --- | ------------------------- |
 | 1   | 已有需求文档（PRD）               |
-| 2   | 技术方案至少到 prd 档（决定拆分粒度与依赖） |
+| 2   | 技术方案为推荐输入，非强制：已有 PRD 级及以上技术方案时据其确定拆分粒度与依赖；缺失时不阻断，按 PRD 拆分并将受技术方案影响的粒度/依赖登记为待定项 |
 
 
 
@@ -102,7 +101,7 @@ metadata:
 ## 3. 工作流
 
 ```
-- S1 载入 PRD + 技术方案
+- S1 载入 PRD（+ 技术方案，如有）
 - S2 梳理用户旅程，标注切分点
 - S3 生成 Story 清单（标题 + 句式 + 描述）
 - S4 逐条写 AC
@@ -128,6 +127,10 @@ As a {角色}, for {场景}, I want to {动作}, so that {价值}.
 
 ### S4 AC 规范
 
+AC 须表达三要素：**前置条件**（身份 / 数据状态 / 环境）、**操作**（用户做了什么）、**可观察结果**（能被断言的预期）。三要素齐全即可，不强制使用 `GIVEN/WHEN/THEN` 等特定关键词——可用关键词式，也可用自然语句，只要三要素清晰、可测。
+
+关键词式写法（参考，非强制）：
+
 ```markdown
 AC 1: {一句话标题}
 GIVEN {前置条件：身份、数据状态、环境}
@@ -140,20 +143,20 @@ AND   {附加预期}（可选）
 硬性要求（G4）：
 
 
-| 要求   | 说明                               |
-| ---- | -------------------------------- |
-| 结构完整 | GIVEN / WHEN / THEN 缺一即不合格       |
-| 可观察  | 禁止「体验流畅」「运行正常」「友好」               |
-| 可自动化 | 每条 AC 至少能写出 1 条测试步骤              |
-| 原子   | 一条 AC 只验一件事                      |
-| 覆盖度  | 每 Story ≥ 3 条 AC，含 ≥1 异常 + ≥1 边界 |
-| 可量化  | 涉及性能/数量/时长必须给数值                  |
+| 要求    | 说明                               |
+| ----- | -------------------------------- |
+| 三要素完整 | 前置条件 / 操作 / 可观察结果缺一即不合格（不限定具体关键词） |
+| 可观察   | 禁止「体验流畅」「运行正常」「友好」               |
+| 可自动化  | 每条 AC 至少能写出 1 条测试步骤              |
+| 原子    | 一条 AC 只验一件事                      |
+| 覆盖度   | 每 Story ≥ 3 条 AC，含 ≥1 异常 + ≥1 边界 |
+| 可量化   | 涉及性能/数量/时长必须给数值                  |
 
 
 反例 → 正例：
 
 
-| 反例          | 必填                                   |
+| 反例          | 正例                                   |
 | ----------- | ------------------------------------ |
 | THEN 页面正常显示 | THEN 订单列表在 1 秒内渲染，展示 3 条有效订单，按创建时间倒序 |
 | GIVEN 用户已登录 | GIVEN 用户使用已绑定会员卡的账号登录，且账户下有 1 条已完成订单 |
@@ -232,7 +235,7 @@ AND   {附加预期}（可选）
 
 ## 7. 相关
 
-- 模板：references/user-story-app.md / references/user-story-cms.md（按 `artifacts.user_story_template` 取用）
+- 模板：references/user-story-app.md / references/user-story-cms.md（按 profile 的 `team` 取用：APP / CMS）
 - 上游：prd-authoring、tech-solution-prd、tech-solution-detail
 - 下游：user-story-publish
 

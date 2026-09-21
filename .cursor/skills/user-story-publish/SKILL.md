@@ -33,7 +33,6 @@ metadata:
 | Agile Team 默认值 | `profiles/{profile}.yaml` → `mcp.jira.agile_team`（为空表示无默认，需人工填写） |
 | 标签枚举与自动填充策略 | `profiles/{profile}.yaml` → `mcp.jira.labels`（合法枚举、大小写敏感、`auto_fill` 允许自动填的类别） |
 | 需建立的链接集合 | `profiles/{profile}.yaml` → `mcp.jira.links` |
-| AC 书写格式 | `profiles/{profile}.yaml` → `doc.ac_format` |
 
 ## 1. 前置检查
 
@@ -86,7 +85,7 @@ project = "{project}" AND summary ~ "{摘要}" AND parent = "{Epic key}"
 | Component | 按 `mcp.jira.components.platform_rule`；未配置 `components` 的团队不处理 |
 | 优先级 | 不填 |
 | 标签 | 按 `mcp.jira.labels`（合法枚举、`case_sensitive`、`auto_fill` 类别、`business_domain` 门禁、`ai_provenance` 溯源标签均由该配置键定义）。**建单期强制**：`auto_apply: always` 的类别（如 `ai_provenance` → `AIGenerated`）无条件恒定打上，标记经 agent 创建/同步的工单；`business_domain.filter_gate` 为 true 时缺失该类别即停、不建单；命中枚举外标签即停并按 `labels.source` 对齐 |
-| Acceptance Criteria | 支持 Markdown，按 `doc.ac_format` |
+| Acceptance Criteria | 支持 Markdown；按 Story 清单里给定的 AC 原文写入（三要素：前置条件/操作/可观察结果） |
 | 描述 | 团队要求描述自成一体时须自带完整背景；排版规范见下 |
 | 估点字段 / 发布字段 | 不填（发布流程回填） |
 
@@ -120,7 +119,7 @@ project = "{project}" AND summary ~ "{摘要}" AND parent = "{Epic key}"
 1. **需求文档附录 Jira link**：把本 PRD 对应的 **Epic key** 写回需求文档附录的 Jira link 字段（该字段仅放 Epic，不写 Story key）。Story 自身的回链在 S5 已挂到各条 Story 上，不反向灌入 PRD 附录。
 2. **技术方案回链**：执行技术方案发布环节留下的「待回写内容」，spike 与 detail 写入方式一致——均写进对应工单**描述**的「链接的工作项 / 参考文档」小节（可点击超链接，见 S5 回链落点规范）：
    - （detail 场景）Story → Tech Solution 链接，写入该 Story 描述的回链小节
-   - （spike 场景）Spike → Tech Solution 链接 + 结论摘要，写入 spike ticket 描述的回链小节
+   - （spike 场景）Spike → Tech Solution 链接，写入 spike ticket 描述的回链小节
 
 > 回写 Confluence 需要写权限，本环节对 Confluence 为只读（R）：只产出回写内容并提示，由有 Confluence 写权限的环节执行。
 

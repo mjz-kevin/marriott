@@ -271,6 +271,11 @@ When `figma.links` is empty and `decision` is not `none`, add a note in the stat
 - Change comments -> write to `sessions/{timestamp}_review-v{version}.md`, go back to E2 to generate a new version (don't edit the current file).
 - Explicit sign-off ("looks about right" doesn't count) -> mark the current version `status: confirmed`, backfill `confirmed_by`, `confirmed_at`, `sha256`, and proceed to E4.
 
+**Wrap-up options (mandatory)**: whenever the PRD reaches this sign-off gate—first draft or a local revision alike—the status card's "What you need to do / Next" **must present two equally weighted, side-by-side options**; never offer only publishing, and never omit or downplay the PDF export:
+
+- Publish: after 👤 PO sign-off, enter the PRD publishing step (publish / sync to Confluence).
+- Export to PDF locally: convert the finalized local `.md` offline into a readable PDF for local review / archiving / sharing with people who don't use Confluence; **no sign-off required**, doesn't modify the source, doesn't publish (a parallel option, independent of publishing).
+
 ### E4 Publish and record the URL
 
 1. If the current version file's fingerprint ≠ the `sha256` at sign-off -> it was edited after sign-off, go back to E3.
