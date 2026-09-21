@@ -24,7 +24,8 @@ init/
 │   └── AI-SDLC-macOS-Intel.zip         # macOS Intel 运行时包
 │       # 均含 AI-SDLC/runtime/<对应架构 node + python>，install.sh 按机型自动选并铺到 ~/.cursor/AI-SDLC/runtime/
 └── dist/                 # 构建产物（git 忽略）
-    └── mrt-sdlc-<role>-<ver>.zip     # 每角色一个压缩包（含安装脚本 + README + 运行时）
+    ├── AI-SDLC-Role-<role>-<ver>.zip      # 角色包：每角色一个（含安装脚本 + README，不含运行时）
+    └── AI-SDLC-Runtime-<平台>-<ver>.zip   # 运行时初始化包：加 --runtime 时生成（win / mac-intel / mac-silicon）
 ```
 
 > 构建过程中会临时展开各角色目录，打完 zip 后自动删除，`dist/` 下最终只保留 zip。
@@ -69,7 +70,7 @@ zip 里已内置安装脚本、角色 README、离线运行时（Windows `AI-SDL
 
 ## 分发与安装（发给最终用户）
 
-把对应角色的 `mrt-sdlc-<role>-<ver>.zip` 发给用户（Confluence 附件 / 网盘 / IM 均可）。用户解压后：
+把对应角色的 `AI-SDLC-Role-<role>-<ver>.zip` 发给用户（Confluence 附件 / 网盘 / IM 均可）。用户解压后：
 
 **macOS / Linux**
 ```bash

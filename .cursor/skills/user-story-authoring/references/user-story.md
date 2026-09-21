@@ -1,38 +1,56 @@
 # User Story Template
 
-## Story Metadata
+{Fill in each field per the required column. Definitions and guidance are shown in {}. Example values use the blockquote tag `> **`Example`**` and must not be copied into the Story output.}
 
-### Story 1: {Title}
+| Field | Content | Required? |
+| --- | --- | --- |
+| Space | {The Jira space this ticket belongs to} | Required |
+| Board | {The board this ticket is tracked on} | Required |
+| Type | Story | Required |
+| Summary | {Concisely summarize the core content of this ticket. General naming convention: [Platform] Module - Page - Feature} | Required |
+| Description | {Describe the background, requirements, and acceptance criteria in detail: > As a {target user role}, > [For / When] {precondition / scenario}, > I will be able to {core capability / action}, > So that {business value}.} | Required |
+| Parent | {Link to the parent Epic.} | To be filled |
+| Story Type | {Defines the nature of the story: -Enabler / Spike -Functional -Technical -Scope Change Request -UX Design -Discretionary -Non-Discretionary} | Required |
+| Acceptance Criteria | {Acceptance Criteria (Markdown supported) — Figma / Design (if any) {Figma link}, Assumptions, and AC in GIVEN / WHEN / AND / THEN form.} | Required |
+| Component | {Component field} | No need to fill |
+| Impacted Systems | {Systems that will be affected} | Optional |
+| External System Link | {External system link.} | Optional |
+| External System ID | {External system ID.} | Optional |
+| External System Status | {External system status.} | Optional |
+| MGP RFP ID | {MGP RFP related ID.} | Optional |
+| MGP BRM ID | {MGP BRM related ID.} | Optional |
+| Fix Version | {Fix version} | No need to fill |
+| Agile Team | {The agile team that completes this Story} | To be filled |
+| Attachment | {Attachment} | Optional |
+| Note | {Markdown supported} | Optional |
+| Label | {AI generating label} | To be filled |
+| Linked work item | {Linked work item} | Optional |
+| Priority | {Priority level} | To be filled |
+| Custom Field 1 | {Dev points} | Optional |
+| Custom Field 2 | {QA points} | Optional |
+| Target Date | {Estimated completion date} | Optional |
 
-| Field | Content | Required? | Notes |
-|-------|---------|-----------|-------|
-| Space | {space} | Required | Jira project / space from the team config |
-| Board | {board} | Required | Board from the team config |
-| Type | Story | Required | Fixed value |
-| Summary | {Concisely summarize the core content of this ticket} | Required | Naming convention: [Platform] Module - Page - Feature |
-| Description | {Background, requirements, and acceptance criteria} | Required | See "Description Structure" below |
-| Parent | {Epic key} | To be filled | Link to the parent Epic |
-| Story Type | {see values below} | Required | Enabler/Spike, Functional, Technical, Scope Change Request, UX Design, Discretionary, Non-Discretionary |
-| Acceptance Criteria | {GIVEN/WHEN/AND/THEN} | Required | Markdown supported; see the AC spec below |
-| Components | — | No need to fill | Fill per the team config `mcp.jira.components` when present |
-| Impacted Systems | {Systems that will be affected} | Optional | Fill when downstream sites / CDN are involved (per team config) |
-| External System Link | {External system link} | Optional | |
-| External System ID | {External system ID} | Optional | |
-| External System Status | {External system status} | Optional | |
-| MGP RFP ID | {MGP RFP related ID} | Optional | |
-| MGP BRM ID | {MGP BRM related ID} | Optional | |
-| Fix Version | — | No need to fill | Back-filled by the release flow / CRQ |
-| Agile Team | {The agile team that completes this Story} | To be filled | From the team config `mcp.jira.agile_team`; empty means no default |
-| Attachment | {Design / logs} | Optional | |
-| Note | {Additional notes} | Optional | Markdown supported |
-| Labels | {module / site tag} | To be filled | Enum and dimensions per the team config `mcp.jira.labels` |
-| Linked work items | {PRD / Figma / Tech Solution} | Optional | Establish per the team config link set `mcp.jira.links` |
-| Priority | {P1 / P2 / P3} | To be filled | |
-| Custom Field 1 | Dev points | Optional | AI doesn't fill; estimated by DEV |
-| Custom Field 2 | QA points | Optional | AI doesn't fill; estimated by QA |
-| Target Date | YYYY-MM-DD | Optional | Estimated completion date |
+> **`Example`**
+>
+> | Field | Example value |
+> | --- | --- |
+> | Space | Marriott Digital – Bonvoy App |
+> | Board | Search & Discovery |
+> | Summary | [iOS] Search - Discovery Result List - Points-eligibility filter |
+> | Description | > As a Bonvoy member, > when planning a trip, > I will be able to filter search results by points eligibility, > so that I only see hotels I can book with points. |
+> | Parent | EPIC-1024 Unified Search & Discovery |
+> | Story Type | Functional |
+> | Acceptance Criteria | GIVEN a member has run a search, WHEN they tap the "Points stays" chip, THEN only points-eligible properties for the selected dates are shown. 3.1 AC1 - Points filter applies. 3.2 AC2 - Empty state shown when no points-eligible results. |
+> | Impacted Systems | Availability service, Loyalty service |
+> | Agile Team | Discovery Squad |
+> | Label | search-discovery |
+> | Priority | P1 / P2 / P3 |
+
+<!-- Author note: Space/Board values come from the team config; Label enum and auto-fill policy per `mcp.jira.labels`; Linked work item per `mcp.jira.links`; Agile Team default per `mcp.jira.agile_team`; Component per `mcp.jira.components` when present. Do not write this note into the Story output. -->
 
 ## Description Structure
+
+<!-- Reference only — use when filling the Description field. -->
 
 ```markdown
 As a {target user role},
@@ -45,7 +63,7 @@ So that {business value}.
 
 ### Format
 
-> The GIVEN/WHEN/AND/THEN below is only a reference style for writing ACs, not a fixed output structure; an AC only needs to express the three elements of precondition / action / observable result and be testable. Do not apply it verbatim and do not force specific keywords.
+<!-- The GIVEN/WHEN/AND/THEN below is only a reference style for writing ACs, not a fixed output structure; an AC only needs to express the three elements of precondition / action / observable result and be testable. Do not apply it verbatim and do not force specific keywords. -->
 
 ```markdown
 GIVEN {precondition: user identity, data state, environment},
@@ -59,6 +77,18 @@ THEN  {overall expected result}.
 
 - **Figma / Design (if any)**: {Figma link}
 - **Assumptions**: {preconditions / assumptions}
+
+> **`Example`**
+>
+> GIVEN a member has run a search
+>
+> WHEN they tap the "Points stays" chip
+>
+> THEN only points-eligible properties for the selected dates are shown.
+>
+> 3.1 AC1 - Points filter applies
+>
+> 3.2 AC2 - Empty state shown when no points-eligible results
 
 ### Hard Requirements
 
@@ -91,3 +121,5 @@ THEN  {overall expected result}.
 | **T**estable | Can each AC produce an executable test step | |
 
 Any dimension fails -> re-split. Common splitting dimensions: CRUD split, role split, platform split, state split, exception-flow split, rollout split.
+
+<!-- Structural enhancement: when the team config `content_model.required = true`, also check site scope, language scope (zh/en fallback), and migration coupling (split content-model changes from feature implementation). -->

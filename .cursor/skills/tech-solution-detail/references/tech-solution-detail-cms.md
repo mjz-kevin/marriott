@@ -1,112 +1,187 @@
-# CMS Technical Solution Template
+# Story-Level Detailed Technical Solution Template (CMS)
 
 ## Document Information
 
 | Item | Content |
-| ------------- | ---------------------- |
-| Product / Feature Name | [Enter name] |
-| Version | v1.0 |
-| Author | [Author] |
+|------|---------|
+| Product / Feature Name | {feature_name} |
+| Version | v{version} |
+| Author | {author} |
 | Date | YYYY-MM-DD |
-| Status | Draft / In Review / Approved |
+| Status | Draft / Under Review / Confirmed |
 
-## Change Log
+## Version Change Log
 
 | Version | Update Date | Change Type | Description | Author | Reviewer |
-| ------- | -------------- | -------- | -------------------- | ----------- | -------------- |
-| V1.0.0 | [YYYY/MM/DD] | A | Initial draft | [Name] | [Reviewer Name] |
+|---------|-------------|-------------|-------------|--------|----------|
+| V1.0.0 | {YYYY/MM/DD} | A | Initial version | {author} | {reviewer} |
 
-> A = Add | M = Modification | D = Deletion
+**Type Description: A = Add | M = Modification | D = Deletion**
 
 ## 1. Background and Goals
 
-- **Business Background:** [Business requirement background and the problem to solve]
-- **Goals for This Iteration:** [What will be delivered this time; the functionality to implement]
+{State the business background and what this cycle delivers.}
+
+- **Business Background:** {Business requirement background and the problem to solve}
+- **Goals for This Cycle:** {What will be delivered this cycle; the functionality to implement}
+
+> **`Example`**
+>
+> • **Business Background:** The app needs a curated "Points Stays" content module on the discovery home tab, but the CMS has no content type to model promoted, points-eligible collections.
+>
+> • **Goals for This Cycle:** Add a `pointsStaysCollection` content type with draft/version support and expose it to the app via the Content API.
 
 ## 2. Technical Solution
 
-- **Overall Approach:** [Overall plan for how content is modeled, published, and consumed]
-- **Architecture / Flow:** [Attach architecture diagram or main flow diagram: edit → review → publish → consume]
+{Describe how content is modeled, published, and consumed. Attach an architecture or main flow diagram (edit → review → publish → consume).}
+
+- **Overall Approach:** {Overall plan for how content is modeled, published, and consumed}
+- **Architecture / Flow:** {Attach architecture diagram or main flow diagram}
 
 | Focus | Description |
 |-------|-------------|
-| Content Storage | [Database / collection] |
-| Publishing Method | [Draft/version, scheduled publish/unpublish] |
-| Consumption Method | [Local API / REST / GraphQL / render layout + component] |
+| Content Storage | {Database / collection} |
+| Publishing Method | {Draft / version, scheduled publish / unpublish} |
+| Consumption Method | {Local API / REST / GraphQL / render layout + component} |
+
+> **`Example`**
+>
+> | Focus | Description |
+> |-------|-------------|
+> | Content Storage | Payload collection `pointsStaysCollection` in MongoDB |
+> | Publishing Method | Draft → review → published; scheduled publish supported |
+> | Consumption Method | GraphQL Content API consumed by the app discovery tab |
 
 ## 3. Key Design
 
-**3.1 Content Model**
+### 3.1 Content Model
 
-| Content Type | Purpose | Key Fields | Draft/Version | Multilingual |
-|--------------|---------|------------|---------------|--------------|
-| `[slug]` | [Description] | [Fields] | Yes/No | Yes/No |
+{Define each content type with its purpose, key fields, draft/version support, and multilingual support.}
 
-**3.2 Permissions and Publishing Workflow**
+| Content Type | Purpose | Key Fields | Draft / Version | Multilingual |
+|--------------|---------|------------|-----------------|--------------|
+| `{slug}` | {Purpose} | {Fields} | Yes / No | Yes / No |
+
+> **`Example`**
+>
+> | Content Type | Purpose | Key Fields | Draft / Version | Multilingual |
+> |--------------|---------|------------|-----------------|--------------|
+> | `pointsStaysCollection` | Curated points-eligible hotel collection | `title`, `properties[]`, `startDate`, `endDate` | Yes | Yes |
+
+### 3.2 Permissions and Publishing Workflow
+
+{Define the read/write/publish permissions per role and the publishing workflow, including how rejections are handled.}
 
 | Role | Read | Write | Publish | Description |
 |------|------|-------|---------|-------------|
-| [editor] | | | | |
-| [reviewer] | | | | |
+| `{editor}` | | | | |
+| `{reviewer}` | | | | |
 | admin | ✓ | ✓ | ✓ | |
 
-- Publishing workflow: [draft → review → published; how rejections are handled]
+- **Publishing workflow:** {draft → review → published; how rejections are handled}
 
-**3.3 Interfaces and Consumers**
+> **`Example`**
+>
+> | Role | Read | Write | Publish | Description |
+> |------|------|-------|---------|-------------|
+> | editor | ✓ | ✓ | | Creates and edits drafts |
+> | reviewer | ✓ | | ✓ | Approves and publishes; rejection returns to draft with a comment |
+> | admin | ✓ | ✓ | ✓ | Full access |
 
-| Consumer | Read Method | Key Field Contract | Null/Failure Fallback |
-|----------|-------------|--------------------|-----------------------|
-| [App/Web/Downstream] | [REST/GraphQL] | | [Hide module / use cache; do not fail silently] |
+### 3.3 Interfaces and Consumers
 
-**3.3.1 GraphQL Contract (Content API)**
+{List each consumer with its read method, key field contract, and null/failure fallback.}
+
+| Consumer | Read Method | Key Field Contract | Null / Failure Fallback |
+|----------|-------------|--------------------|-------------------------|
+| {App / Web / Downstream} | {REST / GraphQL} | {Contract} | {Hide module / use cache; must not fail silently} |
+
+#### 3.3.1 GraphQL Contract (Content API) (optional)
+
+{If the change touches the Content API, fill each row. Otherwise write `—`.}
 
 | Item | Content |
 |------|---------|
-| Subgraph / Schema | [Subgraph name; types and fields to add/change this time] |
-| Data Type | [New GraphQL data type, e.g., `AudioItem`, `ContentLayout`] |
-| Endpoint | [GraphQL endpoint address] |
-| Query Definition | [Query name, parameters, return structure] |
-| Retrieval by Segment | [Whether the query supports returning different content by user segment; how the segment parameter is passed] |
+| Subgraph / Schema | {Subgraph name; types and fields to add or change this cycle} |
+| Data Type | {New GraphQL data type} |
+| Endpoint | {GraphQL endpoint address} |
+| Query Definition | {Query name, parameters, return structure} |
+| Retrieval by Segment | {Whether the query returns different content by user segment; how the segment parameter is passed} |
 
-**3.4 Data Migration**
+> **`Example`**
+>
+> | Item | Content |
+> |------|---------|
+> | Subgraph / Schema | `content` subgraph; add `PointsStaysCollection` type |
+> | Data Type | `PointsStaysCollection` |
+> | Endpoint | `/graphql` (Content API gateway) |
+> | Query Definition | `pointsStaysCollection(locale, segment): PointsStaysCollection` |
+> | Retrieval by Segment | Yes; `segment` passed as a query argument, defaulting to `all` |
+
+### 3.4 Data Migration (optional)
+
+{List each schema change and its migration method. If there is no migration, write `—` in the table.}
 
 | Change Type | Object (Collection / Field) | Description | Migration Method |
-| :-------------------------- | :------------------------- | :--------- | :-------------------------------------- |
-| Add / Delete / Change Type / Rename | `[collection.field]` | [Change content] | `payload migrate` (generate + run migration script) |
+|-------------|-----------------------------|-------------|------------------|
+| {Add / Delete / Change Type / Rename} | `{collection.field}` | {Change content} | {e.g., `payload migrate`} |
 
 ## 4. Task Breakdown
 
-| Item | Technical Task | Other Comments |
-| ---- | -------- | ------------- |
-| | | |
+{Break the work into technical tasks; each task should be independently deliverable and testable.}
+
+| Item | Technical Task | Acceptance / Comments |
+|------|----------------|-----------------------|
+| {T-01} | {Task} | {How to verify} |
+
+> **`Example`**
+>
+> | Item | Technical Task | Acceptance / Comments |
+> |------|----------------|-----------------------|
+> | T-01 | Define `pointsStaysCollection` content type and access control | Editor can draft; reviewer can publish |
+> | T-02 | Expose the collection via the GraphQL Content API | App query returns the published collection for the given locale |
 
 ## 5. Dependencies and Risks
 
+{Fill each dependency row. Optional rows not involved: write `—`. List risks with impact and response; if none, write `—` in the risk table.}
+
 **Dependencies and Prerequisites**
 
-| Dependency | Purpose | Status/Prerequisite |
-|------------|---------|---------------------|
-| DB | CMS content storage; whether schema changes require migration | |
-| CDN (Content Delivery Network) | Images, videos, and other assets, plus caching/distribution of content APIs | |
-| Downstream Interface | Whether interface contracts are aligned | |
-| Feature Flag / Configuration | Switches or configuration items controlling launch and gradual rollout | |
+| Dependency | Purpose | Status / Prerequisite |
+|------------|---------|-----------------------|
+| DB | {CMS content storage; whether schema changes require migration} | |
+| CDN | {Assets and caching / distribution of content APIs} | |
+| Downstream Interface | {Whether interface contracts are aligned} | |
+| Feature Flag / Configuration | {Switches or configuration controlling launch and gradual rollout} | |
 
 **Risks**
 
 | Risk | Impact | Response |
 |------|--------|----------|
-| | | |
+| {R-01} | {Impact} | {Plan} |
 
-## 6. Non-Functional Design
+> **`Example`**
+>
+> **Risks**
+>
+> | Risk | Impact | Response |
+> |------|--------|----------|
+> | Published collection may be cached stale downstream | App shows an expired promotion | Invalidate the content-API cache on publish; set a short TTL |
+
+## 6. Non-Functional Design (optional)
+
+{Fill each row. Optional rows not involved: write `—`.}
 
 | Dimension | Requirement / Description |
 |-----------|---------------------------|
-| Performance | [Admin edit read response, concurrency] |
-| Caching | [Downstream caching strategy, TTL, invalidation after publish] |
-| Security | [Authentication, privilege-escalation protection] |
+| Performance | {Admin edit read response, concurrency} |
+| Caching | {Downstream caching strategy, TTL, invalidation after publish} |
+| Security | {Authentication, privilege-escalation protection} |
 
 ## 7. Review Conclusion
 
+{Leave blank for reviewers — do not pre-fill before review.}
+
 | Conclusion | Action Item | Owner | Due Date |
-| ---- | ----------- | ----- | -------- |
+|------------|-------------|-------|----------|
 | | | | |

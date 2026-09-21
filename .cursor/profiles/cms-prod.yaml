@@ -48,3 +48,4 @@ mcp:
 doc:
   body_language: en-US
   ac_language: en-US
+  scope_dimensions: [CMS]   # PRD Scope 章节的分块维度＝本团队交付范围；CMS 团队交付内容中台本身，无 Android/iOS/小程序等端概念

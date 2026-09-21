@@ -26,7 +26,8 @@ each repo is asked only once**.
 
 ## Cross-platform notes (macOS / Windows)
 
-- The scripts depend only on the **Python 3 standard library**. Prefer the `python` / `python3` on your system `PATH`. If Python isn't on `PATH` (for example, the portable Windows build), use `C:/AI-SDLC/runtime/python-*/python.exe`.
+- The scripts depend only on the **Python 3 standard library**.
+- **Resolve the Python interpreter from `setup.json` first (same source as `upload_confluence_v2.py`).** Before running any command below, read the repo file `.cursor/profiles/setup.json` (it's short), and take the `python` field from the section matching the current platform (`windows` / `macos` / `linux`), falling back to the `common` section. Use that absolute path as the `python` in every command (expand a leading `~` to the user's home). Only if both the platform section and `common` leave `python` empty (or the file is missing), fall back to the `python` / `python3` on your system `PATH`. This keeps the interpreter consistent with the portable runtime layout (e.g. `~/.cursor/AI-SDLC/runtime/python-*/bin/python3` on macOS, `C:/AI-SDLC/runtime/python-*/python.exe` on Windows).
 - Location of the memory file (can be overridden with `PROFILE_SELECT_HOME`):
   - **Windows:** `%APPDATA%\ai-sdlc-profile-select\selection.json`
   - **macOS / Linux:** `~/.config/ai-sdlc-profile-select/selection.json`
@@ -48,6 +49,8 @@ Read-only, display-only scenarios that don't need to write should also resolve t
 and then read the corresponding yaml.
 
 ## How to use (for callers to follow)
+
+> In every command below, `python` is a placeholder for the interpreter resolved from `.cursor/profiles/setup.json` (see "Cross-platform notes"); substitute that absolute path (or fall back to system `python` / `python3` only when `setup.json` leaves it empty).
 
 ### Step 1 — Is one remembered?
 

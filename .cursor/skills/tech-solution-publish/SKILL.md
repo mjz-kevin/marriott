@@ -71,7 +71,7 @@ If any required landing-spot key (`space` / `parent_pages.root`) is empty or `TB
 
 | # | Check |
 |---|------|
-| 1 | Template sections complete with no empty sections, no `[Enter ...]` / `TODO` residue |
+| 1 | Template sections complete with no empty sections; no `[Enter ...]` / `{guidance block}` / `> **`Example`**` block-quote / HTML-comment / `TODO` residue (business-domain terms alone, like Bonvoy, are not treated as leakage) |
 | 2 | No real secrets, internal domains, real member IDs, or real phone numbers anywhere (a hit blocks) |
 | 3 | Human confirmation is done (prd->TL; spike->TL; detail->DEV) |
 | 4 | The target space, level-1 root page (`parent_pages.root`), and Jira Epic key are all present (a value of TBD hard-blocks) |
@@ -117,7 +117,7 @@ python .cursor/skills/tech-solution-publish/scripts/upload_confluence_v2.py --md
 
 First run `--dry-run`; the script doesn't write to Confluence and only outputs the title (`title` is the complete title after appending the summary, `title_prefix` is the unique-key prefix), `stats` (h2 section count, Story count, AC count, mermaid diagram count), `storage_chars`, and `target` (root/initiative/epic/kind). Verify that `title_prefix` is the expected "prefix+key," `stats` matches the locally confirmed version, `target.epic` points to the expected epic, and `target.initiative` (the parent the script auto-looked-up from Jira; present -> four-level archive, `null` -> three-level) meets expectations before the actual upload.
 
-> **Command form (cross-platform, unified)**: the command is a single line with no line continuations, and can run directly in Windows PowerShell / CMD, macOS, and Linux. `python` in the examples below is a launcher placeholder: on macOS / Linux use the `python` / `python3` on your PATH; on the Windows portable build (Python not on PATH) use `C:/AI-SDLC/runtime/python-*/python.exe`. After running, the script auto-resolves `npx` (for rendering mermaid), so there's no need to specify a Node path in the command.
+> **Command form (cross-platform, unified)**: the command is a single line with no line continuations, and can run directly in Windows PowerShell / CMD, macOS, and Linux. `python` in the examples below is a placeholder for the interpreter resolved from `.cursor/profiles/setup.json`: before running, read that short file and take the `python` field from the section matching the current platform (`windows` / `macos` / `linux`), falling back to the `common` section (expand a leading `~`); only when both leave it empty (or the file is missing) fall back to the `python` / `python3` on your PATH. After running, the script auto-resolves `npx` (for rendering mermaid) from the same `setup.json`, so there's no need to specify a Node path in the command.
 
 ```bash
 python .cursor/skills/tech-solution-publish/scripts/upload_confluence_v2.py --md "<path to tech-solution.md>" --space "<space>" --root "<parent_pages.root>" --epic "<Jira Epic key, e.g. CNAPP-5661>" --kind tech_solution --title "<prefix+key, e.g. APP-TS-Prd-CNAPP-5661>" --title-key "<title key>" --dry-run

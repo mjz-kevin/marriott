@@ -10,15 +10,18 @@ Decision: missing any required section → block.
 
 ## G2 Placeholder Zeroing
 
-Scan for residual placeholders; a hit blocks:
+Scan for residual placeholders and template author-artifact leakage; a hit blocks:
 
 | Pattern | Description |
 |---------|-------------|
 | `[Enter name]` `[Description]` `[Role]` `TBD` `TODO` `???` | Unfilled content |
 | `…` appearing in an AC | AC not finished |
 | A section heading directly followed by the next section heading | Empty section |
+| **`Example`** tag residue, unreplaced `{…}` guidance placeholders, HTML comments, or high-confidence template example paste | Same rules as prd-authoring G2a; **do not** flag business-domain terms alone (like `Bonvoy`) |
 
 Exception: an optional section/item not involved may use `—` as a checklist trace ("assessed, not needed this cycle"); items the template itself requires to be left empty (like the "Glossary" and "Appendix links") may also use `—`. These `—` marks are not treated as unfilled residue, but must be logged in the to-confirm list in the delivery conversation when they represent a pending decision.
+
+Scope-only exception: inside the PRD's `### Scope (Optional)`, the dimension blocks (the team's delivery dimensions, driven by the profile `doc.scope_dimensions`) use selective display—a dimension not touched has its whole block removed rather than kept with `—`; a CMS PRD must not contain Android / iOS / Mini Program blocks. See prd-authoring S4.
 
 ## G3 Synthetic Data and PII
 
@@ -26,7 +29,7 @@ Exception: an optional section/item not involved may use `—` as a checklist tr
 - Interface examples and test data in tech solutions must be **mock**; real secrets, internal domains, member IDs, and order IDs are forbidden
 - Before writing out, scan for real secrets, internal domains, member IDs, order IDs, and phone numbers; a hit blocks the submission
 
-Decision: hit → block; no "warn and continue."
+Decision: on a hit, block the submission; do not warn and proceed.
 
 ## G4 Acceptance-Criteria Testability
 
