@@ -10,7 +10,7 @@ Decision: missing any required section → block.
 
 ## G2 Placeholder Zeroing
 
-Scan for residual placeholders; a hit blocks:
+Scan for residual placeholders and template author-artifact leakage; a hit blocks:
 
 | Pattern | Description |
 |---------|-------------|
@@ -20,7 +20,21 @@ Scan for residual placeholders; a hit blocks:
 | `faithful to the official template` `enforced by quality gates` `not written into the template` | Skill/template notes for the author written into the PRD |
 | The body's H1 is `PRD Template` | Treating the template file name as the product title |
 
+### G2a Template author-artifact zeroing
+
+These patterns detect **template markup or unreplaced guidance**, not legitimate product terms. **Do not** treat business-domain words alone (like `Bonvoy`, `Marriott`, `Points stays`) as leakage—they may be correct product content.
+
+| Pattern | Description |
+|---------|-------------|
+| **`Example`** in any form (`> **`Example`**`, `` **`Example`** ``, a standalone `Example:` label line, or `` `Example`: `` inline) | Example block/tag copied into the product |
+| Unreplaced `{…}` guidance or field placeholders | e.g. `{Describe the current pain points`, `{Fill in each field`, `{Break down stories`, `{Insert the product architecture`, `{List the requirement scope`, `{User story description:`, `{Identify and insert the Figma`, `{feature_name}`, `{author}`, `{reviewer}`, `{YYYY/MM/DD}`, `{link}`, `{Role A}`, `{Step name}`, `{Business rule}`, `{Data item`, `{scope_dimension}`, `{requirement_scope}`, `{brief_description}`, `{Section name, e.g.:` |
+| `<!--` … `-->` or `Author note:` / `Do not write this note into the product` | HTML comment or author-note residue |
+| `{Fill in each field per the required column` / `Definitions and guidance are shown in {}` | Opening template guidance copied verbatim |
+| High-confidence template example paste — verbatim proper-noun fixtures that only appear in the template Example blocks (not quantitative-goal phrasing, which is legitimate in a real PRD) | e.g. `Leisure traveler: Sarah, a Bonvoy Silver member`; `Business traveler: David, a Bonvoy Platinum member`; `Explore Destinations" carousel, and a "Points Stays" filter buried in the booking flow`; `EPIC-1024 Unified Search & Discovery`; `Example — Module: Unified Search Sheet` |
+
 Exception: an optional section/item not involved may use `—` as a checklist trace ("assessed, not needed this cycle"); items the template itself requires to be left empty (like the "Glossary" and "Appendix links") may also use `—`. These `—` marks are not treated as unfilled residue, but must be logged in the to-confirm list in the delivery conversation when they represent a pending decision.
+
+Scope-only exception: inside `### Scope (Optional)`, the dimension blocks (the team's delivery dimensions, driven by the profile `doc.scope_dimensions`—e.g. APP → `**Android:** / **iOS:**`, CMS → `**CMS:**`) use **selective display**—a dimension not touched has its whole block removed rather than kept with `—`, so a missing dimension block there is not treated as a deleted-section violation. A CMS PRD must not contain Android / iOS / Mini Program blocks. When none of the team's dimensions is touched, the `### Scope (Optional)` heading is kept with `—` below it.
 
 ## G3 Synthetic Data and PII
 
@@ -28,7 +42,7 @@ Exception: an optional section/item not involved may use `—` as a checklist tr
 - Interface examples and test data in tech solutions must be **mock**; real secrets, internal domains, member IDs, and order IDs are forbidden
 - Before writing out, scan for real secrets, internal domains, member IDs, order IDs, and phone numbers; a hit blocks the submission
 
-Decision: hit → block; no "warn and continue."
+Decision: on a hit, block the submission; do not warn and proceed.
 
 ## G4 Acceptance-Criteria Testability
 

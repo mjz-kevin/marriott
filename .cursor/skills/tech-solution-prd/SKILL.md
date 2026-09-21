@@ -107,13 +107,14 @@ Undecidable technical points are logged as a spike ticket for research (state th
 | Don't write business rules | Business rules belong to the PRD; the solution only writes the technical implementation |
 | Don't delete sections | For an optional item/section not involved, keep the heading and write `—` (a checklist trace meaning "assessed, not needed this cycle"); when a full sentence is needed use "Not applicable this cycle"; don't delete the section |
 | No fabricated optional content | Don't proactively generate content for an optional item without a requirement/clarification basis; write it only when the requirement, clarification conclusion, or user explicitly calls for it, otherwise write `—` |
-| Faithful to the template | The body starts from "## Document Information"; fill only the template's existing sections and fields, don't add explanatory sentences, lead-ins, comments, or subsections not defined by the template; the template file's title and author notes are not part of the product |
+| Faithful to the template | The body starts from "## Document Information"; fill only the template's existing sections and fields, don't add explanatory sentences, lead-ins, comments, or subsections not defined by the template. Never copy `{guidance blocks}`, `> **`Example`**` block quotes, or HTML comments into the product; the template file's title and author notes are not part of the product |
 
 ## 4. Quality gates
 
 - All 7 chapters complete, no empty sections
 - The body starts from "## Document Information," with no explanatory sentences, lead-ins, or subsections added beyond the template
-- No `[Enter ...]` / `[Name]` / `TODO` residue
+- No `{guidance block}` residue, no `> **`Example`**` block-quote residue, and no HTML-comment residue; **do not** treat business-domain terms alone (Bonvoy, Marriott, etc.) as leakage
+- No `[Enter ...]` / `{feature_name}` / `{author}` / `TODO` placeholder residue
 - An architecture diagram exists (mermaid or a Confluence reference)
 - The STB/ARB trigger-decision row has a clear conclusion (if unsure, treat as triggered)
 - Post-launch monitoring and version-compat strategy are written

@@ -132,19 +132,19 @@ Anti-pattern -> correct:
 
 ### S6 Jira fields
 
-Fill the Story template's field table item by item.
+Fill the Story template's field table item by item. Replace each `{guidance block}` with real values. Any **`Example`** block quote (`> **\`Example\`**` …) is author reference only—never copy example content into the Story output. Never copy the opening table guidance sentence or HTML comments into the Story output.
 
 | Field | Handling |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Required fields | All required; missing one fails ticket creation |
 | Agile Team | Fill from the `mcp.jira.agile_team` default; an empty key means the team has no default, leave it for manual entry, don't fabricate |
-| Labels | Choose only from the valid enum in `mcp.jira.labels`, with case strictly per `labels.case_sensitive`; auto-fill only the categories listed in `labels.auto_fill`. Categories with `auto_apply: always` (like `ai_provenance` → `AIGenerated`) are applied unconditionally, to mark tickets created/synced by the agent. **`business_domain`** (when `filter_gate: true`) is a filtering hard-gate: decide the domain by the Story's functional nature against the official domain definitions on `labels.source` (not by literal wording of the title), on multiple hits take the one closest to the core value; a missing/wrong one is filtered downstream. **`platform`** (when present): keep it consistent with the Component rule via `platform.platform_binding`—any ticket whose Component is `iOS` (per `components.platform_rule.ios_only`) MUST also carry the `iOS` platform label; single-platform tickets take that platform, cross-platform tickets are decided explicitly. Process labels with `process_labels.auto_fill` false are only checked, not auto-filled; don't fabricate labels outside the enum—align with the TL/SM per the `labels.source` guide first. Teams with empty `labels` have no such constraint |
+| Label | Choose only from the valid enum in `mcp.jira.labels`, with case strictly per `labels.case_sensitive`; auto-fill only the categories listed in `labels.auto_fill`. Categories with `auto_apply: always` (like `ai_provenance` → `AIGenerated`) are applied unconditionally, to mark tickets created/synced by the agent. **`business_domain`** (when `filter_gate: true`) is a filtering hard-gate: decide the domain by the Story's functional nature against the official domain definitions on `labels.source` (not by literal wording of the title), on multiple hits take the one closest to the core value; a missing/wrong one is filtered downstream. **`platform`** (when present): keep it consistent with the Component rule via `platform.platform_binding`—any ticket whose Component is `iOS` (per `components.platform_rule.ios_only`) MUST also carry the `iOS` platform label; single-platform tickets take that platform, cross-platform tickets are decided explicitly. Process labels with `process_labels.auto_fill` false are only checked, not auto-filled; don't fabricate labels outside the enum—align with the TL/SM per the `labels.source` guide first. Teams with empty `labels` have no such constraint |
 | Component | Fill per `mcp.jira.components.platform_rule`: platform-specific tickets designated by `ios_only` pick the corresponding Component, platform tickets with `android` = `none` pick no Component, and cross-end/platform-agnostic tickets leave it empty as needed. **When Component is set to `iOS`, the `iOS` platform label in `labels.platform` must be set in tandem** (Component and platform label share the same source, keep them consistent). Teams without `components` configured don't handle it |
 | Priority | Don't fill |
 | Conditionally filled fields | Fill by condition (field names from the team config, like Impacted Systems) |
-| Estimation fields | **Always leave empty** |
-| Release fields | Don't fill (back-filled by the release flow / CRQ) |
-| `链接的工作项` | Go through the team-configured link set and establish each |
+| Estimation fields | **Always leave empty** (Custom Field 1 / Custom Field 2) |
+| Release fields | Don't fill (Fix Version; back-filled by the release flow / CRQ) |
+| Linked work item | Go through the team-configured link set (`mcp.jira.links`) and establish each |
 
 ## 4. INVEST self-check
 
@@ -168,7 +168,8 @@ Any failure -> re-split.
 - All back-links listed in the team-configured link set are complete
 - All six INVEST items pass
 - No field requiring human estimation is filled
-- Labels are complete per `mcp.jira.labels`: `ai_provenance` applied; every `mandatory` category has a value (`business_domain` decided against the official domain definitions on `labels.source`, not literal title wording); when a ticket's Component is `iOS`, the `iOS` platform label is present (Component ↔ platform label consistent); no label outside the enum
+- No **`Example`** tag residue, unreplaced `{…}` guidance placeholders, HTML comments, or high-confidence template example paste (per prd-authoring quality-gates G2a); **do not** flag business-domain terms alone (Bonvoy, Marriott, etc.)
+- Label is complete per `mcp.jira.labels`: `ai_provenance` applied; every `mandatory` category has a value (`business_domain` decided against the official domain definitions on `labels.source`, not literal title wording); when a ticket's Component is `iOS`, the `iOS` platform label is present (Component ↔ platform label consistent); no label outside the enum
 - When the team requires self-contained descriptions: each description is self-contained
 
 ## 6. Output

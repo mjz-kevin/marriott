@@ -94,15 +94,15 @@ In the CMS template these fill subsections 3.1 / 3.2 / 3.4 under "3. Key Design"
 
 | Change type | Object | Description | Migration method |
 |----------|------|------|----------|
-| Add / delete / change type / rename | `[collection.field]` | | `payload migrate` (generate + run the migration script) |
+| Add / delete / change type / rename | `{collection.field}` | | `payload migrate` (generate + run the migration script) |
 
 Must answer the impact on historical content (whether existing data is back-filled) and the rollback script.
 When the migration is to be a standalone item, it should be a standalone task and independently rollback-able.
 
 ### S6 Task breakdown
 
-| Item | Technical task | Other Comments |
-|----|----------|---------------|
+| Item | Technical task | Acceptance / Comments |
+|----|----------|-----------------------|
 
 Each task must have acceptance criteria (write them in Comments or list separately).
 This is the comparison baseline for the task-acceptance step; missing one makes the verification step unable to run.
@@ -133,12 +133,13 @@ Fill the template's special sections item by item:
 | No missing states | Every screen state the design defines needs a handling note |
 | Don't delete sections | For an optional item/section not involved, keep the heading and write `—` (a checklist trace meaning "assessed, not needed this cycle"); when a full sentence is needed use "Not applicable this cycle"; don't delete the section |
 | No fabricated optional content | Don't proactively generate content for an optional item without a requirement/clarification basis; write it only when the requirement, clarification conclusion, or user explicitly calls for it, otherwise write `—` |
-| Faithful to the template | The body starts from "## Document Information"; fill only the template's existing sections and fields, don't add explanatory sentences, lead-ins, comments, or subsections not defined by the template; the template file's title and author notes are not part of the product |
+| Faithful to the template | The body starts from "## Document Information"; fill only the template's existing sections and fields, don't add explanatory sentences, lead-ins, comments, or subsections not defined by the template. Never copy `{guidance blocks}`, `> **`Example`**` block quotes, or HTML comments into the product; the template file's title and author notes are not part of the product |
 
 ## 4. Quality gates
 
 - Template sections complete, no empty sections
 - The body starts from "## Document Information," with no explanatory sentences, lead-ins, or subsections added beyond the template
+- No `{guidance block}` residue, no `> **`Example`**` block-quote residue, and no HTML-comment residue; **do not** treat business-domain terms alone (Bonvoy, Marriott, etc.) as leakage
 - No placeholder residue
 - Interface contracts include request/response/error-code mocks, with null and failure fallbacks stated
 - The Feature Flag table includes "behavior on read failure"

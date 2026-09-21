@@ -91,7 +91,7 @@ The PoC code lands in the team's actual code repo, and the build command must ru
 | The conclusion must be a single choice | After the comparison you must give a recommendation; when a single choice isn't possible, state that the evaluation dimensions or data are insufficient |
 | Don't estimate | Only give the impact on estimation; points are set by DEV/QA |
 | Example data must be mock | Same as other solution tiers |
-| Faithful to the template | The body starts from "## Document Information"; fill only the template's existing sections and fields, don't add explanatory sentences, lead-ins, comments, or subsections not defined by the template; the template file's title and author notes are not part of the product |
+| Faithful to the template | The body starts from "## Document Information"; fill only the template's existing sections and fields, don't add explanatory sentences, lead-ins, comments, or subsections not defined by the template. Never copy `{guidance blocks}`, `> **`Example`**` block quotes, or HTML comments into the product; the template file's title and author notes are not part of the product |
 | Don't delete sections | For an optional item/section not involved, keep the heading and write `—` (a checklist trace meaning "assessed, not needed this cycle"); when a full sentence is needed use "Not applicable this cycle"; don't delete the section |
 | No fabricated optional content | Don't proactively generate content for an optional item without a requirement/clarification basis; write it only when the requirement, clarification conclusion, or user explicitly calls for it, otherwise write `—` |
 
@@ -99,6 +99,7 @@ The PoC code lands in the team's actual code repo, and the build command must ru
 
 - All 7 chapters complete, no empty sections
 - The body starts from "## Document Information," with no explanatory sentences, lead-ins, or subsections added beyond the template
+- No `{guidance block}` residue, no `> **`Example`**` block-quote residue, and no HTML-comment residue; **do not** treat business-domain terms alone (Bonvoy, Marriott, etc.) as leakage
 - No placeholder residue
 - >= 2 solutions, each with all 6 elements filled
 - The comparison matrix is filled (when >=2 solutions)

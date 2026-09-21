@@ -71,7 +71,7 @@ If any required landing-spot key (`space` / `parent_pages.root`) is empty or `TB
 
 | # | Check |
 |---|------|
-| 1 | Template sections complete with no empty sections, no `[Enter ...]` / `TODO` residue |
+| 1 | Template sections complete with no empty sections; no `[Enter ...]` / `{guidance block}` / `> **`Example`**` block-quote / HTML-comment / `TODO` residue (business-domain terms alone, like Bonvoy, are not treated as leakage) |
 | 2 | No real secrets, internal domains, real member IDs, or real phone numbers anywhere (a hit blocks) |
 | 3 | Human confirmation is done (prd->TL; spike->TL; detail->DEV) |
 | 4 | The target space, level-1 root page (`parent_pages.root`), and Jira Epic key are all present (a value of TBD hard-blocks) |
