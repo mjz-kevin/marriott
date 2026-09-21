@@ -1,0 +1,10 @@
+{
+  "name": "example-team",
+  "description": "Example team whitelist. Copy this file, rename it, and add values the team has explicitly approved as safe to write (e.g. shared service accounts with a public record, non-secret sample tokens).",
+  "literals": [
+    "svc-public-docs@example.com"
+  ],
+  "patterns": [
+    "(?i)^SAMPLE_[A-Z0-9_]+$"
+  ]
+}

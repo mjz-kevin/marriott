@@ -1,0 +1,173 @@
+---
+name: user-story-publish
+description: >-
+  Create tickets in Jira from a prepared Story list: idempotent dedup, fill required fields,
+  establish links (the parent Epic plus the link set declared by the team config), execute the
+  write-back items left by the tech-solution publishing step, and leave the Story in the
+  team-configured initial status. Use when the user asks to create Jira tickets, push Stories to
+  Jira, or sync Stories;
+  triggers: 创建 Jira / 建工单 / 推送 Story 到 Jira / 建单 / create jira ticket.
+metadata:
+  agent: UserStory Agent
+---
+
+# User Story Publish — Jira ticket creation
+
+Create tickets in Jira from the confirmed Story list, fill fields, establish back-links, and execute the write-back items left by the tech-solution publishing step on its behalf.
+
+| Dimension | Description |
+|------|------|
+| Purpose | Idempotent ticket creation + fill fields + establish links (Parent Epic + the team-declared link set) + status transition |
+| Input | The Story list produced by the upstream User Story authoring step (PO-confirmed) + the team's Jira config |
+| Output | Jira tickets (created / skipped) + a report (with pending write-back content) |
+| Permission | This step has Jira write access; it is read-only on Confluence, so the requirements-doc appendix write-back only produces content, handed to a step with permission |
+
+## 0. Config values
+
+`{profile}` is the current profile file name (without extension, like `app-prod` / `cms-test`), resolved and passed in by the caller via the `profile-select` skill (`profile.py resolve` gives its absolute path); if it isn't passed in or the file doesn't exist -> block, don't guess.
+
+| Purpose | Key |
+|------|----|
+| Jira site | `profiles/{profile}.yaml` → `mcp.jira.host` |
+| Jira project | By default derived from the Parent Epic key prefix (like Parent=CNAPP-5661 → project CNAPP); when `profiles/{profile}.yaml` → `mcp.jira.project_key` exists, it's used as an override |
+| Ticket type | `profiles/{profile}.yaml` → `mcp.jira.issue_type` |
+| Initial status after creation | `profiles/{profile}.yaml` → `mcp.jira.initial_status` |
+| Agile Team default | `profiles/{profile}.yaml` → `mcp.jira.agile_team` (empty means no default, needs manual entry) |
+| Label enum and auto-fill policy | `profiles/{profile}.yaml` → `mcp.jira.labels` (valid enum, case sensitivity, the `auto_fill` categories allowed to be auto-filled) |
+| The link set to establish | `profiles/{profile}.yaml` → `mcp.jira.links` |
+
+## 1. Pre-checks
+
+| # | Check |
+|---|------|
+| 1 | Each Story has a Parent, >= 3 ACs, no missing fields |
+| 2 | No real secrets, internal domains, real member IDs, or real phone numbers anywhere |
+| 3 | **The PO has confirmed** the Story list (there must be explicit confirmation before batch creation) |
+| 4 | The target Jira project can be determined: each Story has a resolvable Parent Epic key (deriving the project), or `mcp.jira.project_key` is configured as an override; if neither, stop and require it to be completed |
+| 5 | Jira auth is available (stop if `mcp_auth` fails) |
+
+## 2. Workflow
+
+```
+- S1 Pre-checks
+- S2 Dedup one by one (Parent + summary)
+- S3 Create tickets
+- S4 Fill fields
+- S5 Establish links (Epic + go through the team-configured link set)
+- S6 Write back (requirements-doc appendix + tech-solution's leftover back-links)
+- S7 Status: leave in the initial status
+- S8 Report
+```
+
+### S2 Idempotent dedup
+
+Dedup one by one before creating, to avoid duplicate tickets. `{project}` comes from the Parent Epic key prefix (or the `mcp.jira.project_key` override):
+
+```text
+project = "{project}" AND summary ~ "{summary}" AND parent = "{Epic key}"
+```
+
+| Result | Action |
+|------|------|
+| 0 | Create |
+| 1 | Skip, report the existing key, don't update (to avoid overwriting manual edits) |
+| >=2 | Stop and hand to the user to decide |
+
+> When one already exists, **don't update** by default. Only enter the edit flow when the user explicitly asks to update.
+
+### S3/S4 Fields
+
+Write per the Story template's field table:
+
+| Field | Handling |
+|------|------|
+| Type | Take `mcp.jira.issue_type` |
+| Parent | Must fill the Epic |
+| Agile Team | Per `mcp.jira.agile_team`: fill if it has a value, leave empty for manual entry if empty |
+| Component | Per `mcp.jira.components.platform_rule`; teams without `components` configured don't handle it |
+| Priority | Don't fill |
+| Labels | Per `mcp.jira.labels` (the valid enum, `case_sensitive`, `auto_fill` categories, the `business_domain` gate, and the `ai_provenance` provenance label are all defined by this config key). **Mandatory at creation time**: categories with `auto_apply: always` (like `ai_provenance` → `AIGenerated`) are applied unconditionally, marking tickets created/synced by the agent; when `business_domain.filter_gate` is true, a missing category stops creation; hitting a label outside the enum stops, align per `labels.source` |
+| Acceptance Criteria | Supports Markdown; write the AC text as given in the Story list (three elements: precondition/action/observable result) |
+| Description | When the team requires self-contained descriptions, it must carry full background; see the layout spec below |
+| Estimation fields / Release fields | Don't fill (back-filled by the release flow) |
+
+**Description layout spec**:
+
+- The user-story sentence keywords (`As a` / `When` (or `For`) / `I will be able to` / `So that`) and each subsection heading (like `【背景】`/`【范围】`/`【数据契约（概览）】`/`【性能】`/`【链接的工作项 / 参考文档】`) are all bold.
+- Submission method: the Jira description is ADF, and `**` in plain text won't render as bold. Use `editJiraIssue` / `createJiraIssue` with `contentFormat: "markdown"` (Jira auto-converts to ADF), or construct the ADF `strong` mark directly; don't submit `**xxx**` as plain text.
+
+### S5 Establish links
+
+First establish the Parent (Epic, hierarchy), then go through the team-configured link set and establish each; the link types follow the team config:
+
+| link | Target |
+|------|------|
+| `prd` | The Confluence PRD page (only when the team config requires this link) |
+| `figma` | The design URL |
+| `tech_solution` | The Confluence tech-solution page |
+
+> Items not in the team-configured link set are automatically not linked; no need to write a separate branch in the flow.
+
+**Back-link landing spec** (`prd` / `figma` / `tech_solution` point to a Confluence page or an external URL, not a Jira issue):
+
+- **Parent (Epic)**: use the hierarchy parent-child relation (the `parent` field, issue<->issue), established normally.
+- **URL back-links**: write into the "链接的工作项 / 参考文档" subsection of the target ticket description (in the body, persisted with the ticket); the `tech_solution` back-link is written the same way for detail (into the Story) and spike (into the spike ticket), both in the description subsection. **Must be a clickable hyperlink**: for markdown submission write `[display text](URL)`, or construct ADF with a `link` mark; bare URLs are forbidden (relying only on frontend autolink, they degrade to non-clickable text on export / API read). If MCP supports writing Jira Web remote links, you may also add one in the Links area.
+- **Don't stuff into comments**: comments aren't a proper back-link spot and are easily buried; the spike conclusion back-link is likewise written in the description subsection, not a comment; only when the description can't be written should you fall back to a comment and note it in the report.
+- If a category has no corresponding link, write the placeholder "未提供（待补充）"; don't leave it empty, don't fabricate.
+
+### S6 Write back
+
+1. **Requirements-doc appendix Jira link**: write this PRD's **Epic key** back to the Jira link field in the requirements-doc appendix (that field holds only the Epic, not Story keys). Each Story's own back-link is already attached to it in S5 and isn't back-fed into the PRD appendix.
+2. **Tech-solution back-links**: execute the "pending write-back content" left by the tech-solution publishing step; spike and detail are written the same way—both into the "链接的工作项 / 参考文档" subsection of the corresponding ticket **description** (a clickable hyperlink, see the S5 back-link landing spec):
+   - (detail case) Story -> Tech Solution link, into that Story's description back-link subsection
+   - (spike case) Spike -> Tech Solution link, into the spike ticket's description back-link subsection
+
+> Writing back to Confluence needs write access, and this step is read-only (R) on Confluence: it only produces the write-back content and a prompt, done by a step with Confluence write access.
+
+### S7 Status transition
+
+After creation, leave in the initial status designated by `mcp.jira.initial_status`.
+Don't auto-transition forward; the schedule is a PO decision.
+
+## 3. Rules
+
+| Rule | Description |
+|------|------|
+| Batch creation needs PO confirmation | Don't execute without confirmation |
+| Don't delete or restructure fields | Only fill values, establish links, add comments; don't change field structure |
+| Skip if it exists | Don't overwrite manual edits |
+| Stop on failure | On partial failure report the created list, don't retry the succeeded ones |
+| Sensitive-info block | A hit on real secrets / real member IDs stops; don't redact and continue |
+| Don't estimate | Leave any field requiring human estimation empty |
+| Don't hardcode constants | The target project is derived from the Parent Epic key (or the team-config override); link types / initial status come from the team config |
+
+## 4. Output report
+
+```markdown
+Created {n} Stories (skipped {m} duplicates)
+
+| Story | Jira Key | Status |
+|-------|----------|------|
+| {summary} | {key} | {initial status} |
+
+- **Skipped**: {summary} already exists → {key}
+- **Links**: Epic established / {list each link-set item's status}
+- **Pending write-back**: {the requirements-doc appendix Jira link needs to be written by a step with Confluence write access / none}
+- **Unfilled fields**: {the list of fields requiring human estimation}
+```
+
+## 5. Troubleshooting
+
+| Symptom | Handling |
+|------|------|
+| Auth failure | Retry once after `mcp_auth`; if it still fails, report |
+| Creation fails due to a missing required field | Stop, list the missing fields, don't guess values |
+| Network timeout | Report the created and uncreated lists, don't create duplicates |
+| Link type doesn't exist | Warn and skip that link, don't block ticket creation |
+| Missing team constant | Stop, state the missing item and the corresponding owner to complete it |
+
+## 6. Related
+
+- Input format: the Story list produced by the upstream User Story authoring step (field table in its template)
+- Upstream: user-story-authoring
+- Collaboration: tech-solution-publish, prd-publish

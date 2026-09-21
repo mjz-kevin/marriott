@@ -1,0 +1,54 @@
+
+team: CMS
+display_name: CMS 团队
+
+mcp:
+  jira:
+    host: https://marriottcloud.atlassian.net
+    project_key: GCD
+    issue_type: "故事"
+    initial_status: Backlog
+    agile_team: ""       # 空 = 无默认，人工填写
+    labels:                # CMS 无 business_domain 等枚举门禁，其余标签人工填写
+      case_sensitive: true
+      auto_fill: [ai_provenance]
+      ai_provenance:       # 溯源标签：凡经 agent 创建/同步的 Jira，建单时恒定自动打上
+        auto_apply: always # 无条件添加，不依赖需求内容
+        select: unique
+        values: [AIGenerated]   # 固定值（无空格：Jira label 不允许空格，否则会被拆成两个标签）
+    links: [prd, figma, tech_solution]
+
+  confluence:
+    base_url: https://marriottcloud.atlassian.net/wiki
+    space: CMI
+    parent_pages:
+      # 文件夹模式（当前）：一级根目录「CMS Team Requirement Materials」folder 页 ID。
+      # 发布脚本在此根下自动建/找 {initiative} → {epic} → {epic}-PRD / {epic}-Tech Solution。
+      # {initiative} 取 Epic 的父级 Jira key（Initiative/计划，如 GCD-359）；{epic} 取 Jira Epic key（如 CNAPP-5661）。
+      # {initiative} 与 {epic} 夹标题由脚本查 Jira 摘要拼为「key-摘要」（如 GCD-359-内容中台重构），
+      # 幂等查重按 Jira key 前缀匹配，摘要文案变动不会重复建夹。
+      root: "4175954245"             # 一级根目录页 ID（CMS Team Requirement Materials，prod/CMI，folder 类型）
+      # 旧模式回退（直接父页，仅当未走文件夹模式时使用）：
+      prd: "4184605008"
+      tech_solution: "4175954245"
+    folder_layout:                   # 文件夹层级约定（供 skill 说明用；实际由脚本 --root/--initiative/--epic/--kind 落地）
+      level1: "CMS Team Requirement Materials"      # 一级：固定根目录（即 parent_pages.root）
+      level2: "{initiative}"                        # 二级：Initiative（Epic 父级）夹，标题「key-摘要」，无父项时省略
+      level3: "{epic}"                              # 三级：Epic 夹，标题「key-摘要」，如 CNAPP-5661-会员权益重构
+      level4_prd: "{epic}-PRD"                      # 四级：PRD 归档夹
+      level4_tech_solution: "{epic}-Tech Solution"  # 四级：技术方案归档夹
+    naming:                            # 标题前缀（唯一键=前缀+Jira key）；脚本自动追加「-Jira 摘要」为可读尾巴，日期/版本不进标题
+      prd: CMS-PRD-{epic}
+      tech_solution_prd: CMS-TS-Prd-{epic}
+      tech_solution_spike: CMS-TS-Spike-{spike_key}
+      tech_solution_detail: CMS-TS-Detail-{story_key}
+    content_format: markdown
+
+# ---------------------------------------------------------------- 内容模型
+content_model:
+  required: true
+
+# ---------------------------------------------------------------- 产物语言
+doc:
+  body_language: en-US
+  ac_language: en-US

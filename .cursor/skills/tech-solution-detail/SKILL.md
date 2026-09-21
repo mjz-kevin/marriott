@@ -1,0 +1,164 @@
+---
+name: tech-solution-detail
+description: >-
+  Write a Story-level detailed tech solution following the team's official detail template:
+  business background, main flow, interface/data contracts with fallbacks, a Feature Flag table,
+  a task breakdown with per-item acceptance, reusable components, platform-specific sections,
+  QA test paths, and monitoring. Use when the user asks for a detailed design, a Story-level
+  tech solution, or an implementation breakdown;
+  triggers: 详细技术方案 / 详细设计 / 任务拆解 / Story 技术方案 / detail design.
+metadata:
+  agent: Tech Solution Agent
+---
+
+# Tech Solution — Detail level
+
+The Story-level detailed tech solution, produced before development starts based on the User Story + AC. It is the one tier a DEV can implement directly, and the baseline for writing unit tests, comparing interface contracts, and accepting tasks.
+
+| Dimension | Description |
+|------|------|
+| Purpose | Detailed design down to the interface field level + task breakdown + acceptance criteria for each task |
+| Input | Story + AC, the confirmed PRD-tier solution, designs (Figma link) |
+| Output | A Story-level detailed solution (aligned to the team detail template), serving as the feature branch's linked task list and verification baseline |
+| Scope | Doesn't change the requirement direction (a direction change returns to PRD-level solution confirmation); doesn't estimate, only gives impact scope and task count; interface examples are always mock and must include error scenarios |
+| Acceptance benchmark | Test: a DEV who wasn't in the earlier discussions can start work directly after reading it |
+
+Fill chapter by chapter in the section order of the team's detail template; don't add or remove sections and don't mix templates.
+
+## 0. Config values
+
+`{profile}` is the current profile file name (without extension, like `app-prod` / `cms-test`), resolved and passed in by the caller via the `profile-select` skill (`profile.py resolve` gives its absolute path); if it isn't passed in or the file doesn't exist -> block, don't guess.
+
+| Purpose | Key |
+|------|----|
+| Whether a content model is needed | `profiles/{profile}.yaml` → `content_model.required` |
+| detail template | Pick the detail template by the profile's `team` (one each for app / cms, see "## 6. Related") |
+
+## 1. Prerequisites
+
+| # | Condition |
+|---|------|
+| 1 | Have Story + AC (acceptance boundary) |
+| 2 | The PRD-tier solution is confirmed (direction unchanged; otherwise return to PRD-level solution confirmation first) |
+| 3 | Have designs (Figma link), covering the screen states the design defines |
+
+> Figma design reading: when a Figma link is present, you must read the design content via Figma MCP as the basis for the detailed design and QA paths, not just infer from the link; a read failure is logged as a risk, don't fabricate.
+
+## 2. Workflow
+
+```
+- S1 文档信息 + version-history table
+- S2 Background
+- S3 Main flow
+- S4 Contracts and dependencies
+- S5 [conditional] Content model + permissions + migration (when the team requires a content model)
+- S6 Task breakdown (each with acceptance criteria)
+- S7 Risks and dependencies
+- S8 Special sections (reusable components, QA test paths, monitoring, non-functional design, etc.)
+- S9 Review conclusion (leave only the header row blank, filled in manually by reviewers at review time; don't pre-fill here)
+- S10 Self-check + hand to DEV for confirmation
+
+The exact section names and numbering follow the template used.
+```
+
+### S3 Main flow
+
+Fill the template's main-flow section: entry, request timing, data loading, business exceptions, state transitions, redirect after a key action, with a flowchart or architecture diagram. mermaid diagrams follow the diagram spec: declare the diagram type and direction on the first line, double-quote node text and edge labels, use ASCII node IDs, cover all branch outlets, and do a previewer render self-check when finished; publishing renders them into images via mmdc, so Node.js (`npx`) must be installed.
+
+### S4 Contracts and dependencies
+
+Interface / data contracts must specify the following four items:
+
+| Item | Requirement |
+|----|------|
+| Request / trigger timing | Enter page / refresh / login-state change |
+| Key fields | `field name`: meaning, type |
+| Null / failure fallback | Field empty -> ? Request fails -> fallback strategy, no silent failure |
+| Prerequisite / Safelisting | Interface safelist |
+
+Give mock examples of the request / response / error codes (the approach follows the team's example-data convention, domain `api.example.com`), and they must include error scenarios; a solution with only success examples can't be accepted.
+
+Fill the Feature Flag / config-item table row by row: Key, meaning, default, behavior on read failure, notes.
+> The default is "off" by default, a read failure doesn't block entering the page, both ends read the same key, don't hardcode default-on locally.
+
+The design / spec source must give a Figma link.
+
+### S5 The three key tables of the content model (required when the team requires a content model)
+
+**Content model**: content type / purpose / key fields / draft·version / multilingual (whether multilingual + fallback strategy)
+
+**Permissions and publishing flow**: the read/write/publish matrix for editor / reviewer / admin + the publishing flow (draft -> review -> published, how rejection is handled)
+
+**Data migration**:
+
+| Change type | Object | Description | Migration method |
+|----------|------|------|----------|
+| Add / delete / change type / rename | `[collection.field]` | | `payload migrate` (generate + run the migration script) |
+
+Must answer the impact on historical content (whether existing data is back-filled) and the rollback script.
+When the team requires the content model as a standalone item, migration should be a standalone task and independently rollback-able.
+
+### S6 Task breakdown
+
+| Item | Technical task | Other Comments |
+|----|----------|---------------|
+
+Each task must have acceptance criteria (write them in Comments or list separately).
+This is the comparison baseline for the task-acceptance step; missing one makes the verification step unable to run.
+Tasks should be independently acceptable and not too coarse-grained (split further if too coarse); effort/points are estimated by the DEV.
+
+### S8 Special sections
+
+Fill the template's special sections item by item:
+
+| Point | Content |
+|------|------|
+| Reusable components | Component name / where used; prefer reusing design-system components (see the team's coding conventions) |
+| Multi-end / multi-site differences | List differences per requirement point; write "consistent" if none |
+| Suggested QA test paths | Cover the team's test scope; state coverage covers each screen state the design defines |
+| Post-launch monitoring | Tracking, crash / performance metrics, release success rate |
+| Non-functional design | Performance, cache (TTL and invalidation), security (auth, privilege-escalation protection) |
+| Other | State pages (Loading / Empty / Error) and boundaries |
+
+## 3. Mandatory rules
+
+| Rule | Description |
+|------|------|
+| Interface examples must be mock | No real secrets, internal domains, member IDs |
+| Examples include error scenarios | Success-only examples can't be accepted |
+| Reference real code paths | Actually search the relevant code repo before referencing |
+| Every task has acceptance criteria | Missing one is rejected |
+| Don't estimate | Only give impact scope and task count |
+| No missing states | Every screen state the design defines needs a handling note |
+| Don't delete sections | Write "本期不涉及" for anything not involved |
+| Faithful to the template | The body starts from "## 文档信息"; fill only the template's existing sections and fields, don't add explanatory sentences, lead-ins, comments, or subsections not defined by the template; the template file's title and author notes are not part of the product |
+
+## 4. Quality gates
+
+- Template sections complete, no empty sections
+- The body starts from "## 文档信息," with no explanatory sentences, lead-ins, or subsections added beyond the template
+- No placeholder residue
+- Interface contracts include request/response/error-code mocks, with null and failure fallbacks stated
+- The Feature Flag table includes "behavior on read failure"
+- Every task has acceptance criteria
+- No real secrets / internal domains / real member IDs
+- Special sections filled: difference table, QA test paths covering all UI states, monitoring, non-functional design
+- When the team requires a content model: the content-model table is non-empty, the permission matrix is filled, the migration table includes rollback
+- Multilingual: gave the fallback strategy per the team's multilingual requirement
+
+## 5. Output
+
+Named per the team's title format.
+After handoff, stop and wait for DEV confirmation. Once confirmed, **you must** lay out the next step as two parallel options, presented equally—don't mention only publishing and don't weaken "convert to PDF" into a footnote or omit it:
+
+- Publish: enter the tech-solution publishing step (detail mode).
+- Local convert to PDF: convert the finalized local `.md` offline into a readable, well-formatted PDF for local review, archiving, or sending to people who don't use Confluence; doesn't modify the source or publish.
+
+Even if this round is just a local revision to a finalized solution, finishing the revision counts as reaching this wrap-up step again, and you must still present the two parallel options above—don't skip.
+
+## 6. Related
+
+- Templates: references/tech-solution-detail-app.md / references/tech-solution-detail-cms.md (pick by the profile's `team`: APP / CMS)
+- Upstream: tech-solution-prd
+- Downstream: tech-solution-publish
+- Parallel option: md-to-pdf (convert the finalized local tech solution to PDF for local review/archiving)

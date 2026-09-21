@@ -1,0 +1,31 @@
+{
+    "_comment": "【macOS / Linux 版】复制本文件为同目录 mcp.json 后填写凭证。npx 已在系统 PATH，command 直接用 'npx'。API token 获取地址：https://id.atlassian.com/manage-profile/security/api-tokens。",
+    "confluenceRest": {
+        "base_url": "https://marriottcloud.atlassian.net/wiki",
+        "email": "",
+        "api_token": ""
+    },
+    "mcpServers": {
+        "Atlassian-MCP-Server": {
+            "url": "https://mcp.atlassian.com/v1/mcp/authv2"
+        },
+        "figma": {
+            "_comment": "FIGMA_API_KEY 获取地址：https://www.figma.com/developers/api#access-tokens（Figma → Settings → Security → Personal access tokens）",
+            "command": "npx",
+            "args": ["-y", "figma-developer-mcp", "--stdio"],
+            "env": {
+                "FIGMA_API_KEY": ""
+            }
+        },
+        "marriott-github": {
+            "_comment": "GITHUB_TOKEN 获取地址：git.marriott.com → Settings → Developer settings → Personal access tokens",
+            "command": "npx",
+            "args": ["-y", "github-mcp-server-js"],
+            "env": {
+                "GITHUB_TOKEN": "",
+                "GITHUB_SERVER_URL": "git.marriott.com",
+                "GITHUB_PERMISSION": "read-write"
+            }
+        }
+    }
+}

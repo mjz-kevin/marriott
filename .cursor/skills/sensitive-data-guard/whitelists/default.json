@@ -1,0 +1,24 @@
+{
+  "name": "default",
+  "description": "Baseline safe values: common placeholders and test/sample data that never represent real secrets or personal information.",
+  "literals": [
+    "password",
+    "your-password-here",
+    "changeme",
+    "example.com",
+    "user@example.com",
+    "test@example.com",
+    "AKIAIOSFODNN7EXAMPLE",
+    "00000000000",
+    "13800138000",
+    "123 Example Street",
+    "20260917-130342"
+  ],
+  "patterns": [
+    "(?i)<[^>]*(?:password|token|secret|key)[^>]*>",
+    "(?i)\\$\\{[^}]*(?:PASSWORD|TOKEN|SECRET|KEY)[^}]*\\}",
+    "(?i)(?:xxx+|\\*{3,}|__redacted__|placeholder|dummy|sample)",
+    "(?i)@example\\.(?:com|org|net)",
+    "^4111[ \\-]?1111[ \\-]?1111[ \\-]?1111$"
+  ]
+}

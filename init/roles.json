@@ -1,0 +1,117 @@
+{
+  "_comment": "AI SDLC 角色分发清单。build.py 读取本文件，按角色把 .cursor 下的 agents/skills 及公共资产打包。字段说明见下方 _fields。资产名对应 ../.cursor/agents/<name>.md 与 ../.cursor/skills/<name>/。agent 若在 .cursor/agents 下不存在，会用 init/placeholders/<name>.md 兜底并在包内标注『能力尚未就绪』。",
+  "_fields": {
+    "agents": "该角色随包分发的 Agent（.md，来自 .cursor/agents 或 init/placeholders）",
+    "skills": "该角色专属 Skill（目录，来自 .cursor/skills）",
+    "phase": "该角色在 SDLC 中的阶段，仅用于 README 展示"
+  },
+
+  "common": {
+    "_comment": "所有角色都会收到的公共 Skill 与文件。sensitive-data-guard 为强制安全护栏；profile-select 为团队配置刚需；create-pr 为本仓库通用 PR 工具。运行时自检与 mcp.json 生成由安装脚本(install.sh/install.ps1)完成。",
+    "skills": [
+      "sensitive-data-guard",
+      "profile-select",
+      "create-pr"
+    ],
+    "profiles": [
+      "app-test.yaml",
+      "app-prod.yaml",
+      "cms-test.yaml",
+      "cms-prod.yaml",
+      "setup.json"
+    ],
+    "files": [
+      "mcp.example.macos.json",
+      "mcp.example.windows.json"
+    ]
+  },
+
+  "roles": {
+    "PO": {
+      "title": "Product Owner",
+      "phase": "需求收集 & 设计 / Refinement",
+      "agents": ["eval-agent", "userstory-agent"],
+      "skills": [
+        "requirement-clarify",
+        "prd-authoring",
+        "prd-publish",
+        "user-story-authoring",
+        "user-story-publish"
+      ]
+    },
+    "TL": {
+      "title": "Tech Lead",
+      "phase": "需求设计 / Refinement / 开发 / 验证 / Code Review",
+      "_comment": "TL 与 Dev 分发相同内容（技术方案 + 开发 + 验证 + CodeReview），两者资产集合保持一致。",
+      "agents": [
+        "tech-solution-agent",
+        "dev-agent",
+        "verify-agent",
+        "code-review-agent"
+      ],
+      "skills": [
+        "requirement-clarify",
+        "tech-solution-prd",
+        "tech-solution-spike",
+        "tech-solution-detail",
+        "tech-solution-publish",
+        "baseline-checkout",
+        "feature-branch",
+        "unit-test-authoring",
+        "build-verify",
+        "contract-diff",
+        "unit-test-runner",
+        "acceptance-check",
+        "diff-fetch",
+        "code-review-rules",
+        "review-comment",
+        "merge-gate",
+        "harness-invoke"
+      ]
+    },
+    "Dev": {
+      "title": "Developer",
+      "phase": "需求设计 / Refinement / 开发 / 验证 / Code Review",
+      "_comment": "Dev 与 TL 分发相同内容，两者资产集合保持一致。",
+      "agents": [
+        "tech-solution-agent",
+        "dev-agent",
+        "verify-agent",
+        "code-review-agent"
+      ],
+      "skills": [
+        "requirement-clarify",
+        "tech-solution-prd",
+        "tech-solution-spike",
+        "tech-solution-detail",
+        "tech-solution-publish",
+        "baseline-checkout",
+        "feature-branch",
+        "unit-test-authoring",
+        "build-verify",
+        "contract-diff",
+        "unit-test-runner",
+        "acceptance-check",
+        "diff-fetch",
+        "code-review-rules",
+        "review-comment",
+        "merge-gate",
+        "harness-invoke"
+      ]
+    },
+    "QA": {
+      "title": "Quality Assurance",
+      "phase": "开发(用例预生成) / 功能测试 / Release 回归",
+      "agents": ["test-agent"],
+      "skills": [
+        "test-case-authoring",
+        "test-case-to-script",
+        "auto-test-run",
+        "test-report-publish",
+        "story-bug-create",
+        "regression-bug-create",
+        "harness-invoke"
+      ]
+    }
+  }
+}
