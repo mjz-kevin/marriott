@@ -27,9 +27,9 @@ description: >-
 
 ```
 - [ ] 步骤 1：收集 diff 与分支上下文
-- [ ] 步骤 2：选择匹配的模板
-- [ ] 步骤 3：逐字读取该模板文件
-- [ ] 步骤 4：根据 diff 填充每个章节
+- [ ] 步骤 2：判断匹配的场景模板（判断不了让用户选）
+- [ ] 步骤 3：逐字读取「场景模板 + 通用模板」两个文件
+- [ ] 步骤 4：根据 diff 填充叠加后的每个章节
 - [ ] 步骤 5：把草稿交给用户审阅
 - [ ] 步骤 6：创建 PR（仅当用户要求时）
 ```
@@ -46,13 +46,21 @@ git diff $(git merge-base origin/HEAD HEAD 2>/dev/null || echo HEAD~1)..HEAD
 从分支名中提取 Jira 工单号（命名约定：`[JIRA-TICKET]-[description]`，
 例如 `GTI-1234-config-data-new-arch`）。
 
-**步骤 2 — 选择模板。** 依据 [reference.md](reference.md) 中的对照表将改动匹配到对应
-场景。无法确定时，使用默认模板。
+**步骤 2 — 判断场景模板。** 依据 [reference.md](reference.md) 中的对照表，从 diff 特征
+判断本次改动属于 `PULL_REQUEST_TEMPLATE/` 里的哪个场景（feature/bugfix/hotfix/refactor/
+docs/release）。**判断不了或改动为混合类型时，不要擅自默认——列出候选场景让用户选。**
 
-**步骤 3 — 读取模板文件**，确保标题/checklist 完全准确。切勿凭记忆硬编码模板文本；
-以文件为准。
+**步骤 3 — 读取「场景模板 + 通用模板」两个文件。** 无论选中哪个场景模板，都要额外叠加
+通用模板 `pull_request_template.md`：
 
-**步骤 4 — 根据 diff 填充每个章节：**
+- 先读所选场景模板 `PULL_REQUEST_TEMPLATE/{scenario}.md`；
+- 再读通用模板 `template/PR/pull_request_template.md`；
+- 把两者的章节**合并**：通用模板的通用章节（如自测清单、影响范围、敏感信息等团队恒定项）
+  始终保留；场景模板的特有章节叠加进来；两者重复的同名章节以场景模板为准、不重复出现。
+
+切勿凭记忆硬编码模板文本；以文件为准。若某一方缺章节，以并集为准补齐。
+
+**步骤 4 — 根据 diff 填充叠加后模板的每个章节：**
 - 写具体的「变更说明 (What & Why)」——引用实际改动的文件/模块。
 - 勾选正确的「变更类型 (Type of change)」。
 - 列出真实、可复现的测试步骤。
@@ -79,3 +87,5 @@ gh pr create --base <base> --title "<title>" --body-file <tmpfile>
   `.github/pull_request_template.md`；两种机制并存，互不冲突。
 - 让作者对内容负责：未勾选的选项是刻意保留，而非疏漏。除非已核实，否则不要自动勾选
   安全类选项（测试通过、无敏感信息泄漏）。
+- 下游衔接：PR 创建后进入代码审核环节——由 `diff-fetch` 拉取本 PR 差异，`code-review-rules`
+  按规范逐条审核，`review-comment` 组织意见，`merge-gate` 判门禁并提交 review。

@@ -170,12 +170,28 @@ def api(method, url, auth, body=None, headers=None):
 
 
 # ============================= Markdown -> storage =============================
+def _autolink_bare_urls(s):
+    """把裸 http(s) URL 包成 <a>；已在 <a>...</a> 内的片段不重复处理。"""
+    parts = re.split(r'(<a\b[^>]*>.*?</a>)', s, flags=re.I | re.S)
+    out = []
+    for i, part in enumerate(parts):
+        if i % 2 == 1:
+            out.append(part)
+        else:
+            out.append(re.sub(
+                r'(https?://[^\s<"]+)',
+                lambda m: f'<a href="{m.group(1)}">{m.group(1)}</a>',
+                part,
+            ))
+    return ''.join(out)
+
+
 def _inline(s):
     s = html.escape(s, quote=False)
     s = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", s)
     s = re.sub(r"`([^`]+?)`", r"<code>\1</code>", s)
     s = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r'<a href="\2">\1</a>', s)
-    return s
+    return _autolink_bare_urls(s)
 
 
 def md_to_storage(md_text):

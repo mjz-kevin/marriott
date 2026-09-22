@@ -3,3 +3,6 @@ mcp.json
 # Python 编译缓存（skill 脚本运行时生成，不提交）
 **/__pycache__/
 *.pyc
+
+# Skill 编写规范（本地生效，暂不提交到仓库）
+rules/skill-authoring.mdc

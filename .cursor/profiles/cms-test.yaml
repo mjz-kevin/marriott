@@ -44,6 +44,63 @@ mcp:
       tech_solution_detail: CMS-TS-Detail-{story_key}
     content_format: markdown
 
+  github:                              # GitHub（自建 GHES）连接 scope；开发/验证类 skill 的 MCP 读写落点
+    host: git.marriott.com             # 自建 GHES 域名
+    org: cnexperience                  # 组织/所有者（owner），与 APP 同 org
+    repos:                             # 交付的代码仓库；base=各仓库真实基线分支
+      cncms:      { repo: cnexperience/cncms,                 base: main }   # Payload CMS + Next.js
+      monorepo:   { repo: cnexperience/cn-frontend-monorepo,  base: main }   # Nx monorepo（didi / member-day / legal-page 等 app）
+    # 兼容旧引用：单一 default_branch 已废弃，基线分支改由 repos.*.base 提供
+
+# ---------------------------------------------------------------- 代码工程（开发/验证类 skill 用）
+code:
+  languages: [typescript]              # 语言栈：TypeScript
+  # 分支命名：唯一 AI Feature 分支模板；{story_key}=Jira Story key，{slug}=Story 摘要短横线化
+  branch:
+    prefix: ai/feature                 # AI 专属分支前缀，与人工分支隔离
+    template: "ai/feature/{story_key}-{slug}"
+  build:                              # 编译/构建命令（build-verify 用），按 repo 键区分；对齐各仓 CI
+    cncms:                             # Next.js + payload；pnpm 10.x；precommit=generate:all && lint:tsc && build:compile
+      tool: pnpm
+      command: "pnpm install --frozen-lockfile && pnpm lint:tsc && pnpm build"
+    monorepo:                          # Nx monorepo；pnpm 11.x；构建校验只跑 lint/build/typecheck，单测交 unit-test-runner（职责不重叠）
+      tool: pnpm-nx
+      command: "pnpm install --frozen-lockfile && npx nx run-many -t lint build typecheck"
+  contract:                           # contract-diff 口径：接口契约以技术方案 detail 的接口定义为基线
+    source: tech_solution_detail       # 契约基线来源：Story 级明细方案的接口定义章节
+    match: field_level                 # 比对粒度：逐字段（TS 看 interface/type/zod schema；payload 看 collection field）
+  extras: [payload_migration]          # 预留（当前无 skill 消费）：CMS 特有 payload migrate（cncms 的 `pnpm migration:apply`），待未来迁移校验类 skill 接入
+
+# ---------------------------------------------------------------- 代码审核（代码审核类 skill 用）
+review:
+  rules_source: TBD                   # code-review-rules 用：CMS 团队编码规范来源（Confluence 规范页 URL/ID 或仓库内规范文件路径）；待补，缺失时 skill 停下要求补齐，不臆造规范
+  security_baseline: null             # 可选：安全基线来源；缺省用 skill 内置通用安全基线
+  ignore_globs:                       # diff-fetch 免审文件：生成物/锁文件不纳入审核上下文
+    - "pnpm-lock.yaml"
+    - "**/dist/**"
+    - "**/*.generated.*"
+    - "**/migrations/**"              # payload 迁移产物（评审看源，不看生成迁移）
+  merge_gate:                         # merge-gate 门禁策略
+    auto_merge: false                 # 本期不自动合并，仅给结论交人工拍板
+    on_block: request_changes         # 有阻断项时的 review event（request_changes / comment）
+
+# ---------------------------------------------------------------- 测试（开发/验证类 skill 用）
+test:
+  unit:                               # 单元测试框架与执行命令（unit-test-authoring / unit-test-runner 用）；对齐 CI
+    cncms:
+      framework: vitest                # 单测 test:unit（vitest.config.unit.mts）；另有 test:int 集成、playwright e2e
+      command: "pnpm test:unit"
+      needs_services: [postgres, redis] # 集成/部分单测依赖 docker 服务（docker compose up -d，见 .harness/ci-test.env）；纯单测 test:unit 一般不依赖
+    monorepo:
+      framework: jest                  # Nx + jest（jest.preset.js）；本地 Agent 无 Nx Cloud 分布式，用 affected 只测受 Feature 分支改动影响的 project（比 run-many 全量快）
+      command: "npx nx affected -t test --base=$(git merge-base HEAD origin/{base}) --head=HEAD"  # {base} 由 unit-test-runner 代入 repos.monorepo.base，不硬编码基线分支
+  coverage:                           # 覆盖率口径（unit-test-runner 汇总用）
+    enabled: true                      # 是否统计并展示覆盖率（cncms 接 sonar，sonar-project.properties）
+    min_line: 0                        # 门禁阈值：0=只报告不卡门禁；>0=低于阈值判未通过（与 enabled 职责正交）
+  scope: [functional_case_authoring]  # 预留（当前无 skill 消费）：本期范围＝仅功能测试用例生成，待未来测试用例编写类 skill 接入
+  automation: false                   # 预留（当前无 skill 消费）：本期不做自动化执行
+  regression: false                   # 预留（当前无 skill 消费）：本期不做回归
+
 # ---------------------------------------------------------------- 产物语言
 doc:
   body_language: en-US

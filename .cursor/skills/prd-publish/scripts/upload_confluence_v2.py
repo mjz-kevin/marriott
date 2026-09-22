@@ -177,12 +177,28 @@ def api(method, url, auth, body=None, headers=None):
 
 
 # ============================= Markdown -> storage =============================
+def _autolink_bare_urls(s):
+    """把裸 http(s) URL 包成 <a>；已在 <a>...</a> 内的片段不重复处理。"""
+    parts = re.split(r'(<a\b[^>]*>.*?</a>)', s, flags=re.I | re.S)
+    out = []
+    for i, part in enumerate(parts):
+        if i % 2 == 1:
+            out.append(part)
+        else:
+            out.append(re.sub(
+                r'(https?://[^\s<"]+)',
+                lambda m: f'<a href="{m.group(1)}">{m.group(1)}</a>',
+                part,
+            ))
+    return ''.join(out)
+
+
 def _inline(s):
     s = html.escape(s, quote=False)
     s = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", s)
     s = re.sub(r"`([^`]+?)`", r"<code>\1</code>", s)
     s = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r'<a href="\2">\1</a>', s)
-    return s
+    return _autolink_bare_urls(s)
 
 
 def _cell(s):
@@ -389,23 +405,33 @@ def jira_browse_url(base_url, key):
     return f"{site}/browse/{urllib.parse.quote(key)}"
 
 
+def _epic_anchor_ok(body, epic):
+    """附录已存在规范的 Epic 锚点：<a href=.../browse/EPIC>EPIC</a>。"""
+    esc = html.escape(epic, quote=False)
+    return bool(re.search(
+        r'<a\s+href="[^"]*/browse/' + re.escape(epic) + r'"[^>]*>\s*'
+        + re.escape(esc) + r'\s*</a>',
+        body, re.I))
+
+
 def inject_epic_link(body, epic, epic_url):
     """把附录「Jira link」项的占位替换为指向该 Jira Epic 的链接（storage 格式）。
 
-    按模板生成的附录项是普通段落 `<p>&bull; Jira link: {占位}</p>`（模板行首是字面「•」），
-    主匹配即按此真实结构，把冒号后到该 <p> 结束之间的内容替换为 `<a href=epic_url>epic</a>`，
-    并去掉「（可选）/(Optional)」占位；再兼容历史可能的 `<li><strong>Jira link</strong>` 结构。
-    这样 Epic 回链落在附录「Jira link」项，与技术方案回链落在附录「Technical solution links」项
-    保持一致，不再另加顶部信息条。
+    兼容两种附录写法（与 GCD-359 / GCD-400 实测一致）：
+    - 英文段落：`• Jira link: {占位}` → `<p>&bull; Jira link: ...</p>`
+    - 中文列表：`- **Jira link**：{占位}` → `<li><p><strong>Jira link</strong>：...</p></li>`
 
-    幂等：该项若已含指向同一 Epic（同 URL 或 /browse/<KEY>）的链接，则不改动，避免重复。
-    找不到「Jira link」项时（PRD 无标准附录）为稳妥回退到正文顶部注入一条信息条。
+    占位可以是空、裸 URL、或已由 _autolink_bare_urls 包过的 `<a href=url>url</a>`；
+    最终统一为 `<a href=epic_url>epic</a>`。
+
+    幂等：仅当已存在规范锚点（href 指向该 Epic 且显示文本为 Epic key）时跳过。
+    仅有裸文本 URL 或 href 正确但显示全文 URL 时仍会规范化。
+    找不到「Jira link」项时回退到正文顶部注入信息条。
     返回 (body, injected)。
     """
     if not epic:
         return body, False
-    # 已含指向该 Epic 的链接 → 跳过，避免重复
-    if epic_url in body or re.search(r'href="[^"]*/browse/' + re.escape(epic) + r'(?:["/?#])', body):
+    if _epic_anchor_ok(body, epic):
         return body, False
     anchor = f'<a href="{html.escape(epic_url, quote=True)}">{html.escape(epic)}</a>'
     # 附录「Jira link」项在按模板生成的正文里是普通段落 <p>&bull; Jira link: {占位}</p>
@@ -1066,8 +1092,8 @@ def main():
     feature = re.sub(r"[^A-Za-z0-9]+", "-", os.path.splitext(os.path.basename(args.md))[0]).strip("-")
     workdir = os.path.dirname(os.path.abspath(args.md))
 
-    # 自动注入 Jira Epic 回链：默认在正文顶部加一条指向该 Epic 的链接，无需本地 md 回填。
-    # 幂等——正文已含指向同一 Epic 的链接（如作者手填的附录 Jira link）时自动跳过、不重复。
+    # 自动注入 Jira Epic 回链至附录「Jira link」项（见 inject_epic_link）。
+    # 幂等——仅当附录已存在规范锚点 <a href=.../browse/EPIC>EPIC</a> 时跳过。
     epic_url = jira_browse_url(base_url, args.epic)
     epic_link_injected = False
     if not args.no_epic_link:
