@@ -45,6 +45,10 @@ Fill chapter by chapter in the section order of the team's detail template; don'
 
 ## 2. Workflow
 
+**AI-participation first line (mandatory, not in the template):** the template file does not contain this line—you add it. The product's very first line must be exactly `This document was created with AI assistance.`, on its own line above `## Document Information`, followed by a blank line. It is mandatory product content; always add it even though the template omits it.
+
+**Author fill-in (real person, ask the user):** the `Author` field in Document Information and the `Author` column of the Version Change Log record the **real person generating the doc**, not an AI agent name. Before finalizing, ask the user for their name (e.g. "请输入本文档作者姓名") and fill the value verbatim into both places; if no name is given, leave `—`. Never write "AI SDLC ... Agent" or any AI/agent identity into these fields—the AI-participation disclosure is carried by the first product line.
+
 ```
 - S1 Document Information + version-history table; the `Description` column stays concise (a short phrase summarizing the change, e.g. `Initial version`), not a full paragraph
 - S2 Background
@@ -133,11 +137,15 @@ Fill the template's special sections item by item:
 | No missing states | Every screen state the design defines needs a handling note |
 | Don't delete sections | For an optional item/section not involved, keep the heading and write `—` (a checklist trace meaning "assessed, not needed this cycle"); when a full sentence is needed use "Not applicable this cycle"; don't delete the section |
 | No fabricated optional content | Don't proactively generate content for an optional item without a requirement/clarification basis; write it only when the requirement, clarification conclusion, or user explicitly calls for it, otherwise write `—` |
-| Faithful to the template | The body starts from "## Document Information"; **strip the author-facing ` (optional)` marker from every heading and field/row label in the product** (it is a writing note meaning "may be omitted," not visible title text—e.g. `## 5. Key Alignment Items (optional)` → `## 5. Key Alignment Items`, `### 3.4 Data Migration (optional)` → `### 3.4 Data Migration`); fill only the template's existing sections and fields, don't add explanatory sentences, lead-ins, comments, or subsections not defined by the template. Never copy `{guidance blocks}`, `> **`Example`**` block quotes, or HTML comments into the product; the template file's title and author notes are not part of the product |
+| Faithful to the template | The body starts from "## Document Information" (with the mandatory first line `This document was created with AI assistance.` prepended above it, not in the template); **strip the author-facing ` (optional)` marker from every heading and field/row label in the product** (it is a writing note meaning "may be omitted," not visible title text—e.g. `## 5. Key Alignment Items (optional)` → `## 5. Key Alignment Items`, `### 3.4 Data Migration (optional)` → `### 3.4 Data Migration`); fill only the template's existing sections and fields, don't add explanatory sentences, lead-ins, comments, or subsections not defined by the template. Never copy `{guidance blocks}`, `> **`Example`**` block quotes, or HTML comments into the product; the template file's title and author notes are not part of the product |
+| AI first line | The product's first line is exactly `This document was created with AI assistance.` (its own line above `## Document Information`); mandatory product content added by the skill, not present in the template |
+| Real author | `Author` (Document Information + Version Change Log column) is the real person generating the doc—ask the user for the name and fill it verbatim; never write an AI/agent name (e.g. "AI SDLC ... Agent"). If no name is given, leave `—` |
 
 ## 4. Quality gates
 
 - Template sections complete, no empty sections
+- The product's first line is exactly `This document was created with AI assistance.` (its own line, above `## Document Information`)
+- `Author` (Document Information + Version Change Log) is a real person, not an AI/agent name (no "AI SDLC ... Agent" residue)
 - The body starts from "## Document Information," with no explanatory sentences, lead-ins, or subsections added beyond the template
 - No `{guidance block}` residue, no `> **`Example`**` block-quote residue, and no HTML-comment residue; **do not** treat business-domain terms alone (Bonvoy, Marriott, etc.) as leakage
 - No author-facing ` (optional)` marker left in any heading or field/row label (it is stripped from the product, e.g. `## 5. Key Alignment Items`, `### 3.4 Data Migration`)
