@@ -170,12 +170,28 @@ def api(method, url, auth, body=None, headers=None):
 
 
 # ============================= Markdown -> storage =============================
+def _autolink_bare_urls(s):
+    """把裸 http(s) URL 包成 <a>；已在 <a>...</a> 内的片段不重复处理。"""
+    parts = re.split(r'(<a\b[^>]*>.*?</a>)', s, flags=re.I | re.S)
+    out = []
+    for i, part in enumerate(parts):
+        if i % 2 == 1:
+            out.append(part)
+        else:
+            out.append(re.sub(
+                r'(https?://[^\s<"]+)',
+                lambda m: f'<a href="{m.group(1)}">{m.group(1)}</a>',
+                part,
+            ))
+    return ''.join(out)
+
+
 def _inline(s):
     s = html.escape(s, quote=False)
     s = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", s)
     s = re.sub(r"`([^`]+?)`", r"<code>\1</code>", s)
     s = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r'<a href="\2">\1</a>', s)
-    return s
+    return _autolink_bare_urls(s)
 
 
 def md_to_storage(md_text):
@@ -804,10 +820,13 @@ def _writeback_link_in_storage(storage, item_label, link_url, link_title):
     if not m:
         return storage, False, f"未找到附录条目「{item_label}」，无法写回"
     existing = m.group(2)
-    if link_url in existing:
+    esc_url = html.escape(link_url, quote=True)
+    if re.search(r'<a\s+href="' + esc_url + r'"', existing):
         return storage, False, "该链接已存在于条目内，无需重复写回"
-    # 已有内容里若残留「（可选）」等标注也一并去除后再追加链接
+    # 已有内容里若残留「（可选）」等标注也一并去除；裸 URL 占位替换为规范锚点（不追加重复 URL）
     cleaned = re.sub(r'\s*(（可选）|\(可选\)|\(optional\)|\(Optional\))', '', existing).strip()
+    if cleaned and link_url in cleaned and '<a ' not in cleaned:
+        cleaned = ''
     new_segment = m.group(1) + ': ' + (cleaned + ' ' if cleaned else '') + anchor + m.group(3)
     new_storage = storage[:m.start()] + new_segment + storage[m.end():]
     return new_storage, True, "已写入链接"

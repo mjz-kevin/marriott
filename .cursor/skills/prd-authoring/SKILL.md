@@ -118,7 +118,14 @@ Give each NFR a quantified metric (performance, compatibility, offline and avail
 
 ### S8 Add appendices (to-confirm items not in the body)
 
-Fill the appendix per the template bullet format (`• Jira link:`, `• Reference document links (Optional):`, etc.). **The Jira link points only to the single Epic this PRD corresponds to** (don't fill in Story keys); if the Epic isn't created yet at writing time, leave the field empty. For each appendix link field, fill it if there's a value and leave it empty otherwise; don't write explanatory text like "filled in later by XX" or "TBD."
+Fill the appendix per the template bullet format (`• Jira link:`, `• Reference document links (Optional):`, etc.). **The Jira link points only to the single delivery Epic this PRD corresponds to** (type = Epic; never fill in a Story, Sub-task, or Initiative key). Use only the Epic key confirmed in clarification (`jira_epic` from Eval Agent state); if the Epic isn't confirmed yet at writing time, leave the field empty—do not infer from a business-reference Story cited in the raw requirement. Business-context Story keys (e.g. the original requirement ticket) may go under `• Reference document links (Optional):` with browse URLs, not under `• Jira link:`.
+
+**Appendix link format** (both work at publish time; prefer markdown links for readable labels):
+- Preferred: `[GCD-400](https://marriottcloud.atlassian.net/browse/GCD-400)` or Chinese list `- **Jira link**：[GCD-400](url)`
+- Also accepted: bare URL `https://…/browse/GCD-400` (publish script auto-links and normalizes Epic label)
+- Empty `• Jira link:` is OK — `prd-publish` injects from `--epic`
+
+For each appendix link field, fill it if there's a value and leave it empty otherwise; don't write explanatory text like "filled in later by XX" or "TBD."
 The to-confirm list is not written into the PRD body and not published to Confluence; to-confirm items are listed one by one (with owners) in the conversation only at S10 handoff.
 
 ### S9 Self-check

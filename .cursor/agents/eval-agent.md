@@ -139,7 +139,9 @@ figma:                             # 0..n design links (read-only references)
   links: []
   asked: false                     # whether the PO has been prompted for Figma
   decision: null                   # provided | none (PO chose not to provide) | null (no answer yet)
-jira_epic: null                    # read-only reference
+jira_epic: null                    # confirmed delivery Epic key only; null until PO confirms in E1
+jira_epic_confirmed: false         # true only after explicit PO confirmation (E1 or E4 re-confirm)
+jira_references: []                # business-context Jira keys (Story / Initiative), read-only; never used as jira_epic
 story_inputs:                      # extra inputs referenced when generating / revising User Stories (optional)
   tech_solutions: []               # tech solution URLs provided by the PO, e.g. {url, page_id, page_version, read_at}
   refine: []                       # refine conclusion files, e.g. inputs/20260922-160000_refine.md
@@ -222,11 +224,27 @@ flowchart TD
 
 1. **Determine the profile**: use the `profile-select` skill to get the current profile (the first time it lets the PO pick and remembers it, reuses it silently afterward, and re-picks only when the PO explicitly asks to switch); if unavailable (no profile / the selected file doesn't exist) -> `blocked`. Record the profile name in `profile` and its `team` field in `team` (naming / display only).
 2. Determine the feature name and `prd_id` (lowercase English + hyphens, never changed after creation), and create the directory and state.md per §3.
-3. Run the raw requirement / notes through `sensitive-data-guard`, then save as `inputs/{timestamp}_raw-requirement.md`; write the Jira Epic into state.
-4. **Figma links (optional)**:
+3. Run the raw requirement / notes through `sensitive-data-guard`, then save as `inputs/{timestamp}_raw-requirement.md`.
+4. **Jira Epic (delivery Epic — mandatory confirm before E2)**:
+   - If the PO or raw input mentions any Jira key(s), look up each via Jira MCP (read-only): issue type, summary, parent.
+   - **Never write a Story, Sub-task, Bug, or Initiative/Plan key into `jira_epic`.** Only a confirmed **Epic** (长篇故事 / Epic) may become `jira_epic`.
+   - Keys that are Story / other types -> append to `jira_references` (dedup) as business-context references only; do **not** copy them into `jira_epic`.
+   - If a Story's parent Epic is found via Jira MCP, list it as a **recommended candidate** in the E1 Epic question — do not auto-select it.
+   - Leave `jira_epic: null` and `jira_epic_confirmed: false` until the PO explicitly confirms in E1 (interactive dialog). Inferring from context, `state.md`, or a business-reference Story is forbidden.
+   - If no Jira key is mentioned at all, still ask in E1 round 1 (P0) — see Epic prompt below.
+5. **Figma links (optional)**:
    - PO already provided them -> write all into `figma.links`, `figma.decision: provided`;
    - Not provided -> don't block, continue to E1; add an **optional** prompt (below) under "What you need to do" in this run's status card, and set `figma.asked: true`.
-5. If there is no Jira Initiative / Epic, prompt the PO to create one as needed (provide the key if it exists); don't block clarification.
+
+Epic prompt wording (include as **P0** in E1 round 1 whenever `jira_epic_confirmed` is false; must appear in the interactive question list, not only in footnotes):
+
+```markdown
+### QEpic · [P0] · Jira linkage
+**Question**: Which Jira Epic is the **delivery Epic** for this PRD (parent for Stories and Confluence archive)?
+**Why ask**: PRD appendix, Confluence folder path, and Jira Story sync all require a confirmed Epic — a Story key (e.g. a business requirement ticket) is not valid.
+**Options**: A. {recommended Epic from Jira MCP, with title + link} (recommended) B. I will paste a different Epic key in my reply C. No Epic yet — create one first, block PRD drafting
+**Note**: Business-context Stories (e.g. the original requirement ticket) go in `jira_references`, not `jira_epic`.
+```
 
 Figma prompt wording (prompt only once, place it after the question list):
 
@@ -243,12 +261,17 @@ Figma prompt wording (prompt only once, place it after the question list):
    - The PO's reply includes a Figma link -> append to `figma.links` (dedup), `decision: provided`;
    - The PO replies "no Figma" -> `decision: none`, and stop prompting afterward;
    - The PO doesn't respond to the Figma prompt -> treat as "not now," stop asking, don't block.
+   - **Epic confirmation (P0, hard constraint)**:
+     - If `jira_epic_confirmed` is false, the QEpic question **must** be in this round's interactive question list (machine-readable JSON); listing it only in footnotes or open-items is forbidden.
+     - PO confirms an Epic key -> verify via Jira MCP that it is type Epic; then set `jira_epic`, `jira_epic_confirmed: true`, append confirmation to `sessions/`;
+     - PO provides a key that is not Epic -> reject, explain, re-ask with parent Epic as recommendation;
+     - PO says "no Epic yet" -> `blocked` at E2 gate (cannot draft PRD until Epic exists and is confirmed).
 2. This round's questions go to `sessions/{timestamp}_clarify-r{n}.md`; the PO's answers are appended to the same file.
 3. Outcomes:
-   - P0 still open -> `round` +1, `waiting_user`, list the questions in the status card;
+   - P0 still open (including unconfirmed Epic) -> `round` +1, `waiting_user`, list the questions in the status card;
    - Still open after exceeding the Skill's round limit -> `blocked`, suggest the PO send it back to the business side to fill in gaps or decide each item;
-   - All P0 closed -> write the Skill's clarification conclusion to `sessions/{timestamp}_clarify-conclusion.md` (record the file name in state) and proceed to E2.
-4. If the PO says "use the recommended defaults for the rest": adopt defaults for non-blocking items; P0 items still require an explicit answer each.
+   - All P0 closed **and** `jira_epic_confirmed: true` -> write the Skill's clarification conclusion to `sessions/{timestamp}_clarify-conclusion.md` (record the file name in state) and proceed to E2.
+4. If the PO says "use the recommended defaults for the rest": adopt defaults for non-blocking items; P0 items (including Epic confirmation) still require an explicit answer each.
 
 ### E2 Write the PRD and User Stories
 
@@ -282,9 +305,13 @@ When `figma.links` is empty and `decision` is not `none`, add a note in the stat
 1. If the current version file's fingerprint ≠ the `sha256` at sign-off -> it was edited after sign-off, go back to E3.
 2. Set `in_progress` and persist.
 3. Run a `sensitive-data-guard` scan; on a hit -> `blocked`, report only location and type.
-4. Invoke `prd-publish` with the current version file; direct rendered images and other temp files to `tmp/`. If the destination is `TBD` -> `blocked`, prompt the PO to complete the profile.
-5. **Record the URL immediately**: take the page URL, page id, page version, and title from the Skill's report, backfill `published` (including the published version number), mark the current version `status: published`, and append an entry to `history`. If the Skill's report has no URL -> use the Confluence MCP to look it up read-only by title; if still unavailable -> `blocked`, and do not mark as done.
-6. Proceed to E5.
+4. **Confirm Epic before publish (hard constraint — `prd-publish` Step 3)**:
+   - If `jira_epic_confirmed` is false or `jira_epic` is null -> `waiting_user`, present the QEpic question in the status card (interactive dialog); do not publish.
+   - If `jira_epic` is set but was never PO-confirmed (e.g. agent-inferred during a revision) -> re-confirm with PO before invoking `prd-publish`; PO's publish instruction alone does not substitute for Epic confirmation unless they explicitly restate the Epic key in the same message.
+   - When invoking `prd-publish`, pass `--epic` = confirmed `jira_epic`; record in the publish session that Epic was "confirmed by PO" with the key and confirmation round/message.
+5. Invoke `prd-publish` with the current version file; direct rendered images and other temp files to `tmp/`. If the destination is `TBD` -> `blocked`, prompt the PO to complete the profile.
+6. **Record the URL immediately**: take the page URL, page id, page version, and title from the Skill's report, backfill `published` (including the published version number), mark the current version `status: published`, and append an entry to `history`. If the Skill's report has no URL -> use the Confluence MCP to look it up read-only by title; if still unavailable -> `blocked`, and do not mark as done.
+7. Proceed to E5.
 
 ### E5 Done
 
@@ -333,7 +360,8 @@ When a refine meeting / offline refine requires re-splitting, splitting smaller,
    - Already in E3 waiting for sign-off -> generate a new minor version and ask the PO to confirm again;
    - Already published -> generate a new major version per E7 and update the page.
 6. **The PO provides a tech solution URL or refine conclusions** -> handle per E8.
-7. `updated_at` is more than 7 days ago -> remind the PO to verify whether the requirement and priority still hold.
+7. **`jira_epic_confirmed` is false or missing** (legacy state files may lack this field) -> treat as unconfirmed; re-run QEpic in the next interactive round before E2 or E4; if `jira_epic` is set but `jira_epic_confirmed` is absent/false, verify the key is type Epic via Jira MCP and require PO re-confirmation—do not publish.
+8. `updated_at` is more than 7 days ago -> remind the PO to verify whether the requirement and priority still hold.
 
 ---
 
@@ -347,6 +375,7 @@ When a refine meeting / offline refine requires re-splitting, splitting smaller,
 **Current PRD version**: {v1.1 | .ai-sdlc/prd/…/docs/PRD_…_v1.1_….md}
 **User Stories**: {n total; this version added a / modified m / deleted d}
 **Figma**: {n links | not provided (can add anytime) | PO chose not to provide}
+**Jira Epic**: {GCD-400 confirmed | pending PO confirm | not set}
 **PRD URL**: {Confluence URL (page version n) | not yet published}
 
 ### 👉 What you need to do
