@@ -35,6 +35,8 @@ Create tickets in Jira from the confirmed Story list, fill fields, establish bac
 | Agile Team default | `profiles/{profile}.yaml` → `mcp.jira.agile_team` (empty means no default, needs manual entry) |
 | Label enum and auto-fill policy | `profiles/{profile}.yaml` → `mcp.jira.labels` (valid enum, case sensitivity, the `auto_fill` categories allowed to be auto-filled) |
 | The link set to establish | `profiles/{profile}.yaml` → `mcp.jira.links` |
+| Jira REST credentials (for Web remote links) | `.cursor/mcp.json` → `confluenceRest` (`base_url` / `email` / `api_token`); the same Atlassian account and token cover Jira REST — the site root is `base_url` minus the trailing `/wiki`, Jira REST lives at `<site>/rest/api/3`. Read by the script, never printed |
+| Web remote-link script | `.cursor/skills/user-story-publish/scripts/upload_confluence_v2.py --jira-remote-link` (pure stdlib, cross-platform, idempotent by `globalId`) |
 
 ## 1. Pre-checks
 
@@ -78,7 +80,7 @@ project = "{project}" AND summary ~ "{summary}" AND parent = "{Epic key}"
 
 ### S3/S4 Fields
 
-**Submission channel (hard constraint)**: create and edit tickets only via the Atlassian MCP (`createJiraIssue` / `editJiraIssue`). REST API, temporary scripts, and shell subagents are forbidden. On an MCP error, only fix the arguments and retry—don't fall back to another channel.
+**Submission channel (hard constraint)**: create and edit tickets only via the Atlassian MCP (`createJiraIssue` / `editJiraIssue`). REST API, temporary scripts, and shell subagents are forbidden. On an MCP error, only fix the arguments and retry—don't fall back to another channel. **The only exception**: creating a Jira **Web remote link** (external URL in the Links area) — MCP exposes no write tool for it, so it goes through the publish script's `--jira-remote-link` mode over Jira REST (see S5). This exception covers remote links only; ticket create/edit stays MCP-only.
 
 **Field submission format**:
 
@@ -107,14 +109,13 @@ Write per the Story template's field table:
 - The user-story sentence keywords (`As a` / `When` (or `For`) / `I will be able to` / `So that`) and each subsection heading are bold. Heading language follows `doc.body_language`: use `Linked Work Items / Reference Documents` for `en-US`, `链接的工作项 / 参考文档` for `zh-CN`.
 - Submission method: the Jira description is ADF, and `**` in plain text won't render as bold. Use `editJiraIssue` / `createJiraIssue` with `contentFormat: "markdown"` (Jira auto-converts to ADF), or construct the ADF `strong` mark directly; don't submit `**xxx**` as plain text.
 
-**Back-link subsection template** (fill the team-configured link set; heading language per `doc.body_language`):
+**Back-link subsection template** (fill the team-configured link set; heading language per `doc.body_language`). `tech_solution` is intentionally absent here — it lands as a Jira Web remote link, not in the description (see the S5 back-link landing spec):
 
 ```markdown
 **Linked Work Items / Reference Documents**
 
 * PRD: [{PRD title}]({PRD URL})
 * Figma: [{design title}]({design URL})
-* Tech Solution: [{solution title}]({solution URL})
 ```
 
 ### S5 Establish links
@@ -125,23 +126,28 @@ First establish the Parent (Epic, hierarchy), then go through the team-configure
 |------|------|
 | `prd` | The Confluence PRD page (only when the team config requires this link) |
 | `figma` | The design URL |
-| `tech_solution` | The Confluence tech-solution page |
+| `tech_solution` | The Confluence tech-solution page (already landed as a Web remote link by the tech-solution publishing step; this step only re-does it as a fallback) |
 
 > Items not in the team-configured link set are automatically not linked; no need to write a separate branch in the flow.
 
 **Back-link landing spec** (`prd` / `figma` / `tech_solution` point to a Confluence page or an external URL, not a Jira issue):
 
 - **Parent (Epic)**: use the hierarchy parent-child relation (the `parent` field, issue<->issue), established normally.
-- **URL back-links**: write into the back-link subsection of the target ticket description (heading language per `doc.body_language`; template above). Persisted in the body. The `tech_solution` back-link is written the same way for detail (into the Story) and spike (into the spike ticket). **Must be a clickable hyperlink**: for markdown submission write `[display text](URL)`, or construct ADF with a `link` mark; bare URLs are forbidden (relying only on frontend autolink, they degrade to non-clickable text on export / API read). If MCP supports writing Jira Web remote links, you may also add one in the Links area.
-- **Don't stuff into comments**: comments aren't a proper back-link spot and are easily buried; the spike conclusion back-link is likewise written in the description subsection, not a comment; only when the description can't be written should you fall back to a comment and note it in the report.
-- If a category has no corresponding link, write the placeholder "未提供（待补充）"; don't leave it empty, don't fabricate.
+- **`prd` / `figma` — description subsection**: write into the back-link subsection of the target ticket description (heading language per `doc.body_language`; template above) via MCP `editJiraIssue`. **Must be a clickable hyperlink**: for markdown submission write `[display text](URL)`, or construct ADF with a `link` mark; bare URLs are forbidden (relying only on frontend autolink, they degrade to non-clickable text on export / API read).
+- **`tech_solution` — already landed by the tech-solution publishing step (don't re-write by default)**: the tech-solution back-link is written as a Jira **Web remote link** by the tech-solution publishing step itself (right after it publishes detail/spike to Confluence), so this step does **not** write it by default. Only as a **fallback** — when that step reported the remote-link write as failed/pending — create it here via the publish script's `--jira-remote-link` mode over Jira REST (idempotent by `globalId`, so even if it was already written a re-run is a safe `action=update`, no duplicate; credentials reused from `confluenceRest`):
+
+```bash
+python .cursor/skills/user-story-publish/scripts/upload_confluence_v2.py --jira-remote-link --issue "<ticket key>" --link-url "<Confluence URL>" --link-title "<page title>" --relationship "Tech Solution" --icon-url "https://<site>/wiki/favicon.ico"
+```
+
+  Check the result JSON: `ok=true` with `action=create`/`action=update`. Never write the tech_solution link into the description subsection or a comment; it lives in the Web links area only.
+- **Don't stuff into comments**: comments aren't a proper back-link spot and are easily buried.
+- If a `prd` / `figma` category has no corresponding link, write the placeholder "未提供（待补充）"; don't leave it empty, don't fabricate.
 
 ### S6 Write back
 
 1. **Requirements-doc appendix Jira link**: write this PRD's **Epic key** back to the Jira link field in the requirements-doc appendix (that field holds only the Epic, not Story keys). Each Story's own back-link is already attached to it in S5 and isn't back-fed into the PRD appendix.
-2. **Tech-solution back-links**: execute the "pending write-back content" left by the tech-solution publishing step; spike and detail are written the same way—both into the back-link subsection of the corresponding ticket **description** (a clickable hyperlink, see the S5 back-link landing spec):
-   - (detail case) Story -> Tech Solution link, into that Story's description back-link subsection
-   - (spike case) Spike -> Tech Solution link, into the spike ticket's description back-link subsection
+2. **Tech-solution back-links (fallback only)**: the tech-solution publishing step already writes the spike/detail Web remote link itself. This step re-does it **only as a fallback** when that step reported the remote-link write as failed/pending — via the `--jira-remote-link` script (idempotent by `globalId`, detail onto the Story / spike onto the spike ticket). Never write the tech_solution link into the description subsection or a comment.
 
 > Writing back to Confluence needs write access, and this step is read-only (R) on Confluence: it only produces the write-back content and a prompt, done by a step with Confluence write access.
 
@@ -154,7 +160,7 @@ Don't auto-transition forward; the schedule is a PO decision.
 
 | Rule | Description |
 |------|------|
-| MCP-only channel | Create/edit tickets only via MCP `createJiraIssue` / `editJiraIssue`; REST API, temporary scripts, and shell subagents are forbidden |
+| MCP-only channel | Create/edit tickets only via MCP `createJiraIssue` / `editJiraIssue`; REST API, temporary scripts, and shell subagents are forbidden. Sole exception: Jira Web remote links (external URL in the Links area), which MCP can't write, go through the publish script's `--jira-remote-link` REST mode |
 | Batch creation needs PO confirmation | Don't execute without confirmation |
 | Don't delete or restructure fields | Only fill values, establish links, add comments; don't change field structure |
 | Skip if it exists | Don't overwrite manual edits |
@@ -173,7 +179,7 @@ Created {n} Stories (skipped {m} duplicates)
 | {summary} | {key} | {initial status} |
 
 - **Skipped**: {summary} already exists → {key}
-- **Links**: Epic established / {list each link-set item's status}
+- **Links**: Epic established / {each link-set item's status: prd/figma written into description subsection; tech_solution Web remote link already done by the tech-solution step, or fallback action=create/update here}
 - **Pending write-back**: {the requirements-doc appendix Jira link needs to be written by a step with Confluence write access / none}
 - **Unfilled fields**: {the list of fields requiring human estimation}
 ```
@@ -187,6 +193,8 @@ Created {n} Stories (skipped {m} duplicates)
 | Network timeout | Report the created and uncreated lists, don't create duplicates |
 | Link type doesn't exist | Warn and skip that link, don't block ticket creation |
 | Back-link renders as plain text (`[title](url)` or escaped `\[`) | Rewrite the whole description via `editJiraIssue` with `contentFormat: "markdown"` |
+| Web remote link `ok=false` (script) | Fix per the HTTP status in the result JSON (auth / issue key / URL) and rerun; it's idempotent by `globalId`, so a rerun won't duplicate. If it still fails, keep the description-subsection back-link and note the remote-link gap in the report |
+| External URL rejected by "Linked Work Items" | Expected — Issue Links only accept issue↔issue; put the external URL in Web links via `--jira-remote-link` instead |
 | Missing team constant | Stop, state the missing item and the corresponding owner to complete it |
 
 ## 6. Related

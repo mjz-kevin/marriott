@@ -47,7 +47,7 @@ If condition 1 isn't met, return to the requirement-clarification step; don't sk
 - S1  Load prd-template.md
 - S2  Gather and read through the inputs
 - S3  Write 1. Business Overview
-- S4  Write Scope (Optional)
+- S4  Write Scope
 - S5  Write 2. Feature Explanation
 - S6  Write 3. User Story List
 - S7  Write chapters 4–10
@@ -58,7 +58,7 @@ If condition 1 isn't met, return to the requirement-clarification step; don't sk
 
 ### S1 Load the requirements-doc template
 
-Read [prd-template.md](references/prd-template.md). Treat only "## Document Information" and the sections after it as the product skeleton: copy the order, headings, and (optional) / required markers verbatim; don't add or remove sections yourself and don't change the official headings. Replace all `{placeholders}` in the template, leaving no residue. For an optional item not in scope, keep the heading and write `—` (or "Not applicable this cycle"); don't delete the section.
+Read [prd-template.md](references/prd-template.md). Treat only "## Document Information" and the sections after it as the product skeleton: copy the order and headings verbatim, but **strip the author-facing ` (optional)` / ` (Optional)` marker from every heading and field label** (it is a writing note meaning "this section may be omitted," not part of the product title—e.g. `### Scope (Optional)` → `### Scope`, `## 4. Non-Functional Requirements (Optional)` → `## 4. Non-Functional Requirements`, `• Reference document links (Optional):` → `• Reference document links:`); keep the required/optional distinction only as authoring behavior, not as visible title text; don't add or remove sections yourself and don't change the official headings otherwise. Replace all `{placeholders}` in the template, leaving no residue. For an optional item not in scope, keep the (marker-stripped) heading and write `—` (or "Not applicable this cycle"); don't delete the section.
 
 The section hierarchy and wording follow Part 1 of the official "PRD Template." The authoring constraints (quantifiable, no placeholder residue, sensitive info) are enforced only in this skill's quality gates.
 
@@ -68,6 +68,7 @@ The section hierarchy and wording follow Part 1 of the official "PRD Template." 
 - Only after publishing, when a **real requirement change** occurs (business-level changes to scope/goals/rules/Story additions or removals), add an `M` or `D` row; one requirement change corresponds to one row.
 - **Local iterations** during writing and revision (re-splitting / reordering / merging User Stories, wording tweaks, format fixes, and other "edit points") are **not recorded** as version-history rows—these are iteration snapshots kept in local archives, they don't go into the doc table and don't go out with the doc.
 - So for "a PRD of the same requirement," under normal circumstances there is **only one** version-history row (the initial version); the row count grows only when a requirement change occurs, and the count equals the number of requirement changes, not the number of local revisions.
+- The `Description` column stays **concise**: one short phrase / clause summarizing the change (e.g. `Initial version`, `Added points-eligibility filter Story`), not a full paragraph or a list of edit points.
 
 **Must not be written into the product** (these are metadata for the author to read, not official sections):
 
@@ -90,11 +91,11 @@ When the input contains Figma links, you must read the design content via Figma 
 - 1.1 Background: current problem -> business impact -> why now
 - 1.2 Purpose: each goal must give current value -> target value -> measurement method -> measurement point in time; don't use unquantified phrasing like "improve efficiency"
 
-### S4 Write Scope (Optional)
+### S4 Write Scope
 
 The Scope sub-blocks are the **team's own delivery dimensions**, driven by the profile `doc.scope_dimensions` (APP team → `Android` / `iOS`; CMS team → `CMS`). This is the team's delivery scope, **not** a "which platforms does this requirement touch" list. Generate one `**{dimension}:**` block per configured dimension; **never hardcode platforms and never emit a dimension the team doesn't have** (e.g. a CMS PRD must not contain Android / iOS / Mini Program).
 
-**Selective display (Scope only):** within the team's own dimensions, show only the blocks this requirement actually touches—for a dimension not touched, remove its entire block (the `**{dimension}:**` heading and its table), don't keep it with `—`. If none of the team's dimensions is touched, keep the `### Scope (Optional)` heading and write `—` below it. Priorities use only P1 / P2.
+**Selective display (Scope only):** within the team's own dimensions, show only the blocks this requirement actually touches—for a dimension not touched, remove its entire block (the `**{dimension}:**` heading and its table), don't keep it with `—`. If none of the team's dimensions is touched, keep the `### Scope` heading and write `—` below it. Priorities use only P1 / P2.
 
 > This selective-display rule applies **only to the dimension blocks inside Scope**. All other optional sections/items follow the general rule: keep the heading and write `—` as a checklist trace; don't delete them.
 
@@ -139,8 +140,8 @@ After writing, stop and wait for PO confirmation; don't move on to the next step
 
 | Rule | Description |
 | ------------- | ---------------------------------------------------- |
-| Template first | Section order, headings, and (optional) / required markers follow prd-template.md starting from "## Document Information"; the template file's H1 and author notes are not part of the product. Fill only the template's existing sections and fields; don't add explanatory sentences, lead-ins, comments, or subsections not defined by the template. Never copy `{guidance blocks}`, **`Example`** block quotes, or HTML comments into the product |
-| Optional items not involved | For an optional item/section not involved, keep the heading and write `—` (a checklist trace meaning "assessed, not needed this cycle"); when a full sentence is needed use "Not applicable this cycle"; don't delete the section or row. **Exception (Scope only):** the dimension blocks inside `### Scope (Optional)` are driven by the profile `doc.scope_dimensions` and use selective display—remove a not-touched dimension block entirely (see S4) |
+| Template first | Section order and headings follow prd-template.md starting from "## Document Information"; **strip the author-facing ` (optional)` marker from headings and field labels in the product** (e.g. `### Scope (Optional)` → `### Scope`)—it is a writing note, not visible title text. The template file's H1 and author notes are not part of the product. Fill only the template's existing sections and fields; don't add explanatory sentences, lead-ins, comments, or subsections not defined by the template. Never copy `{guidance blocks}`, **`Example`** block quotes, or HTML comments into the product |
+| Optional items not involved | For an optional item/section not involved, keep the heading and write `—` (a checklist trace meaning "assessed, not needed this cycle"); when a full sentence is needed use "Not applicable this cycle"; don't delete the section or row. **Exception (Scope only):** the dimension blocks inside `### Scope` are driven by the profile `doc.scope_dimensions` and use selective display—remove a not-touched dimension block entirely (see S4) |
 | No fabricated optional content | Don't proactively generate content for an optional item without a requirement/clarification basis; write it only when the requirement, clarification conclusion, or user explicitly calls for it, otherwise write `—` |
 | Make assumptions explicit | If an assumption from the clarification conclusions is adopted, write it into the corresponding section and mark it `[Assumption]` |
 | Only what and why | The how goes to the later tech-solution steps (PRD level and Story-level detail) |
@@ -195,6 +196,7 @@ Design images target "readable in doc preview and as publish attachments," not p
 - Compare section by section against prd-template.md starting from "## Document Information": sections are complete, order matches, no empty sections
 - No explanatory sentences, lead-ins, or subsections added beyond the template; never copy `{guidance blocks}`, **`Example`** block quotes, or HTML comments into the product
 - No template metadata leakage: "# PRD Template," "faithful to the official template," "enforced by quality gates"; no `{guidance block}` residue; no **`Example`** tag residue (per G2a); no HTML-comment residue; **do not** treat business-domain terms alone (Bonvoy, Marriott, etc.) as leakage
+- No author-facing ` (optional)` / ` (Optional)` marker left in any heading or field label (it is stripped from the product, e.g. `### Scope`, `## 4. Non-Functional Requirements`, `• Reference document links:`)
 - No `[Enter ...]` / `TBD` / `TODO` residue
 - The version-history table contains only requirement-level changes: the initial version has only one row, with no version rows from local iterations (re-splitting/reordering/wording tweaks and other edit points)
 - Goals are quantifiable; ACs have no vague words and can be reduced to test cases
