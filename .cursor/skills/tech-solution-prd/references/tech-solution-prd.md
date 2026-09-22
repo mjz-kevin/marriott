@@ -10,6 +10,9 @@
 | Date | YYYY-MM-DD |
 | Status | Draft / Under Review / Confirmed |
 
+<!-- Author note: `{author}` is the real person generating the doc — ask the user for their name at authoring time and fill it in verbatim; never write an AI agent name (e.g. "AI SDLC ... Agent") into the Author field or the Version Change Log Author column. The AI-participation disclosure is a separate first product line added by the authoring skill, not part of this template. -->
+
+
 ## Version Change Log
 
 | Version | Update Date | Change Type | Description | Author | Reviewer |

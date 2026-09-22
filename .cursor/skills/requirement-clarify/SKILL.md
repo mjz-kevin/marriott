@@ -53,7 +53,7 @@ The clarification step before writing a PRD or tech solution; through multi-roun
 | -------------------- | --- | ------------------------------------------------- |
 | Raw requirement / notes | Required | Text, links, or a transcription of speech all work |
 | Figma link | Optional | Once provided, read the content via Figma MCP as visual fact merged into context (see "Figma visual facts") |
-| Linked Jira / Confluence | Optional | Read historical requirements docs, Epics, and existing Stories as context |
+| Linked Jira / Confluence | Optional | Read historical requirements docs, Epics, and existing Stories as context; **must** validate issue types via Jira MCP when any key is present (see "Jira linkage facts") |
 
 **Technical mode**:
 
@@ -99,6 +99,18 @@ The sub-agent takes on the heavy lifting that needs no user interaction (reading
 
 **Figma visual facts**: when the input contains a Figma link, you **must** read the design content via Figma MCP (the `figma` server) (board structure, screen states, key components and fields, copy and interaction annotations); don't infer from the link and don't directly ask the user about design details. The reading results are merged into the gap scan and conflict detection, comparing dimensions like screens, data, and role scenarios to identify inconsistencies between requirement and design; the related facts are annotated in the clarification conclusion with the source "design"; screen states missing from the design are logged as to-confirm, not judged as "no such state." If reading fails (no permission / broken link / MCP unavailable), log "design facts not obtained" as a risk and continue the other dimensions—don't block the clarification.
 
+**Jira linkage facts**: when the input mentions any Jira key or URL, you **must** look up each issue via Jira MCP (read-only): issue type, summary, status, parent. Use the results as facts—don't guess type from the key prefix.
+
+| Lookup result | Handling |
+| ------------- | -------- |
+| Type = Epic (长篇故事) | Candidate **delivery Epic** for this PRD; include in QEpic options with title + browse link |
+| Type = Story / Sub-task / Bug | **Not** a delivery Epic; record as `jira_references` (business-context reference only); if parent is Epic, recommend parent in QEpic |
+| Type = Initiative / Plan (计划) | Archive parent only; **not** a delivery Epic; note in references |
+| Key marked Invalid / deprecated in summary | Flag in conflict table; do not recommend as delivery Epic |
+| MCP lookup fails | Log as risk; QEpic becomes open-ended (PO must paste Epic key) |
+
+**Delivery Epic vs business reference**: the **delivery Epic** is where this PRD's User Stories are created and where Confluence archives under `{epic}-PRD`. A **business-reference Story** (e.g. the original requirement ticket cited as the use case) is context only—it must never be treated as the delivery Epic. When both exist, QEpic is always **P0** in round 1.
+
 ### 1. Scan for gaps
 
 Take the corresponding checklist per the S0 judgment, go through the checklist below dimension by dimension, and judge `COVERED / PARTIAL / MISSING`. **You must judge every dimension; no selective spot-checking.**
@@ -115,6 +127,7 @@ Take the corresponding checklist per the S0 judgment, go through the checklist b
 | Screens and states | Has designs; all states the design defines (loading/empty/error, etc.) are complete | Only the default state |
 | Data and rules | Fields, source, validation, defaults, exception handling | Only a field list |
 | Integration and dependencies | Upstream/downstream systems, owners, status | Assumes "all interfaces exist" |
+| Jira linkage | Delivery Epic key confirmed (type = Epic); business-reference Stories distinguished; parent Epic identified when only a Story is cited | Only a Story/Initiative cited with no Epic confirmation; Story key used as if it were the Epic |
 | Non-functional / security & compliance | Performance/capacity/availability have quantified metrics; permissions, auditing, data classification are clear | Blank or only "follow the spec" |
 | Acceptance criteria | Observable, automatable, covering positive/negative cases and boundaries | "works fine," "good experience" |
 
@@ -142,6 +155,8 @@ Check at least the following types; when found, list them for the user to decide
 | Conflict type | Example |
 | ---- | --------------------------- |
 | Self-contradiction | The requirement says "visible to all users," but the AC says "visible only to members" |
+| Jira type mismatch | Input cites GCD-104 (Story) as the Epic; delivery Epic should be GCD-400 (parent or team Epic) |
+| Delivery Epic vs reference Story | Pilot use case = business Story GCD-104, but PRD delivery / Jira sync parent = team Epic GCD-400 — two keys serve different roles |
 | Metric conflict | The goal is "reduce steps," but the solution adds a confirmation popup step |
 | Constraint conflict | "first screen loads in 1s" + "first screen shows 8 real-time interfaces" |
 | Solution-vs-requirement conflict (technical) | The PRD requires offline availability, but the solution hard-depends on real-time interfaces |
@@ -161,6 +176,8 @@ First sort by dependency and blocking level, then output the full list for this 
 | **Non-blocking** | Doesn't change direction, only affects effort/schedule, or has an industry-standard practice | Give a recommended default and log it as an assumption; the user can keep it or overturn it later |
 
 Each round has at most 5 P0s (at most 8 total per round including non-blocking items); if exceeded, batch them and ask P0s first.
+
+**QEpic (mandatory P0 in business mode, round 1)**: when Eval Agent invokes this Skill and `jira_epic_confirmed` is false (or no delivery Epic is confirmed), **QEpic must be included in round 1's `questions[]`**—never deferred to open-items or footnotes. Use Jira MCP to populate options: confirmed Epic candidates with `summary（https://…/browse/KEY）`; if a Story was cited, include its parent Epic as the recommended option and the Story itself only in the question's `why` text as business context.
 
 **Presentation (hard constraint)**: the main agent must send all questions of the round at once using structured option controls (question / option cards) for the user to click; it **must not** write them as plain-text body for the user to type; only when a question is inherently an open-ended quantitative value (like a target conversion rate) that can't be enumerated does it degrade to a text input, with the expected format stated in the prompt. The sub-agent has no controls; it outputs per the "question list (machine-readable handoff format)" and hands off to the main agent to pop up (see executor protocol).
 
@@ -209,7 +226,8 @@ Give the following conclusion directly in the conversation (don't write a file, 
 
 ```markdown
 ## 1. Confirmed conclusions
-{Listed by dimension, one line each, annotated with source: raw requirement / round-n answer / design / code fact / interface doc}
+{Listed by dimension, one line each, annotated with source: raw requirement / round-n answer / design / code fact / interface doc / Jira MCP}
+{Must include when applicable: **Delivery Epic** = KEY (confirmed round N); **Jira references** = [list of business-context keys]}
 
 ## 2. Conflicts and decisions
 | Conflict | Options | Decision | Decider |
@@ -233,7 +251,7 @@ Give the following conclusion directly in the conversation (don't write a file, 
 ## 4. Convergence rules
 
 - **Round cap of 3**. Round 1 scans all dimensions to produce the gap list; round 2 does a second scan of the previous round's answers (which unlock questions that depended on them and may introduce new gaps); round 3 asks only the still-unclosed P0s and gives the assumption log. From round 4 on, stop asking and write the open items into a risk table for human confirmation. Exceeding 3 rounds usually means the input quality is insufficient and should be returned upstream to complete.
-- **Release threshold**: release to the corresponding authoring step only when all P0s are closed; if any P0 is unclosed, don't release, no matter how complete the other dimensions are. If the dimensions are broadly complete but a few non-P0 items are pending, you may release but require the downstream product to keep a "to confirm" section. The sub-agent has no dialog controls and must not decide on its own that P0s are closed or release; it can only hand off to the main agent for the user to answer and then judge.
+- **Release threshold**: release to the corresponding authoring step only when all P0s are closed; if any P0 is unclosed, don't release, no matter how complete the other dimensions are. **In business mode (Eval Agent), unconfirmed delivery Epic counts as an open P0**—do not release to PRD-authoring until QEpic is answered and the Epic type is verified as Epic via Jira MCP. If the dimensions are broadly complete but a few non-P0 items are pending, you may release but require the downstream product to keep a "to confirm" section. The sub-agent has no dialog controls and must not decide on its own that P0s are closed or release; it can only hand off to the main agent for the user to answer and then judge.
 - **Every question must carry a recommended default.**
 - **Don't fabricate business rules or technical solutions.** Anything neither found nor asked goes into the assumption log, not "confirmed conclusions"; undecided technical disagreement points are logged as to-confirm or a spike, not deciding the selection for the authoring step.
 - **Distinguish fact from inference.** Facts from code/docs/interfaces/original words are annotated with source; AI inferences are explicitly marked.

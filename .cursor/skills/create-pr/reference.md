@@ -5,7 +5,11 @@
 
 ## 模板选择
 
-| 改动特征 | 模板 |
+**规则：先判场景模板，再叠加通用模板。** 从 diff 特征判断属于下表哪个场景；判断不了或
+混合类型时，列出候选让用户选。**无论选中哪个场景，都额外叠加通用模板
+`pull_request_template.md`**（通用章节始终保留，场景章节叠加，重复同名章节以场景模板为准）。
+
+| 改动特征 | 场景模板（再叠加通用模板） |
 |----------|------|
 | 新增面向用户的功能 | `PULL_REQUEST_TEMPLATE/feature.md` |
 | 修复缺陷 / 处理 bug 工单 | `PULL_REQUEST_TEMPLATE/bugfix.md` |
@@ -13,7 +17,7 @@
 | 不改变行为的结构调整 | `PULL_REQUEST_TEMPLATE/refactor.md` |
 | 仅文档 / 注释 / README | `PULL_REQUEST_TEMPLATE/docs.md` |
 | 版本发布 / 合并到 release 分支 | `PULL_REQUEST_TEMPLATE/release.md` |
-| 以上都不是 / 混合 / 不确定 | `pull_request_template.md`（默认） |
+| 混合 / 判断不了 | 让用户选场景；仍无法确定时仅用通用模板 `pull_request_template.md` |
 
 从 diff 判断的提示：
 - 仅 `*.md` / 文档路径变更 → `docs`。
@@ -45,7 +49,7 @@
 ## 草稿展示格式
 
 将填好的正文放在代码块中展示，并在其后附一段简短说明，列出：
-- 使用了哪个模板及原因；
+- 使用了哪个场景模板 + 通用模板（两者叠加）及原因；
 - 哪些 checklist 项保持未勾选、需要作者处理。
 
 ## gh CLI 说明

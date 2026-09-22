@@ -270,6 +270,11 @@ Ask the confirmer to review the current version file (the standard is the corres
 - Change comments -> write to `sessions/{timestamp}_review-v{version}.md`, go back to T3 to generate a new version (don't edit the current file).
 - Explicit sign-off -> record it in `confirmed`; **after all required confirmers have signed off**, mark the current version `status: confirmed`, backfill `sha256`, and proceed to T5.
 
+**Wrap-up options (mandatory)**: whenever the solution reaches this sign-off gate—first draft or a local revision alike—the status card's "What you need to do / Next" **must present two equally weighted, side-by-side options**; never offer only publishing, and never omit or downplay the PDF export:
+
+- Publish: after 👤 confirmer sign-off, enter the tech-solution publishing step (publish / sync to Confluence).
+- Export to PDF locally: convert the finalized local `.md` offline into a readable PDF for local review / archiving / sharing with people who don't use Confluence; **no sign-off required**, doesn't modify the source, doesn't publish (a parallel option, independent of publishing).
+
 ### T5 Publish and record the URL
 
 1. If the current version file's fingerprint ≠ the `sha256` at sign-off -> go back to T4.

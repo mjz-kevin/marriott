@@ -5,10 +5,6 @@ dist/
 res/AI-SDLC-windows.zip
 res/AI-SDLC-macOS-Silicon.zip
 res/AI-SDLC-macOS-Intel.zip
-# 下载缓存与已解开的运行时目录（含大体积二进制，另行准备，不提交）
-res/_download/
-res/AI-SDLC/
-
 # Python 缓存
 **/__pycache__/
 *.pyc
