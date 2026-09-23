@@ -1,53 +1,53 @@
 <!--
-缺陷修复 (Bugfix) PR 模板
-使用方式: 在 PR 创建页 URL 后追加 ?template=bugfix.md
+Bugfix PR Template
+Usage: append ?template=bugfix.md to the PR creation page URL
 -->
 
-## 🐛 缺陷描述 (Bug Description)
-<!-- 出现了什么问题？表现是什么？影响了哪些用户/场景？ -->
+## 🐛 Bug Description
+<!-- What went wrong? How does it manifest? Which users/scenarios are affected? -->
 
 
-## 复现步骤 (Steps to Reproduce)
+## Steps to Reproduce
 1.
 2.
 3.
 
-**期望行为 (Expected):**
+**Expected:**
 
-**实际行为 (Actual):**
+**Actual:**
 
-## 关联 (Related)
+## Related
 - Fixes #
-- Jira / 缺陷单:
-- 相关告警 / 日志 / 监控链接:
+- Jira / Bug ticket:
+- Related alerts / logs / monitoring links:
 
-## 根因分析 (Root Cause)
-<!-- 问题的真正原因是什么？为什么之前没有被发现？ -->
-
-
-## 修复方案 (Fix)
-<!-- 如何修复的？为什么这样修？是否有更彻底的方案作为后续跟进？ -->
+## Root Cause
+<!-- What's the real cause of the problem? Why wasn't it caught earlier? -->
 
 
-## 影响用户范围 (Blast Radius)
-<!-- 该缺陷影响了哪些用户/数据？是否需要数据修复或补偿？ -->
+## Fix
+<!-- How did you fix it? Why this way? Is there a more thorough solution worth a follow-up? -->
 
 
-## 测试说明 (How to Test)
-<!-- 如何验证缺陷已修复且未引入回归 -->
+## Blast Radius
+<!-- Which users/data does this bug affect? Is a data fix or compensation needed? -->
+
+
+## How to Test
+<!-- How to verify the bug is fixed without introducing a regression -->
 1.
 2.
 
-## 自测清单 (Checklist)
-- [ ] 已新增可复现该缺陷的回归测试（修复前失败、修复后通过）
-- [ ] 本地构建与测试均已通过
-- [ ] 已验证不影响相关功能，无回归
-- [ ] 无敏感信息泄漏
-- [ ] 已评估是否需要同步修复到其他分支 / 版本
-- [ ] 已考虑是否需要历史数据修复
+## Checklist
+- [ ] Added a regression test that reproduces the bug (fails before the fix, passes after)
+- [ ] Local build and tests pass
+- [ ] Verified related functionality is unaffected, no regressions
+- [ ] No sensitive information leaked
+- [ ] Assessed whether the fix needs to be ported to other branches / versions
+- [ ] Considered whether historical data needs to be fixed
 
-## 是否需要回滚 / 数据修复 (Rollback / Data Fix)
-<!-- 无则填 N/A -->
+## Rollback / Data Fix
+<!-- Enter N/A if none -->
 N/A
 
-## 备注 (Notes for Reviewers)
+## Notes for Reviewers

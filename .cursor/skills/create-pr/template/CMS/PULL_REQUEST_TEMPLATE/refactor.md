@@ -1,39 +1,39 @@
 <!--
-重构 (Refactor) PR 模板 —— 用于不改变外部行为的代码/结构优化
-使用方式: 在 PR 创建页 URL 后追加 ?template=refactor.md
+Refactor PR Template — for code/structure improvements that don't change external behavior
+Usage: append ?template=refactor.md to the PR creation page URL
 -->
 
-## ♻️ 重构目标 (Goal)
-<!-- 这次重构要解决什么问题？（可读性 / 可维护性 / 性能 / 消除技术债 / 架构演进） -->
+## ♻️ Goal
+<!-- What does this refactor aim to solve? (readability / maintainability / performance / paying down tech debt / architecture evolution) -->
 
 
-## 关联 (Related)
+## Related
 - Related #
-- Jira / 技术债项:
+- Jira / Tech debt item:
 
-## 变更内容 (What Changed)
-<!-- 重构了哪些部分？调整了哪些结构 / 命名 / 抽象 -->
+## What Changed
+<!-- Which parts were refactored? What structures / names / abstractions were adjusted? -->
 
 
-## 行为一致性保证 (Behavior Preservation)
-<!-- 重构不应改变外部可观察行为，说明如何保证这一点 -->
-- [ ] 现有测试全部通过，未修改断言语义
-- [ ] 对外接口 / API / 契约保持不变
-- [ ] 已通过对比测试 / 快照测试验证行为一致（如适用）
+## Behavior Preservation
+<!-- A refactor should not change externally observable behavior; explain how you ensured this -->
+- [ ] All existing tests pass, with no change to assertion semantics
+- [ ] External interfaces / APIs / contracts remain unchanged
+- [ ] Behavior consistency verified via comparison tests / snapshot tests (if applicable)
 
-## 测试说明 (How to Test)
+## How to Test
 1.
 2.
 
-## 自测清单 (Checklist)
-- [ ] 本地构建与测试均已通过
-- [ ] 未引入行为变更（如有请拆分为独立 PR）
-- [ ] 已补充/保留足够测试覆盖
-- [ ] 无敏感信息泄漏
-- [ ] 变更粒度适中，便于审查（大重构建议分批提交）
+## Checklist
+- [ ] Local build and tests pass
+- [ ] No behavior changes introduced (if any, please split into a separate PR)
+- [ ] Sufficient test coverage added/retained
+- [ ] No sensitive information leaked
+- [ ] Change is reasonably scoped for review (large refactors should be submitted in batches)
 
-## 风险与影响 (Risk & Impact)
-<!-- 潜在风险点、影响模块、是否需要重点回归的区域 -->
+## Risk & Impact
+<!-- Potential risks, affected modules, and areas that need focused regression testing -->
 
 
-## 备注 (Notes for Reviewers)
+## Notes for Reviewers

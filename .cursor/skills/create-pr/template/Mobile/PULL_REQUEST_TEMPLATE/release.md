@@ -1,53 +1,53 @@
 <!--
-发布 (Release) PR 模板 —— 用于版本发布 / 合并到 release 或 main 分支
-使用方式: 在 PR 创建页 URL 后追加 ?template=release.md
+Release PR Template — for version releases / merging into a release or main branch
+Usage: append ?template=release.md to the PR creation page URL
 -->
 
-## 🚀 发布版本 (Release Version)
-<!-- 例如 v1.4.0 -->
-**版本号:**
-**发布类型:** 常规发布 / 补丁发布 / 预发布
+## 🚀 Release Version
+<!-- e.g., v1.4.0 -->
+**Version:**
+**Release type:** Regular release / Patch release / Pre-release
 
-## 关联 (Related)
+## Related
 - Milestone:
-- 发布计划 / 变更评审:
+- Release plan / Change review:
 
-## 变更清单 (Changelog)
-<!-- 汇总本次发布包含的主要变更，按类型分组 -->
-### ✨ 新功能
+## Changelog
+<!-- Summarize the main changes in this release, grouped by type -->
+### ✨ Features
 -
 
-### 🐛 缺陷修复
+### 🐛 Bugfixes
 -
 
-### ♻️ 重构 / 优化
+### ♻️ Refactors / Improvements
 -
 
 
-## 依赖与迁移 (Dependencies & Migration)
-- [ ] 数据库迁移: 无 / 有（附脚本与执行顺序）
-- [ ] 配置 / 环境变量变更: 无 / 有（说明）
-- [ ] 第三方依赖升级: 无 / 有（说明）
-- [ ] 需要客户端 / 下游同步升级: 无 / 有（说明）
+## Dependencies & Migration
+- [ ] Database migration: None / Yes (attach scripts and execution order)
+- [ ] Config / environment variable changes: None / Yes (explain)
+- [ ] Third-party dependency upgrades: None / Yes (explain)
+- [ ] Client / downstream upgrade required: None / Yes (explain)
 
-## 发布前检查 (Pre-Release Checklist)
-- [ ] 所有关联 PR 已合并且 CI 通过
-- [ ] 回归测试 / 冒烟测试已完成
-- [ ] 版本号 / CHANGELOG / Tag 已更新
-- [ ] 已在预发布 / 灰度环境验证
-- [ ] 相关方（QA、运维、产品、客服）已知会
-- [ ] 监控与告警就绪
+## Pre-Release Checklist
+- [ ] All related PRs are merged and CI passes
+- [ ] Regression / smoke tests completed
+- [ ] Version number / CHANGELOG / tag updated
+- [ ] Verified in the pre-release / canary environment
+- [ ] Stakeholders (QA, Ops, Product, Support) notified
+- [ ] Monitoring and alerting ready
 
-## 发布窗口与负责人 (Release Window & Owner)
-- 计划发布时间:
-- 发布负责人:
-- 值班 / 应急联系人:
+## Release Window & Owner
+- Planned release time:
+- Release owner:
+- On-call / emergency contact:
 
-## 回滚方案 (Rollback Plan)
-<!-- 发布失败时的回滚步骤，必填 -->
+## Rollback Plan
+<!-- Rollback steps in case the release fails, required -->
 
 
-## 发布后验证 (Post-Release Verification)
-<!-- 上线后需要确认的关键指标与验证步骤 -->
+## Post-Release Verification
+<!-- Key metrics and verification steps to confirm after going live -->
 1.
 2.

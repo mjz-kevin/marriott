@@ -7,11 +7,10 @@
   },
 
   "common": {
-    "_comment": "所有角色都会收到的公共 Skill 与文件。sensitive-data-guard 为强制安全护栏；profile-select 为团队配置刚需；create-pr 为本仓库通用 PR 工具。运行时自检与 mcp.json 生成由安装脚本(install.sh/install.ps1)完成。",
+    "_comment": "所有角色都会收到的公共 Skill 与文件。",
     "skills": [
       "sensitive-data-guard",
-      "profile-select",
-      "create-pr"
+      "profile-select"
     ],
     "profiles": [
       "app-test.yaml",
@@ -66,6 +65,7 @@
         "code-review-rules",
         "review-comment",
         "merge-gate",
+        "create-pr",
         "harness-invoke"
       ]
     },
@@ -95,6 +95,7 @@
         "code-review-rules",
         "review-comment",
         "merge-gate",
+        "create-pr",
         "harness-invoke"
       ]
     },
