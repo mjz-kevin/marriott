@@ -48,12 +48,50 @@ else
   ditto -x -k "$ZIP_PKG" "$CURSOR_HOME"
 fi
 
+# 清理 macOS 打包产生的资源分叉目录 / 垃圾文件（若 zip 是在 macOS 上用 Finder/zip 打的）
+rm -rf "$CURSOR_HOME/__MACOSX"
+find "$CURSOR_HOME/AI-SDLC" -name ".DS_Store" -type f -delete 2>/dev/null || true
+
 if [ -d "$RUNTIME_ROOT" ]; then
   echo "    运行时已就位：${RUNTIME_ROOT}"
 else
   echo "    ⚠️ 解压后未发现 ${RUNTIME_ROOT}，请检查运行时包内结构（应为 AI-SDLC/runtime/...）。"
   exit 1
 fi
+
+# ---- 铺开离线 MCP 包（figma / github）到 runtime/mcp-offline/ ----
+# 来源：包内 mcp-offline/ 下 figma-*.zip / github-*.zip（带版本号，纯 JS 跨架构通用）。
+# 每个 zip 内为 node_modules/...，分别解压到 mcp-offline/figma/ 与 mcp-offline/github/。
+MCP_BASE="$RUNTIME_ROOT/mcp-offline"
+MCP_SRC="$PKG_DIR/mcp-offline"
+if [ -d "$MCP_SRC" ]; then
+  mkdir -p "$MCP_BASE"
+  for spec in "figma:figma-*.zip" "github:github-*.zip"; do
+    sub="${spec%%:*}"; glob="${spec##*:}"; dst="$MCP_BASE/$sub"
+    if [ -d "$dst" ]; then
+      echo "--> 检测到 ${dst} 已存在，跳过 $sub"
+      continue
+    fi
+    zipf="$(ls "$MCP_SRC"/$glob 2>/dev/null | sort | tail -n1)"
+    if [ -z "$zipf" ] || [ ! -f "$zipf" ]; then
+      echo "--> ⚠️ 未找到 $sub 的离线包（$glob），跳过"
+      continue
+    fi
+    echo "--> 解压 $(basename "$zipf") 到 ${dst} ..."
+    mkdir -p "$dst"
+    if command -v unzip >/dev/null 2>&1; then
+      unzip -oq "$zipf" -d "$dst"
+    else
+      ditto -x -k "$zipf" "$dst"
+    fi
+    rm -rf "$dst/__MACOSX"
+    find "$dst" -name ".DS_Store" -type f -delete 2>/dev/null || true
+  done
+  echo "    离线 MCP 包处理完成（figma / github）"
+else
+  echo "--> 本包未带离线 MCP 包（mcp-offline/），跳过。"
+fi
+
 
 echo ""
 echo "==> 运行时初始化完成 ✅"

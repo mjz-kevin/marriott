@@ -107,14 +107,14 @@ The Scope sub-blocks are the **team's own delivery dimensions**, driven by the p
 
 - 2.1 Product architecture diagram: draw with mermaid, follow the "Diagram spec" below, and ensure it renders both locally and after publishing
 - 2.2 User Journey (with a flowchart, also following the "Diagram spec")
-- 2.3 UI Overview: per the template, list each screen as a bullet with its high-fidelity design/wireframe image and Figma link (e.g., `• **{Screen name}:** {design image} — {Figma link}`); for multiple screens repeat as bullet points. When Figma links are present, download per "Figma design handling" and insert the design images of the screens this PRD covers; put images into the body, don't substitute explanatory text for images; on read failure, handle per S2
+- 2.3 UI Overview: per the template, list each screen as a bullet with its high-fidelity design/wireframe image and Figma link (e.g., `• **{Screen name}:** {design image} — {Figma link}`); for multiple screens repeat as bullet points. Keep each screen to image + title + a short 1–3 sentence summary of what it is and its key interactions/states; put pixel-level specs (dimensions, colors, font sizes, radii, gradients) into the 2.4 tables or leave them to the Figma link, not into 2.3. When several screens share one Figma link, give the link once at the top and don't repeat it per screen. When Figma links are present, download per "Figma design handling" and insert the design images of the screens this PRD covers; put images into the body, don't substitute explanatory text for images; on read failure, handle per S2
 - 2.4 Feature-module tables: one table per UI Section, one element per row; Operation Logic writes "user action -> system response" not implementation; Data Requirement writes field names and validation; Performance Requirement must be quantifiable (metric name + threshold + measurement condition), no vague descriptions
 
 ### S6 Write 3. User Story List
 
 Fill per the `## 3. User Story List` skeleton of prd-template.md. Don't copy the opening `{Break down stories by role + scenario + acceptance criteria.}` guidance into the product—go straight to the Story blocks. Don't add explanatory sentences, lead-ins, or subsections not defined by the template.
 
-Each Story fills only the fields defined in its template block. **Story 1** includes the user story sentence (form `As a {role}, for {scenario}, I want to {action}, so that {value}.`), `Detailed requirement description`, `{Identify and insert the Figma design and link.}`, and `Acceptance Criteria` with numbered ACs. **Story 2+** follow the slimmer skeleton in the template (no `Detailed requirement description` unless the template block includes it). ACs must express the three elements of precondition/action/observable result and be reducible to test cases; a fixed keyword format is not required. The Figma design field inserts the design images and link of the screens this Story covers, per "Figma design handling."
+Each Story fills only the fields defined in its template block. **Story 1** includes the user story sentence (form `As a {role}, for {scenario}, I want to {action}, so that {value}.`), `Detailed requirement description`, `{Identify and insert the Figma design and link.}`, and `Acceptance Criteria` with numbered ACs. **Story 2+** follow the slimmer skeleton in the template (no `Detailed requirement description` unless the template block includes it). Write `Detailed requirement description` as a one-line lead plus per-field or per-scenario bullets, not one long dense paragraph, and don't restate rules already in 2.4 / business rules / ACs—reference them instead. ACs must express the three elements of precondition/action/observable result and be reducible to test cases; a fixed keyword format is not required. The Figma design field gives a short core-point summary plus the design images and link of the screens this Story covers (keep the Story's own link so it reads standalone; don't copy pixel-level specs already in 2.3/2.4), per "Figma design handling."
 
 ### S7 Write chapters 4–10
 
@@ -187,7 +187,7 @@ When Figma links are present (2.3 UI Overview, Story design fields), read the de
 | Locate | Extract `fileKey` and `nodeId` from the link (the URL's `1-3` corresponds to node `1:3`); read the board structure, screen states, components, and copy as the factual basis; don't infer from the link |
 | Select | A single node may contain multiple boards; take only those matching the screens this PRD covers; don't export unrelated boards |
 | Export | Save images to the PRD image directory specified by the caller, using semantic English names; control size and format per "Design image adaptation" |
-| Reference | Reference the local images with Markdown image syntax (path relative to the PRD file) in the corresponding screen of 2.3 and the Story design fields, and keep that screen's Figma link |
+| Reference | Reference the local images with Markdown image syntax (path relative to the PRD file) in the corresponding screen of 2.3 and the Story design fields, and keep that screen's Figma link. In 2.3 give image + title + a short 1–3 sentence summary (no pixel-level specs, which go to 2.4 or the link); when several screens share one link, give it once at the top rather than per screen |
 | Completeness | Every screen the PRD covers must have a corresponding image, saved together with the PRD for the publishing step to attach |
 | Failure | If reading still fails after retrying via `mcp_auth`, log it as to-confirm in that field, and at handoff explain in the conversation which designs weren't obtained and why; don't fabricate design details |
 
@@ -219,7 +219,7 @@ Design images target "readable in doc preview and as publish attachments," not p
 - The same concept uses a consistent name throughout
 - Multilingual fields state the fallback strategy when a translation is missing
 - All mermaid diagrams pass the "Diagram spec" self-check
-- When Figma links are present, 2.3 UI Overview and the relevant Stories have local design images inserted per "Figma design handling"; read-failure items are logged as to-confirm, and the body doesn't substitute explanatory text for images
+- When Figma links are present, 2.3 UI Overview and the relevant Stories have local design images inserted per "Figma design handling"; read-failure items are logged as to-confirm, and the body doesn't substitute explanatory text for images. 2.3 and the Story design fields stay concise (image + title + short summary), don't carry pixel-level specs (those live in 2.4 or the link), and a Figma link shared by several screens is given once, not repeated per screen
 - Design images have resolution/format/width/size controlled per "Design image adaptation," and after a rename or extension change the body references are synced and links are valid
 
 See [quality-gates.md](references/quality-gates.md) for details.

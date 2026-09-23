@@ -130,15 +130,19 @@ Flowchart: {image or mermaid}
 
 ### 2.3 UI Overview
 
-{Insert high-fidelity design / wireframe and the corresponding Figma link. If there are multiple, repeat by bullet point.}
+{Insert high-fidelity design / wireframe and the corresponding Figma link. If there are multiple, repeat by bullet point. Give each screen image + title + a short 1–3 sentence summary of what it is and its key interactions/states; keep pixel-level specs in 2.4 or the Figma link, not here. When several screens share one Figma link, give the link once at the top instead of per screen.}
 
 > **`Example`**
 >
-> • **Search entry & sheet:** {Insert Figma link — Unified Search Sheet}
+> Figma design: {Insert Figma link — Group Booking flow}
 >
-> • **Result list with filters:** {Insert Figma link — Discovery Result List}
+> • **Search entry & sheet:** {design image}
 >
-> • **Room type preview:** {Insert Figma link — Result Card Room Type Preview}
+> {1–3 sentence summary of the entry point and search sheet interactions.}
+>
+> • **Result list with filters:** {design image}
+>
+> {1–3 sentence summary of the result list and filter behavior.}
 
 ### 2.4 Function Module Explanation
 

@@ -16,7 +16,11 @@ init/
 ├── build.py              # 构建脚本：读 roles.json，产出各角色包（纯标准库）
 ├── templates/
 │   ├── install.sh        # 会被拷进每个包（macOS/Linux 安装器）
-│   └── install.ps1       # 会被拷进每个包（Windows 安装器，含运行时解压）
+│   ├── install.ps1       # 会被拷进每个包（Windows 安装器，含运行时解压）
+│   ├── uninstall.sh      # 会被拷进每个角色包（macOS/Linux 卸载器，删所有角色资产）
+│   ├── uninstall.ps1     # 会被拷进每个角色包（Windows 卸载器）
+│   ├── install-runtime.sh / install-runtime.ps1     # 运行时初始化包安装器
+│   └── uninstall-runtime.sh / uninstall-runtime.ps1 # 运行时初始化包卸载器（删 node/python/mcp）
 ├── placeholders/         # 尚未落地的 Agent 占位（dev/verify/code-review/test）
 ├── res/                  # 离线绿色运行时（体积大，git 忽略，另行准备放入）
 │   ├── AI-SDLC-windows.zip             # Windows 运行时包 → 解压到 C:\
@@ -35,8 +39,8 @@ init/
 | 角色 | Agents | 说明 |
 | --- | --- | --- |
 | **PO** | eval-agent, userstory-agent | Eval / User Story，PRD 与建单相关 Skill |
-| **TL** | tech-solution + dev + verify + code-review | 与 Dev **完全相同**的内容 |
-| **Dev** | tech-solution + dev + verify + code-review | 与 TL **完全相同**的内容 |
+| **TL** | tech-solution + dev + verify + code-review | 含 PRD 级技术方案（`tech-solution-prd`），其余与 Dev 相同 |
+| **Dev** | tech-solution + dev + verify + code-review | 与 TL 相同，但**不含** `tech-solution-prd` |
 | **QA** | test-agent | 用例生成、自动化测试、报告与 Bug 建单相关 Skill |
 
 > 公共 Skill（全部角色都装）：`sensitive-data-guard`、`profile-select`、`create-pr`。
@@ -93,6 +97,40 @@ zip 里已内置安装脚本、角色 README、离线运行时（Windows `AI-SDL
 5. 提示用户填 `~/.cursor/mcp.json` 凭证，再在 Cursor MCP 设置里确认三个 server 已连接（agents/skills 自动识别，无需重启）。
 
 > 安装脚本在用户级 `~/.cursor/` 完成运行时铺开与 mcp.json 生成，用户装完只需填凭证，无需任何额外配置步骤。
+
+## 卸载（发给最终用户）
+
+每个角色包内都附带卸载脚本，且**与角色无关**——无论装的是哪个角色包，卸载脚本都会按内置的
+「AI SDLC 全量资产清单」（构建时由 `build.py` 从 `roles.json` 汇总注入）清除**所有角色**相关资产：
+
+- 删除所有角色涉及的 **agents**、**skills**、全部 **profiles（含 `setup.json`）**、**mcp 示例模板**（`mcp.example.*.json`）；
+- **不删除** `~/.cursor/mcp.json`（含用户手填凭证，始终保留）；
+- **不删除**用户自己的 agent / skill（不在清单里的一律不动）；
+- **不删除**运行时 `~/.cursor/AI-SDLC/`（由运行时包的卸载脚本负责）。
+
+**macOS / Linux**
+```bash
+./uninstall.sh            # 正式卸载
+./uninstall.sh --dry-run  # 演练：只列出将删除项，不实际删除
+```
+
+**Windows（PowerShell）**
+```powershell
+.\uninstall.ps1           # 正式卸载
+.\uninstall.ps1 -DryRun   # 演练：只列出将删除项，不实际删除
+```
+
+**卸载运行时**（node / python + 离线 MCP 包）——用运行时初始化包内的卸载脚本：
+```bash
+# macOS
+./uninstall.sh            # 删除 ~/.cursor/AI-SDLC/（可加 --mcp-only 只删离线 MCP 包）
+```
+```powershell
+# Windows
+.\uninstall.ps1           # 删除 C:\AI-SDLC\（可加 -McpOnly 只删离线 MCP 包）
+```
+> 运行时卸载脚本默认会二次确认；加 `-y`/`--yes`（mac）或 `-Yes`（win）可跳过确认，`-n`/`--dry-run`（mac）或 `-DryRun`（win）为演练模式。
+
 
 ## 离线运行时准备（放入 `res/`）
 
