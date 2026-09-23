@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "hooks": {
+    "beforeMCPExecution": [
+      {
+        "command": ".cursor/hooks/guard-atlassian.sh",
+        "failClosed": true
+      }
+    ],
+    "beforeShellExecution": [
+      {
+        "command": ".cursor/hooks/guard-atlassian.sh",
+        "failClosed": true
+      }
+    ]
+  }
+}
