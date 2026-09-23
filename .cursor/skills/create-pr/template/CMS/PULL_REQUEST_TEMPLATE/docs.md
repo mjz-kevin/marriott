@@ -1,32 +1,32 @@
 <!--
-文档 (Docs) PR 模板 —— 用于文档、注释、README 等非功能性变更
-使用方式: 在 PR 创建页 URL 后追加 ?template=docs.md
+Docs PR Template — for documentation, comments, README, and other non-functional changes
+Usage: append ?template=docs.md to the PR creation page URL
 -->
 
-## 📝 文档变更说明 (Summary)
-<!-- 更新了哪些文档？为什么更新？ -->
+## 📝 Summary
+<!-- Which docs were updated? Why? -->
 
 
-## 关联 (Related)
+## Related
 - Related #
-- Jira / 需求:
+- Jira / Requirement:
 
-## 变更类型 (Type)
-- [ ] 新增文档
-- [ ] 修正错误 / 过时内容
-- [ ] 补充示例 / 说明
-- [ ] 排版 / 格式优化
-- [ ] 翻译
+## Type
+- [ ] New documentation
+- [ ] Fix errors / outdated content
+- [ ] Add examples / explanations
+- [ ] Layout / formatting improvements
+- [ ] Translation
 
-## 自测清单 (Checklist)
-- [ ] 链接均可正常访问，无死链
-- [ ] 代码示例可运行 / 与当前实现一致
-- [ ] 无敏感信息泄漏（内部地址、账号、密钥等）
-- [ ] 拼写 / 语法 / 格式已检查
-- [ ] 若为多语言文档，各语言版本已同步（如适用）
+## Checklist
+- [ ] All links work, no dead links
+- [ ] Code examples run / match the current implementation
+- [ ] No sensitive information leaked (internal addresses, accounts, keys, etc.)
+- [ ] Spelling / grammar / formatting checked
+- [ ] For multilingual docs, all language versions are in sync (if applicable)
 
-## 预览 (Preview)
-<!-- 文档站点预览链接或渲染后截图 -->
+## Preview
+<!-- Docs site preview link or rendered screenshots -->
 
 
-## 备注 (Notes for Reviewers)
+## Notes for Reviewers

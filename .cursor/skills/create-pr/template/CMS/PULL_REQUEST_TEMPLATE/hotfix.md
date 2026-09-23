@@ -1,48 +1,48 @@
 <!--
-紧急修复 (Hotfix) PR 模板 —— 用于线上紧急问题的快速修复
-使用方式: 在 PR 创建页 URL 后追加 ?template=hotfix.md
-⚠️ Hotfix 通常走加急审查流程，但仍需保证质量与可回滚。
+Hotfix PR Template — for fast fixes of urgent production issues
+Usage: append ?template=hotfix.md to the PR creation page URL
+⚠️ Hotfixes usually go through an expedited review process, but must still ensure quality and be rollback-safe.
 -->
 
-## 🚨 紧急程度 (Severity)
-- [ ] P0 — 线上完全不可用 / 严重资损 / 数据安全
-- [ ] P1 — 核心功能受损，影响大量用户
-- [ ] P2 — 部分功能受损，有临时规避手段
+## 🚨 Severity
+- [ ] P0 — Production fully down / severe financial loss / data security
+- [ ] P1 — Core functionality broken, affecting many users
+- [ ] P2 — Some functionality broken, with a temporary workaround
 
-## 问题概述 (Incident Summary)
-<!-- 线上正在发生什么？影响范围与时间线 -->
+## Incident Summary
+<!-- What's happening in production right now? Impact scope and timeline -->
 
 
-## 关联 (Related)
+## Related
 - Fixes #
-- 事故单 / 告警:
-- 值班 / 通知记录:
+- Incident ticket / Alert:
+- On-call / Notification record:
 
-## 根因 (Root Cause)
-<!-- 简明扼要说明触发原因 -->
-
-
-## 修复内容 (What This Hotfix Does)
-<!-- 本次改动做了什么，尽量保持最小变更范围 -->
+## Root Cause
+<!-- Concisely explain what triggered the issue -->
 
 
-## 线上验证方案 (Post-Deploy Verification)
-<!-- 部署后如何确认问题已解决（监控指标、日志、手动验证步骤） -->
+## What This Hotfix Does
+<!-- What this change does; keep the change scope as minimal as possible -->
+
+
+## Post-Deploy Verification
+<!-- How to confirm the issue is resolved after deployment (monitoring metrics, logs, manual verification steps) -->
 1.
 2.
 
-## 回滚方案 (Rollback Plan)
-<!-- 如果 hotfix 失败，如何快速回滚？（必填） -->
+## Rollback Plan
+<!-- If the hotfix fails, how do you roll back quickly? (required) -->
 
 
-## 自测清单 (Checklist)
-- [ ] 变更范围已最小化，仅针对该问题
-- [ ] 已在预发/灰度环境验证（或说明为何无法验证）
-- [ ] 回滚方案明确且可执行
-- [ ] 无敏感信息泄漏
-- [ ] 已通知相关负责人 / 值班
-- [ ] 后续跟进项已记录（根因彻底修复、补充测试等）
+## Checklist
+- [ ] Change scope minimized to target only this issue
+- [ ] Verified in the pre-release/canary environment (or explain why it couldn't be verified)
+- [ ] Rollback plan is clear and executable
+- [ ] No sensitive information leaked
+- [ ] Relevant owners / on-call notified
+- [ ] Follow-up items recorded (thorough root-cause fix, additional tests, etc.)
 
-## 后续跟进 (Follow-up)
-<!-- Hotfix 往往是临时止血，列出后续需要补的工作及对应工单 -->
+## Follow-up
+<!-- A hotfix is often a temporary mitigation; list the follow-up work needed and its tickets -->
 - [ ]

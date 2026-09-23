@@ -1,52 +1,52 @@
 <!--
-新功能 (Feature) PR 模板
-使用方式: 在 PR 创建页 URL 后追加 ?template=feature.md
+Feature PR Template
+Usage: append ?template=feature.md to the PR creation page URL
 -->
 
-## ✨ 新功能说明 (Summary)
-<!-- 这个功能是什么？解决了什么用户/业务问题？ -->
+## ✨ Summary
+<!-- What is this feature? What user/business problem does it solve? -->
 
 
-## 背景与动机 (Background & Motivation)
-<!-- 为什么现在做这个功能？关联的产品需求或业务目标 -->
+## Background & Motivation
+<!-- Why build this feature now? The related product requirement or business goal -->
 
 
-## 关联 (Related)
+## Related
 - Closes #
-- Jira / 需求文档:
-- 设计文档 / 原型:
+- Jira / Requirement doc:
+- Design doc / Prototype:
 
-## 实现方案 (Design & Implementation)
-<!-- 关键设计思路、涉及的模块、数据结构 / 接口变更、设计取舍 -->
+## Design & Implementation
+<!-- Key design approach, modules involved, data structure / API changes, design trade-offs -->
 
 
-## 测试说明 (How to Test)
-<!-- 可复现的验证步骤，覆盖正常路径与边界场景 -->
+## How to Test
+<!-- Reproducible verification steps covering the happy path and edge cases -->
 1.
 2.
 
-## 自测清单 (Checklist)
-- [ ] 本地构建与测试均已通过
-- [ ] 已补充单元 / 集成 / E2E 测试，覆盖核心场景
-- [ ] 无敏感信息泄漏（密钥、密码、Token 等）
-- [ ] 已更新用户文档 / API 文档 / 变更日志
-- [ ] 已评估性能与安全影响
-- [ ] 如涉及新增配置或特性开关，已在下方说明默认值
+## Checklist
+- [ ] Local build and tests pass
+- [ ] Added unit / integration / E2E tests covering core scenarios
+- [ ] No sensitive information leaked (keys, passwords, tokens, etc.)
+- [ ] Updated user docs / API docs / changelog
+- [ ] Assessed performance and security impact
+- [ ] If new config or feature flags are introduced, default values are explained below
 
-## 特性开关 / 灰度 (Feature Flag & Rollout)
-<!-- 是否通过特性开关控制？灰度/放量策略是什么？无则填 N/A -->
+## Feature Flag & Rollout
+<!-- Is it gated behind a feature flag? What's the rollout / ramp-up strategy? Enter N/A if none. -->
 N/A
 
-## 影响范围 (Impact)
-- 影响模块:
-- 是否需要数据库迁移: 否 / 是（说明）
-- 是否需要配置或环境变量变更: 否 / 是（说明）
-- 是否向后兼容: 是 / 否（说明）
+## Impact
+- Affected modules:
+- Database migration needed: No / Yes (explain)
+- Config or environment variable changes needed: No / Yes (explain)
+- Backward compatible: Yes / No (explain)
 
-## 截图 / 录屏 (Screenshots / Demo)
-<!-- 请勾选并按需补充。UI 功能请附演示；接口功能可附请求/响应示例 -->
-- [ ] 无视觉变更 (No visual changes)
-- [ ] 已附截图 / 录屏（见下方）
+## Screenshots / Demo
+<!-- Check the boxes and add details as needed. For UI features, attach a demo; for API features, attach request/response examples. -->
+- [ ] No visual changes
+- [ ] Screenshots / screen recording attached (see below)
 
 
-## 备注 (Notes for Reviewers)
+## Notes for Reviewers
