@@ -6,9 +6,10 @@ AI SDLC 分发包构建脚本。
 产出两类互斥的包：
 
   1) 角色包（默认）：读取 init/roles.json，按角色（PO / TL / Dev / QA）把 .cursor 下的
-     agents、skills 及公共资产（profiles、mcp 示例）收集起来，每个角色产出一个压缩包：
+     agents、skills 及公共资产（profiles、mcp.json 示例）收集起来，每个角色产出一个压缩包：
        dist/AI-SDLC-Role-<role>-<ver>.zip
-     内含 install.sh / install.ps1、角色 README。**角色包不含运行时**。
+     内含 install.sh / install.ps1、角色 README。**角色包不含运行时，也不含离线 MCP 包
+     （mcp-offline）——后者已随运行时初始化包铺到 runtime/mcp-offline/，角色包安装脚本直接复用。**
 
   2) 运行时初始化包（加 --runtime <平台>）：只把 res 下对应平台的绿色运行时 zip 连同一份
      精简安装脚本打成一个包，专门用于初始化运行时（不含 agents/skills/profiles/mcp）：
@@ -335,13 +336,9 @@ def build_role(role: str, cfg: dict, common: dict, version: str, assets: dict) -
         else:
             warnings.append(f"公共文件『{fname}』不存在，已跳过")
 
-    # 4.5) 离线 MCP 包（figma / github）——纯 JS 跨平台通用，随包分发到 mcp-offline/
-    #      安装脚本会把它铺到 ~/.cursor/AI-SDLC/runtime/mcp-offline/，供 node 直跑（不再 npx 联网）。
-    mcp_src = RES_DIR / "mcp-offline"
-    if mcp_src.is_dir():
-        _copy_runtime_dir(mcp_src, role_dir / "mcp-offline")
-    else:
-        warnings.append(f"离线 MCP 包 res/mcp-offline 不存在，未打入（figma/github 将回退 npx 联网）")
+    # 4.5) 离线 MCP 包（figma / github）不随角色包分发：它已由运行时初始化包铺到
+    #      ~/.cursor/AI-SDLC/runtime/mcp-offline/。角色包安装脚本直接复用运行时里的即可，
+    #      不再重复携带（若运行时未装则回退 npx 联网，与之前行为一致）。
 
     # 5) 安装 / 卸载脚本（从 init/templates 拷入每个包）
     #    install.sh / uninstall.sh 保持 LF + 可执行位；install.ps1 / uninstall.ps1 写成
@@ -543,8 +540,8 @@ def build_runtime_pkg(platform: str, version: str) -> Path:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="构建 AI SDLC 分发包：默认构建各角色包（agents/skills/profiles/mcp，"
-                    "不含运行时）；加 --runtime 则只构建对应平台的运行时初始化包。"
+        description="构建 AI SDLC 分发包：默认构建各角色包（agents/skills/profiles/mcp.json 示例，"
+                    "不含运行时、不含离线 MCP 包）；加 --runtime 则只构建对应平台的运行时初始化包。"
     )
     parser.add_argument("roles", nargs="*", help="要构建的角色（默认全部）")
     parser.add_argument("--version", default=None,
