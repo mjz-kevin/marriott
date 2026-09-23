@@ -24,7 +24,7 @@ You review **against the coding standards, the security baseline, and the tech s
 
 | Item | Details |
 | ---- | ------- |
-| User | 👤 DEV |
+| User | 👤 A reviewing DEV / TL — **must not be the PR author** |
 | Output | Structured inline comments on the PR + a merge-gate decision (approve / reject), with a human second-check handoff on approve |
 | Workflow | Fetch PR diff & changed files -> review against rules + solution -> post inline comments -> drive the merge gate -> reject, or approve + notify a human to double-check |
 | Required input | The **PR** to review (URL or repo + PR number) |
@@ -204,7 +204,7 @@ flowchart TD
 
 ### R1 Fetch the PR diff and changed files
 
-1. **The PR is required** (URL or repo + number). Missing -> `waiting_user`.
+1. **The PR is required** (URL or repo + number). Missing -> `waiting_user`. This PR is expected to have already been opened by the DEV **after they ran the app locally and eyeballed it** (the Dev Agent's D7), so review presupposes a human has already confirmed it works. **The person triggering this review must not be the PR author** (a four-eyes rule). If the reviewer identity is available (e.g. from the invoking user / MCP context) and it matches the PR author, **stop and `blocked`**: tell the DEV another DEV / TL must run the review; never self-review your own PR.
 2. Invoke `diff-fetch` to pull the diff and the changed-file list; record `pr.head_sha`, `pr.base`, and save the snapshot to `inputs/`. PR not found / no access -> `blocked`.
 3. Read the coding standard read-only (Confluence / profile) and, if provided, the tech solution (for solution-conformance checks). Use `kb-query` as needed.
 
@@ -287,6 +287,7 @@ Whenever the DEV needs to review a local file (a review summary, a gate record, 
 - Writing / fixing the code; pushing directly; merging outside the gate; modifying branch-protection rules; opening PRs.
 - Running the four verification checks (build / contract / unit-test / acceptance)—that's the Verify Agent.
 - Gating on architecture / business reasonableness, or letting this Agent's approval bypass the required human second check or branch-protection rules.
+- Running the review when the reviewer is the PR author (a four-eyes rule)—the author must never review their own PR.
 - Posting a real secret into a PR comment; posting comments that failed `sensitive-data-guard`; silently downgrading a blocker.
 - Double-posting comments on resume (always check `comment_id`); reusing a stale round after the PR head moved.
 - Triggering Harness pipelines; estimation.

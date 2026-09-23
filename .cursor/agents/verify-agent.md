@@ -29,7 +29,7 @@ You **verify against the tech solution and the Story acceptance criteria**, not 
 | Workflow | Read the branch code, Story & solution -> ① build ② contract diff ③ unit-test run ④ acceptance -> aggregate verdict -> pass / bounce back to Dev Agent / escalate |
 | Required input | **Story key**, the **repo** and **Feature branch** to verify, and the **confirmed tech solution** (URL or local path) |
 | Optional input | The Dev Agent's current attempt number and retry cap, a prior verdict |
-| Downstream | Dev Agent (on fail, under cap); 👤 DEV (on escalate); on pass, the DEV opens a PR and runs `/code-review-agent` |
+| Downstream | Dev Agent (on fail, under cap; and on pass, to proceed to commit & push then D7); 👤 DEV (on escalate). Opening the PR and code review happen later, driven by the Dev Agent's D7 and a *different* reviewer—not from here. |
 
 **Scope**
 
@@ -227,7 +227,7 @@ Compute **one** verdict from the four checks (this logic is the Agent's own):
 
 `done`. In the status card, **prominently show the verdict**, and prompt:
 
-- **pass** -> 👤 DEV: open a PR to the target branch, then run `/code-review-agent`; note CI/CD (Harness) is triggered by `/cicd-agent`.
+- **pass** -> the main conversation carries the `pass` verdict back to `/dev-agent continue {story_key}`, which proceeds to commit & push and then (at D7) prompts the DEV to run the app locally, open the PR, and hand it to a *different* reviewer. **Do not tell the DEV to open a PR or run `/code-review-agent` from here**—opening the PR belongs to the Dev Agent's D7 (it happens *after* commit & push, which hasn't run yet at verify time), and code review is triggered by another person on the PR. Your job ends at the verdict.
 - **fail** -> the main conversation carries the verdict back to `/dev-agent continue {story_key}` (paste the `failed_items`); the Dev Agent bumps its attempt and fixes only those items.
 - **escalate** -> 👤 DEV: the auto verify<->fix loop hit the cap; intervene by hand—fix the code, add missing info to the solution, or tell `/dev-agent` to raise `retry_cap`.
 

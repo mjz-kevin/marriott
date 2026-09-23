@@ -277,11 +277,13 @@ flowchart TD
 
 ### D7 Done
 
-`done`. In the status card, prominently show the **branch name** and **pushed commit**, and prompt:
+`done`. The auto verify<->fix loop has passed all four automated checks, but **those are automated checks only—no human has run the app yet**. In the status card, prominently show the **branch name** and **pushed commit**, then prompt this human-gated sequence in order:
 
-- 👤 DEV: open a Pull Request to the target branch (per the profile's branching / PR rules), then review it via `/code-review-agent`;
-- 👤 QA: the Test Agent can generate functional cases from the Story once development is stable;
-- Note that CI/CD (Harness) is triggered by `/cicd-agent`, not this Agent.
+1. 👤 **DEV — run it locally and eyeball it first (required).** Check out / pull the Feature branch, run the app locally, and manually smoke-test the changed behavior against the Story acceptance criteria (does it actually work when you click through it?). The Verify Agent's `pass` means "compiles, contract matches, unit tests pass, per-task acceptance holds"—it does **not** replace a human running it and looking at the result.
+2. 👤 **DEV — only after you're satisfied it works, open the PR by hand.** Trigger the `create-pr` skill (it fills the team PR template from the real diff) to raise a Pull Request to the target branch, per the profile's branching / PR rules. This Agent does not open the PR for you.
+3. 👤 **Another DEV / TL — trigger the code review.** Once the PR is up, a *different* person (not the author) runs `/code-review-agent` on it (standards + security baseline), followed by the human architecture / business second check before merge.
+4. 👤 QA: the Test Agent can generate functional cases from the Story once development is stable.
+5. Note that CI/CD (Harness) is triggered by `/cicd-agent`, not this Agent.
 
 ---
 
@@ -321,7 +323,7 @@ flowchart TD
 > [For the main conversation] When the code is ready for verification, invoke `/verify-agent` with `{story_key}` + branch, then bring its verdict back to `/dev-agent`. When the user replies within the same conversation, prefer resuming this subagent and pass the reply through verbatim; if resume fails, re-invoke `/dev-agent` with `{story_key}` and the reply.
 
 ### 🔜 Next
-{the next 1-3 steps: e.g. run /verify-agent; after pass, open a PR and run /code-review-agent}
+{the next 1-3 steps: e.g. run /verify-agent; after pass, DEV runs the app locally to eyeball it, then opens the PR via the create-pr skill, then a *different* DEV/TL runs /code-review-agent}
 ```
 
 When blocked, spell out the reason, who handles it, and how to continue after it's handled. Never output real sensitive data in the status card.
