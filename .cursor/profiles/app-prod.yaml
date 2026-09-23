@@ -80,18 +80,21 @@ mcp:
 # ---------------------------------------------------------------- 代码工程（开发/验证类 skill 用）
 code:
   languages: [swift, kotlin]           # 语言栈：iOS=swift / Android=kotlin
-  # 分支命名：唯一 AI Feature 分支模板；{story_key}=Jira Story key，{slug}=Story 摘要短横线化
+  # 分支命名：对齐团队 Branching Strategy 的 {KEY}-Xxx-Xxx；AI 套 prefix。{slug}=2–3 个 Title-Case 词，非整句摘要
   branch:
-    prefix: ai/feature                 # AI 专属分支前缀，与人工分支隔离
-    template: "ai/feature/{story_key}-{slug}"
-  build:                              # 每端的编译/构建命令（build-verify 用），按 repo 键区分；命令口径对齐各仓 CI
-    ios:
-      tool: xcodebuild                 # xcodeproj（非 workspace），scheme DragonApp；iOS CI（harness）只做 Testflight 打包，构建校验本地用 xcodebuild
-      command: "xcodebuild -project DragonApp.xcodeproj -scheme DragonApp -destination 'generic/platform=iOS' build"
+    prefix: feat-ai                    # AI 专属前缀，与人工 Feature（无前缀）隔离
+    template: "feat-ai/{story_key}-{slug}"
+  build:                              # 构建校验的语义配置（build-verify 按 OS 组装命令），按 repo 键区分；对齐各仓 CI
+    ios:                               # 仅 macOS 可执行（iOS 固有约束）
+      tool: xcodebuild
+      project: DragonApp.xcodeproj     # xcodeproj（非 workspace）
+      scheme: DragonApp
+      destination: "generic/platform=iOS"
+      action: build                    # skill 组装为 `xcodebuild -project ... -scheme ... -destination ... build`
     android:
-      tool: gradlew                    # gradle 8.11.1；PR 门禁 flavor=oneTst（见 PRValidation.yml）
-      command: "./gradlew clean assembleOneTstDebug"
-      static_check: "./gradlew clean detektAll"   # PR 门禁的静态检查是 detekt（非普通 lint），build-verify 可一并跑
+      tool: gradle                     # skill 按 OS 选 wrapper：Unix=./gradlew，Windows=gradlew.bat（不硬编码 ./gradlew）
+      tasks: [clean, assembleOneTstDebug] # gradle 8.11.1；PR 门禁 flavor=oneTst（见 PRValidation.yml）
+      static_check_tasks: [clean, detektAll] # PR 门禁静态检查是 detekt（非普通 lint），build-verify 可一并跑
   contract:                           # contract-diff 口径：接口契约以技术方案 detail 的接口定义为基线
     source: tech_solution_detail       # 契约基线来源：Story 级明细方案的接口定义章节
     match: field_level                 # 比对粒度：逐字段（Swift 看 Codable/CodingKeys；Kotlin 看 data class/注解）
@@ -110,13 +113,18 @@ review:
 
 # ---------------------------------------------------------------- 测试（开发/验证类 skill 用）
 test:
-  unit:                               # 单元测试框架与执行命令（unit-test-authoring / unit-test-runner 用）；对齐 CI
-    ios:
+  unit:                               # 单元测试语义配置（unit-test-authoring / unit-test-runner 按 OS 组装命令）；对齐 CI
+    ios:                               # 仅 macOS 可执行
+      tool: xcodebuild
       framework: XCTest                # 测试 target：DragonAppTests（单测）/ DragonAppUITests（UI）
-      command: "xcodebuild test -project DragonApp.xcodeproj -scheme DragonApp -destination 'platform=iOS Simulator,name={simulator}' -only-testing:DragonAppTests"  # {simulator} 由 unit-test-runner 运行时代入本机可用模拟器名，不写死型号（各机 Xcode/模拟器版本不同）
+      project: DragonApp.xcodeproj
+      scheme: DragonApp
+      destination: "platform=iOS Simulator,name={simulator}" # {simulator} 由 unit-test-runner 代入本机可用模拟器名，不写死型号（各机 Xcode/模拟器版本不同）
+      only_testing: DragonAppTests     # skill 组装为 `xcodebuild test -project ... -destination ... -only-testing:DragonAppTests`
     android:
+      tool: gradle                     # skill 按 OS 选 ./gradlew 或 gradlew.bat
       framework: JUnit                 # 覆盖率随单测一步产出：PR 门禁与 sonar 均用 jacocoCoverage（jacoco）
-      command: "./gradlew jacocoCoverage"
+      tasks: [jacocoCoverage]
   coverage:                           # 覆盖率口径（unit-test-runner 汇总用）
     enabled: true                      # 是否统计并展示覆盖率（Android jacoco→sonar，projectKey=bmad）
     min_line: 0                        # 门禁阈值：0=只报告不卡门禁；>0=低于阈值判未通过（与 enabled 职责正交）

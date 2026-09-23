@@ -1,4 +1,4 @@
-# Story-Level Detailed Technical Solution Template (App)
+# Detailed Technical Solution Template
 
 ## Document Information
 
@@ -29,7 +29,7 @@
 >
 > This Story adds a points-eligibility filter to the discovery result list so Bonvoy members can narrow results to hotels bookable with points for the selected dates, reducing abandoned searches.
 
-## 2. Main Flow
+## 2. Flow Diagram
 
 {Describe the end-to-end main flow: page entry, request timing, data loading, business exceptions, page state transitions, and navigation after key actions. Attach a flow diagram or Confluence link.}
 
@@ -98,7 +98,7 @@ Flow diagram: {image or mermaid}
 > | T-01 | Add points-eligibility chip and bind it to the filter state | Chip toggles; filtered list excludes ineligible properties |
 > | T-02 | Wire the flag read and default-off behavior | With flag off, chip is hidden on both platforms |
 
-## 5. Key Alignment Items (optional)
+## 5. Key Alignment Items
 
 {List cross-team or cross-platform items that require alignment. If none, write `—` in the table.}
 
@@ -106,7 +106,7 @@ Flow diagram: {image or mermaid}
 |------|-------|------------------|----------|
 | {A-01} | {Focus} | {How it was aligned} | {Comments} |
 
-## 6. Risk Items (optional)
+## 6. Risk Items
 
 {List each risk with its root cause, resulting situation, and response. If none, write `—` in the table.}
 
@@ -114,7 +114,7 @@ Flow diagram: {image or mermaid}
 |------------|---------------------|----------|
 | {R-01} | {Impact} | {Plan} |
 
-## 7. Reusable Components (optional)
+## 7. Reusable Components
 
 {List components reused or produced by this Story. If none, write `—` in the table.}
 
@@ -122,7 +122,7 @@ Flow diagram: {image or mermaid}
 |----------------|------------------------|---------------------|
 | {Component} | {Platform / Owner} | {How it is used} |
 
-## 8. Platform Differences (iOS / Android) (optional)
+## 8. Platform Differences
 
 {List requirement points that differ by platform. If there are no differences, write `—` in the table.}
 
@@ -130,7 +130,7 @@ Flow diagram: {image or mermaid}
 |-------------------|-----|---------|
 | {Point} | {iOS behavior} | {Android behavior} |
 
-## 9. QA Test Paths
+## 9. Suggested QA Test Paths
 
 {List the suggested test path for each requirement point.}
 
@@ -153,7 +153,7 @@ Flow diagram: {image or mermaid}
 |-------------------|-------------------|
 | {Point} | {e.g., Embrace / release success rate / logs} |
 
-## 11. State Pages / Edge Cases (optional)
+## 11. Other Comments (State Pages / Edge Cases)
 
 {List the state pages and edge cases handled. If none, write `—` in the table.}
 

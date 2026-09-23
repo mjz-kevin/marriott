@@ -26,11 +26,19 @@ metadata:
 
 | 用途 | 配置键 |
 |------|----|
-| 构建命令 | `profiles/{profile}.yaml` → `code.build.*.command` — 按被测端／仓库选取（APP：`ios` / `android`；CMS：`cncms` / `monorepo`） |
-| 构建工具 | `profiles/{profile}.yaml` → `code.build.*.tool`（用于归因时判定日志格式） |
-| 静态检查（可选） | `profiles/{profile}.yaml` → `code.build.*.static_check`（存在则一并执行，如 Android 的 detekt；不存在的仓库跳过） |
+| 构建工具 | `profiles/{profile}.yaml` → `code.build.*.tool`（`gradle` / `xcodebuild` / `pnpm` / `pnpm-nx`）— 决定如何组装命令与解析日志 |
+| 构建语义 | `profiles/{profile}.yaml` → `code.build.*` 下的语义字段：gradle 用 `tasks`（＋可选 `static_check_tasks`）；xcodebuild 用 `project`/`scheme`/`destination`/`action`；pnpm 用 `steps`；pnpm-nx 用 `steps`＋`nx.{command,targets}` — 按被测端／仓库选取（APP：`ios` / `android`；CMS：`cncms` / `monorepo`） |
 
 所需配置键缺失（TBD）→ 停止并要求补齐；不臆测构建命令。
+
+**命令组装（跨 OS）**：本 skill 不从 profile 取现成命令串，而是按 `tool` 与语义字段在运行时组装，并适配当前操作系统，避免依赖特定 shell 语法：
+
+| tool | 组装方式 | Windows 差异 |
+|------|------|------|
+| `gradle` | 逐个 task 组装：`<wrapper> <tasks...>`；有 `static_check_tasks` 则另跑一次 | wrapper 用 `gradlew.bat`（Windows）或 `./gradlew`（Unix/macOS） |
+| `xcodebuild` | `xcodebuild -project {project} -scheme {scheme} -destination '{destination}' {action}` | 仅 macOS 可执行；Windows 上判环境不支持并回报，不判为代码失败 |
+| `pnpm` | 逐个 `steps` **分步执行**（每步一次 `pnpm <step>`），不用 `&&` 拼接 | 分步执行天然兼容 PowerShell/CMD |
+| `pnpm-nx` | 先按 `steps` 分步装依赖，再 `pnpm exec nx {nx.command} -t {nx.targets...}`（用 `pnpm exec` 而非 `npx`） | 同上，分步执行 |
 
 ## 1. 前置
 
@@ -44,18 +52,22 @@ metadata:
 ## 2. 工作流
 
 ```
-- S1 解析构建命令（依 profile，按端／仓库）
+- S1 按 tool 与语义字段、结合当前 OS 组装构建命令
 - S2 执行构建，完整捕获输出
 - S3 判定通过与否（退出码 + 关键日志）
 - S4 未通过 → 结构化归因（类别／位置／根因／建议）
 - S5 回报结论：通过放行 / 未通过打回开发环节
 ```
 
-> 双端 Story：本 skill 单次只对单端／单仓库执行一套构建命令；双端 Story 按端分两次验证，各自独立结论。
+> 双端 Story：本 skill 单次只对单端／单仓库执行一套构建；双端 Story 按端分两次验证，各自独立结论。
+
+### S1 组装命令（跨 OS）
+
+按 `code.build.*.tool` 与语义字段组装命令（见「0. 配置取值」的组装表），并适配当前 OS：`gradle` 的 wrapper 在 Windows 用 `gradlew.bat`、Unix/macOS 用 `./gradlew`；`pnpm`/`pnpm-nx` 的多步骤**分步执行**、不用 `&&`；`xcodebuild` 仅 macOS 可执行。不从 profile 取现成命令串。
 
 ### S2 执行构建
 
-执行 `code.build.*.command`，完整捕获 stdout/stderr。构建命令通常耗时较长，需给足超时并保留完整日志用于归因，不截断。若该仓库配置了 `code.build.*.static_check`（如 Android 的 detekt），一并执行并把其失败纳入构建结论。
+执行 S1 组装的命令，完整捕获 stdout/stderr。构建通常耗时较长，需给足超时并保留完整日志用于归因，不截断。多步骤（如 pnpm 的 `steps`）分步执行，任一步非零退出即判失败并保留该步日志。若该仓库配置了 `code.build.*.static_check_tasks`（如 Android 的 detekt），另跑一次并把其失败纳入构建结论。
 
 ### S4 失败结构化归因
 
@@ -83,7 +95,8 @@ metadata:
 
 | 规则 | 说明 |
 |------|------|
-| 命令取自配置 | 构建命令来自团队配置，不硬编码、不自行替换 |
+| 命令按语义组装 | 按 `tool`＋语义字段组装命令、不从 profile 取现成命令串，不自行替换工具 |
+| 跨 OS 适配 | gradle wrapper 按 OS 选（`gradlew.bat`/`./gradlew`）、多步骤分步执行不用 `&&`、xcodebuild 仅 macOS |
 | 结论看退出码＋日志 | 以退出码为主、关键日志为辅判定，不凭部分输出臆断 |
 | 失败必归因 | 未通过必须结构化归因，不直接抛原始日志 |
 | 区分环境问题 | 工具链不可用等环境问题不判为代码失败 |
@@ -92,7 +105,7 @@ metadata:
 
 ## 4. 质量门禁
 
-- 使用团队配置声明的构建命令（非臆测）
+- 按团队配置的 `tool`＋语义字段组装命令（非臆测、非现成命令串）
 - 结论明确为通过／未通过，且有退出码＋关键日志佐证
 - 未通过时归因条目含类别／位置／根因／建议
 - 环境／工具链问题与代码失败被区分开
@@ -116,6 +129,7 @@ metadata:
 | 现象 | 处理 |
 |------|------|
 | 构建工具链不可用 | 回报为环境问题，不判代码失败，不打回 |
+| Windows 上遇 xcodebuild（iOS） | iOS 仅 macOS 可构建；回报环境不支持，不判为代码失败 |
 | 无法解析构建命令 | 停止，说明缺失的配置键及对应 owner 补齐 |
 | 日志过大 | 保留完整日志到文件，归因只列关键条目 |
 | 反复同一错误且超重试上限 | 提醒开发人员介入，不无限打回 |

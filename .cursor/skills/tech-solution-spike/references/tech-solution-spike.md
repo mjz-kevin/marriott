@@ -1,4 +1,4 @@
-# Research (Spike) Technical Solution Template
+# Research (Spike) Technical Solution Template (optional)
 
 ## Document Information
 
@@ -68,7 +68,7 @@
 - **Dependencies and risks:** {Dependencies and risks}
 - **Reusability:** {Reuse potential}
 
-### Option C: {Name} (optional)
+### Option C: {Name}
 
 - **Approach / architecture:** {Overview; attach diagram or Confluence link}
 - **Key implementation points:** {Core implementation steps}
@@ -77,7 +77,7 @@
 - **Dependencies and risks:** {Dependencies and risks}
 - **Reusability:** {Reuse potential}
 
-### Comparison Matrix
+### Comparison Matrix (optional, when more than one option)
 
 {Summarize each dimension across options. Rate each cell with a comparable value (e.g., High / Medium / Low, or a measured number).}
 
@@ -117,7 +117,7 @@
 > | Dependencies / Risks | Bounded by slowest service | Duplicated logic per platform |
 > | Reusability | High (web can reuse) | Low |
 
-## 4. Validation Process (optional)
+## 4. Validation Process (if a PoC exists) — multiple options
 
 {If a PoC exists, record the validation method, demo or data, and key conclusions for each option validated. If no PoC was run, write `—`.}
 
@@ -127,7 +127,7 @@
 - **Demo / data:** {Evidence, measurements, or demo link}
 - **Key conclusions:** {What the validation shows}
 
-### Option 2: {Name} (optional)
+### Option 2: {Name}
 
 - **Validation method:** {How it was validated}
 - **Demo / data:** {Evidence, measurements, or demo link}

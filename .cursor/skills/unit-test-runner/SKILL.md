@@ -25,10 +25,20 @@ metadata:
 
 | 用途 | 配置键 |
 |------|----|
-| 单测执行命令 | `profiles/{profile}.yaml` → `test.unit.*.command` — 按被测端／仓库选取（APP：`ios` / `android`；CMS：`cncms` / `monorepo`）；命令若含占位符执行时代入、不硬编码：`{base}` 代入 `mcp.github.repos.*.base`（monorepo `nx affected`），`{simulator}` 代入本机可用模拟器名（iOS `xcodebuild test`） |
+| 测试工具 | `profiles/{profile}.yaml` → `test.unit.*.tool`（`gradle` / `xcodebuild` / `pnpm` / `pnpm-nx`）— 决定如何组装命令 |
+| 测试语义 | `profiles/{profile}.yaml` → `test.unit.*` 下的语义字段：gradle 用 `tasks`；xcodebuild 用 `project`/`scheme`/`destination`/`only_testing`；pnpm 用 `script`；pnpm-nx 用 `nx.{command,targets,base_ref,head_ref}` — 按被测端／仓库选取（APP：`ios` / `android`；CMS：`cncms` / `monorepo`） |
 | 覆盖率门槛 | `profiles/{profile}.yaml` → `test.coverage`（`enabled` 决定是否统计并展示覆盖率；`min_line` 决定是否卡门禁：`min_line=0` 只报告不卡，`min_line>0` 低于阈值判未通过。两字段职责正交） |
 
 所需配置键缺失（TBD）→ 停止并要求补齐；不臆测测试命令。
+
+**命令组装（跨 OS）**：本 skill 不从 profile 取现成命令串，而是按 `tool` 与语义字段在运行时组装并适配当前 OS：
+
+| tool | 组装方式 | 关键点 |
+|------|------|------|
+| `gradle` | `<wrapper> <tasks...>` | wrapper 按 OS 选 `gradlew.bat`（Windows）/ `./gradlew`（Unix/macOS） |
+| `xcodebuild` | `xcodebuild test -project {project} -scheme {scheme} -destination '{destination}' -only-testing:{only_testing}` | 仅 macOS；`{simulator}` 代入本机可用模拟器（`xcrun simctl list devices available` 选一个） |
+| `pnpm` | `pnpm run {script}` | 跨平台一致 |
+| `pnpm-nx` | `pnpm exec nx {nx.command} -t {nx.targets...} --base <sha> --head {nx.head_ref}` | **`--base` 的值先分两步求：① 跑 `git merge-base HEAD {nx.base_ref}`（`base_ref` 里的 `{base}` 先代入 `repos.*.base`）拿到 SHA；② 把 SHA 作为 `--base` 传入。不用 `$(...)` 命令替换（Windows 不支持）** |
 
 ## 1. 前置
 
@@ -43,16 +53,20 @@ metadata:
 ## 2. 工作流
 
 ```
-- S1 解析单测命令与覆盖率口径（依 profile，按端／仓库）
+- S1 按 tool 与语义字段、结合当前 OS 组装单测命令（含 monorepo 的 base SHA 分步求解）
 - S2 执行单测，完整捕获输出
 - S3 汇总通过率、失败用例清单、覆盖率
 - S4 按覆盖率门槛（min_line）判定通过与否
 - S5 回报结论：通过放行 / 未通过打回开发环节
 ```
 
+### S1 组装命令（跨 OS）
+
+按 `test.unit.*.tool` 与语义字段组装命令（见「0. 配置取值」的组装表），适配当前 OS：gradle wrapper 按 OS 选 `gradlew.bat`/`./gradlew`；xcodebuild 仅 macOS 且 `{simulator}` 代入本机可用模拟器。**monorepo（pnpm-nx affected）先分两步求比较基准**：① 把 `nx.base_ref` 里的 `{base}` 代入 `repos.*.base`，跑 `git merge-base HEAD {base_ref}` 拿 SHA；② 把该 SHA 作为 `--base` 传入。不用 `$(...)` 命令替换（Windows 不支持）。
+
 ### S2 执行单测
 
-执行 `test.unit.*.command`，完整捕获输出。单测通常耗时较长，需给足超时并保留完整日志用于定位失败用例，不截断。命令中若含占位符先代入再执行、不写死：`{base}`（如 monorepo 的 `nx affected --base=origin/{base}`）代入该仓库的 `mcp.github.repos.*.base`；`{simulator}`（如 iOS 的 `xcodebuild test` destination）代入本机可用的模拟器名（`xcrun simctl list devices available` 选一个已启动或可启动的）。
+执行 S1 组装的命令，完整捕获输出。单测通常耗时较长，需给足超时并保留完整日志用于定位失败用例，不截断。
 
 ### S3 汇总
 
@@ -80,7 +94,8 @@ metadata:
 
 | 规则 | 说明 |
 |------|------|
-| 命令取自配置 | 单测命令与覆盖率口径来自团队配置，不硬编码 |
+| 命令按语义组装 | 按 `tool`＋语义字段组装命令、不从 profile 取现成命令串 |
+| 跨 OS 适配 | gradle wrapper 按 OS 选；monorepo base SHA 分两步求（`git merge-base` 后传 `--base`），不用 `$(...)`；xcodebuild 仅 macOS |
 | 只执行不改 | 不写／改单测、不改业务代码；用例缺失或不合理记为发现项交上游 |
 | 门槛看配置 | 是否卡门禁只看 `min_line`（`min_line=0` 只报告不卡，`min_line>0` 低于阈值判未通过）；`enabled` 只决定是否统计展示覆盖率 |
 | 区分失败类型 | 区分「用例失败」与「覆盖率不足」，分别给修复方向 |
@@ -89,7 +104,7 @@ metadata:
 
 ## 4. 质量门禁
 
-- 使用团队配置声明的单测命令与覆盖率口径（非臆测）
+- 按团队配置的 `tool`＋语义字段组装命令与覆盖率口径（非臆测、非现成命令串）
 - 结论明确为通过／未通过，附通过率＋失败用例＋覆盖率
 - 覆盖率按 `min_line` 判定门禁（`min_line=0` 只报告，`min_line>0` 卡阈值），`enabled` 决定是否统计展示
 - 「用例失败」与「覆盖率不足」被区分，各有修复方向

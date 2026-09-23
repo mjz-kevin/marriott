@@ -1,4 +1,4 @@
-# Story-Level Detailed Technical Solution Template (CMS)
+# CMS Technical Solution Template
 
 ## Document Information
 
@@ -57,7 +57,7 @@
 
 ## 3. Key Design
 
-### 3.1 Content Model
+**3.1 Content Model**
 
 {Define each content type with its purpose, key fields, draft/version support, and multilingual support.}
 
@@ -71,7 +71,7 @@
 > |--------------|---------|------------|-----------------|--------------|
 > | `pointsStaysCollection` | Curated points-eligible hotel collection | `title`, `properties[]`, `startDate`, `endDate` | Yes | Yes |
 
-### 3.2 Permissions and Publishing Workflow
+**3.2 Permissions and Publishing Workflow**
 
 {Define the read/write/publish permissions per role and the publishing workflow, including how rejections are handled.}
 
@@ -91,7 +91,7 @@
 > | reviewer | ✓ | | ✓ | Approves and publishes; rejection returns to draft with a comment |
 > | admin | ✓ | ✓ | ✓ | Full access |
 
-### 3.3 Interfaces and Consumers
+**3.3 Interfaces and Consumers**
 
 {List each consumer with its read method, key field contract, and null/failure fallback.}
 
@@ -99,7 +99,7 @@
 |----------|-------------|--------------------|-------------------------|
 | {App / Web / Downstream} | {REST / GraphQL} | {Contract} | {Hide module / use cache; must not fail silently} |
 
-#### 3.3.1 GraphQL Contract (Content API) (optional)
+**3.3.1 GraphQL Contract (Content API)**
 
 {If the change touches the Content API, fill each row. Otherwise write `—`.}
 
@@ -121,7 +121,7 @@
 > | Query Definition | `pointsStaysCollection(locale, segment): PointsStaysCollection` |
 > | Retrieval by Segment | Yes; `segment` passed as a query argument, defaulting to `all` |
 
-### 3.4 Data Migration (optional)
+**3.4 Data Migration**
 
 {List each schema change and its migration method. If there is no migration, write `—` in the table.}
 
@@ -171,7 +171,7 @@
 > |------|--------|----------|
 > | Published collection may be cached stale downstream | App shows an expired promotion | Invalidate the content-API cache on publish; set a short TTL |
 
-## 6. Non-Functional Design (optional)
+## 6. Non-Functional Design
 
 {Fill each row. Optional rows not involved: write `—`.}
 

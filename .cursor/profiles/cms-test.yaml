@@ -55,17 +55,24 @@ mcp:
 # ---------------------------------------------------------------- 代码工程（开发/验证类 skill 用）
 code:
   languages: [typescript]              # 语言栈：TypeScript
-  # 分支命名：唯一 AI Feature 分支模板；{story_key}=Jira Story key，{slug}=Story 摘要短横线化
+  # 分支命名：对齐团队 Branching Strategy 的 {KEY}-Xxx-Xxx；AI 套 prefix。{slug}=2–3 个 Title-Case 词，非整句摘要
   branch:
-    prefix: ai/feature                 # AI 专属分支前缀，与人工分支隔离
-    template: "ai/feature/{story_key}-{slug}"
-  build:                              # 编译/构建命令（build-verify 用），按 repo 键区分；对齐各仓 CI
+    prefix: feat-ai                    # AI 专属前缀，与人工 Feature（无前缀）隔离
+    template: "feat-ai/{story_key}-{slug}"
+  build:                              # 构建校验的语义配置（build-verify 按 OS 组装命令），按 repo 键区分；对齐各仓 CI
     cncms:                             # Next.js + payload；pnpm 10.x；precommit=generate:all && lint:tsc && build:compile
-      tool: pnpm
-      command: "pnpm install --frozen-lockfile && pnpm lint:tsc && pnpm build"
+      tool: pnpm                       # 执行器；skill 分步执行 steps（不用 && 拼接，兼容 PowerShell/CMD）
+      steps:                           # 逐步执行的 pnpm 参数（每步 = 一次 pnpm 调用）
+        - "install --frozen-lockfile"
+        - "lint:tsc"
+        - "build"
     monorepo:                          # Nx monorepo；pnpm 11.x；构建校验只跑 lint/build/typecheck，单测交 unit-test-runner（职责不重叠）
-      tool: pnpm-nx
-      command: "pnpm install --frozen-lockfile && npx nx run-many -t lint build typecheck"
+      tool: pnpm-nx                    # 执行器；skill 先 pnpm 装依赖，再 pnpm exec nx（不用 npx，避免 && 与命令替换）
+      steps:
+        - "install --frozen-lockfile"
+      nx:                              # nx 语义：skill 组装为 `pnpm exec nx run-many -t lint build typecheck`
+        command: run-many
+        targets: [lint, build, typecheck]
   contract:                           # contract-diff 口径：接口契约以技术方案 detail 的接口定义为基线
     source: tech_solution_detail       # 契约基线来源：Story 级明细方案的接口定义章节
     match: field_level                 # 比对粒度：逐字段（TS 看 interface/type/zod schema；payload 看 collection field）
@@ -86,14 +93,20 @@ review:
 
 # ---------------------------------------------------------------- 测试（开发/验证类 skill 用）
 test:
-  unit:                               # 单元测试框架与执行命令（unit-test-authoring / unit-test-runner 用）；对齐 CI
+  unit:                               # 单元测试语义配置（unit-test-authoring / unit-test-runner 按 OS 组装命令）；对齐 CI
     cncms:
+      tool: pnpm                       # skill 组装为 `pnpm run test:unit`
       framework: vitest                # 单测 test:unit（vitest.config.unit.mts）；另有 test:int 集成、playwright e2e
-      command: "pnpm test:unit"
+      script: "test:unit"              # package.json script 名
       needs_services: [postgres, redis] # 集成/部分单测依赖 docker 服务（docker compose up -d，见 .harness/ci-test.env）；纯单测 test:unit 一般不依赖
     monorepo:
+      tool: pnpm-nx                    # skill 组装为 `pnpm exec nx affected -t test --base <sha> --head HEAD`
       framework: jest                  # Nx + jest（jest.preset.js）；本地 Agent 无 Nx Cloud 分布式，用 affected 只测受 Feature 分支改动影响的 project（比 run-many 全量快）
-      command: "npx nx affected -t test --base=$(git merge-base HEAD origin/{base}) --head=HEAD"  # {base} 由 unit-test-runner 代入 repos.monorepo.base，不硬编码基线分支
+      nx:                              # nx 语义；base_ref 由 skill 先跑 `git merge-base HEAD origin/<base>` 求出 SHA 再作为 --base 传入（分两步，不用 $() 命令替换）
+        command: affected
+        targets: [test]
+        base_ref: "origin/{base}"      # {base} 代入 repos.monorepo.base；仅表示比较基准，非直接拼进 shell
+        head_ref: HEAD
   coverage:                           # 覆盖率口径（unit-test-runner 汇总用）
     enabled: true                      # 是否统计并展示覆盖率（cncms 接 sonar，sonar-project.properties）
     min_line: 0                        # 门禁阈值：0=只报告不卡门禁；>0=低于阈值判未通过（与 enabled 职责正交）
