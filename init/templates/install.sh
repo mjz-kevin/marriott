@@ -214,6 +214,10 @@ import json, sys, os
 
 template, target = sys.argv[1], sys.argv[2]
 npx_path = sys.argv[3] if len(sys.argv) > 3 else ""
+# 绿色版 npx 是 `#!/usr/bin/env node` 脚本，脱离系统 PATH 时找不到同目录 node，
+# 会报 `env: node: No such file or directory`。故把 node 的 bin 目录注入到
+# 各 MCP server 的 env["PATH"] 最前面，用 ${env:PATH} 拼接系统原 PATH（由 Cursor 解析）。
+node_bin_dir = os.path.dirname(npx_path) if npx_path else ""
 with open(template, encoding="utf-8") as f:
     tpl = json.load(f)
 
@@ -232,6 +236,9 @@ if npx_path:
     for name in ("figma", "marriott-github"):
         if name in srv:
             srv[name]["command"] = npx_path
+            # 注入 PATH：node 的 bin 放最前，${env:PATH} 保留系统原 PATH，避免覆盖 git 等命令
+            if node_bin_dir:
+                srv[name].setdefault("env", {})["PATH"] = f"{node_bin_dir}:${{env:PATH}}"
 
 # 幂等：保留已有 mcp.json 里用户已填的凭证
 if os.path.isfile(target):
@@ -265,6 +272,11 @@ PYEOF
     # 无 python 时降级：直接复制模板（含 _comment），提示手动清理
     cp "$MCP_TEMPLATE" "$MCP_TARGET"
     echo "    未找到 python，已直接复制模板为 mcp.json（含说明注释，可手动删除 _comment 行；command 仍为 npx）"
+    if [ -n "$NPX_PATH" ]; then
+      NODE_BIN_DIR="$(dirname "$NPX_PATH")"
+      echo "    ⚠️ 降级复制未注入绝对路径：请把 figma / marriott-github 的 command 改为 ${NPX_PATH}，"
+      echo "       并在其 env 里设 \"PATH\": \"${NODE_BIN_DIR}:\${env:PATH}\"（否则绿色版 npx 会报 env: node: No such file or directory）。"
+    fi
   fi
 else
   echo "    ⚠️ 未找到 ${MCP_TEMPLATE}，跳过 mcp.json 生成。"

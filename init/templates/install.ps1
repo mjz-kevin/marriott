@@ -113,8 +113,19 @@ if (Test-Path $mcpTemplate) {
 
     # 用自检到的 npx 绝对路径替换 figma / marriott-github 的 command
     if ($npxInfo.path) {
+        # node 目录 = npx.cmd 所在目录（正斜杠）。注入到 env.Path 最前，用 ; 拼系统 ${env:Path}，
+        # 保证 npx.cmd 及其内部脚本用到绿色版 node，同时不覆盖系统原 Path。
+        $nodeDirForPath = ($npxInfo.path -replace '/[^/]+$','')
         foreach ($srv in @("figma", "marriott-github")) {
-            if ($tpl.mcpServers.$srv) { $tpl.mcpServers.$srv.command = $npxInfo.path }
+            if ($tpl.mcpServers.$srv) {
+                $tpl.mcpServers.$srv.command = $npxInfo.path
+                $pathValue = "$nodeDirForPath;`${env:Path}"
+                if ($tpl.mcpServers.$srv.env) {
+                    $tpl.mcpServers.$srv.env | Add-Member -NotePropertyName "Path" -NotePropertyValue $pathValue -Force
+                } else {
+                    $tpl.mcpServers.$srv | Add-Member -NotePropertyName "env" -NotePropertyValue ([PSCustomObject]@{ Path = $pathValue }) -Force
+                }
+            }
         }
     }
 
