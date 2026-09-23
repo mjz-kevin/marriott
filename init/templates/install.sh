@@ -55,6 +55,17 @@ if [ -d "$PKG_DIR/cursor-files" ]; then
   ( cd "$PKG_DIR/cursor-files" && find . -mindepth 1 -maxdepth 1 -exec cp -R {} "$CURSOR_HOME/" \; )
 fi
 
+echo "--> 安装 hooks（安全闸门）到 $CURSOR_HOME/hooks"
+# 把随包 hooks/ 复制到 ~/.cursor/hooks/（含 Atlassian 写操作 / Confluence 上传的人工确认闸门）。
+# .sh / .py 加可执行位。hooks.json 的合并放到后面（需要 python）。
+if [ -d "$PKG_DIR/hooks" ]; then
+  mkdir -p "$CURSOR_HOME/hooks"
+  ( cd "$PKG_DIR/hooks" && find . -mindepth 1 -maxdepth 1 -exec cp -R {} "$CURSOR_HOME/hooks/" \; )
+  chmod +x "$CURSOR_HOME/hooks/guard-atlassian.sh" 2>/dev/null || true
+  chmod +x "$CURSOR_HOME/hooks/guard_atlassian.py" 2>/dev/null || true
+  find "$CURSOR_HOME/hooks" -name ".DS_Store" -delete 2>/dev/null || true
+fi
+
 # 清理 macOS 垃圾文件
 find "$CURSOR_HOME/agents" "$CURSOR_HOME/skills" -name ".DS_Store" -delete 2>/dev/null || true
 
@@ -343,6 +354,58 @@ else
   echo "    ⚠️ 未找到 ${MCP_TEMPLATE}，跳过 mcp.json 生成。"
 fi
 
+# ---- 幂等合并 ~/.cursor/hooks.json：注册安全闸门 hook（指向 macOS 启动器 .sh）----
+# 用 python 就地合并，保留用户已有的其他 hook，只确保本闸门的 beforeMCPExecution /
+# beforeShellExecution 条目存在且指向 ~/.cursor/hooks/guard-atlassian.sh。
+HOOKS_JSON="$CURSOR_HOME/hooks.json"
+if [ -d "$CURSOR_HOME/hooks" ] && [ -f "$CURSOR_HOME/hooks/guard-atlassian.sh" ]; then
+  if [ -n "$PY" ]; then
+    echo "--> 注册安全闸门 hook 到 $HOOKS_JSON"
+    "$PY" - "$HOOKS_JSON" "hooks/guard-atlassian.sh" <<'PYEOF'
+import json, os, sys
+
+target, cmd = sys.argv[1], sys.argv[2]
+events = ["beforeMCPExecution", "beforeShellExecution"]
+
+data = {"version": 1, "hooks": {}}
+if os.path.isfile(target):
+    try:
+        with open(target, encoding="utf-8") as f:
+            data = json.load(f)
+        if not isinstance(data, dict):
+            data = {"version": 1, "hooks": {}}
+    except Exception:
+        print("    ⚠️ 已有 hooks.json 解析失败，将新建（原文件请自行备份）")
+        data = {"version": 1, "hooks": {}}
+
+data.setdefault("version", 1)
+hooks = data.setdefault("hooks", {})
+
+changed = False
+for ev in events:
+    arr = hooks.setdefault(ev, [])
+    if not isinstance(arr, list):
+        arr = []
+        hooks[ev] = arr
+    # 幂等：已存在指向本闸门脚本的条目则跳过（兼容不同相对写法）
+    exists = any(
+        isinstance(h, dict) and isinstance(h.get("command"), str)
+        and "guard-atlassian" in h["command"]
+        for h in arr
+    )
+    if not exists:
+        arr.append({"command": cmd, "failClosed": True})
+        changed = True
+
+with open(target, "w", encoding="utf-8") as f:
+    json.dump(data, f, ensure_ascii=False, indent=2)
+print("    hooks.json 已更新（新增闸门条目）" if changed else "    hooks.json 已包含闸门条目，未改动")
+PYEOF
+  else
+    echo "    ⚠️ 未找到 python，无法自动合并 hooks.json。请手动在 $HOOKS_JSON 的 beforeMCPExecution 与 beforeShellExecution 下加入：{\"command\": \"hooks/guard-atlassian.sh\", \"failClosed\": true}"
+  fi
+fi
+
 echo ""
 echo "==> 安装完成 ✅"
 echo "后续步骤："
@@ -352,3 +415,5 @@ echo "     - Figma: FIGMA_API_KEY                https://www.figma.com/settings 
 echo "     - GitHub: GITHUB_TOKEN                https://git.marriott.com/settings/tokens/new （到此页面创建）"
 echo "  2) 在 Cursor 的 MCP 设置里确认 Atlassian / figma / marriott-github 三个 server 已连接"
 echo "     （agents / skills 已放入 ~/.cursor/，Cursor 会自动识别，无需重启）"
+echo "  3) 已启用安全闸门 hook：AI 向 Confluence/Jira 写入或运行 upload_confluence_v2.py 上传前，"
+echo "     会被拦截并等待你在终端执行一行批准命令后才放行（对任何模型生效，含 grok）。"

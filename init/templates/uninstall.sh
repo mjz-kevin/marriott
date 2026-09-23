@@ -92,6 +92,55 @@ for f in "${MCP_EXAMPLES[@]}"; do
   rm_path "$CURSOR_HOME/$f" "mcp 示例"
 done
 
+# ---- 5) 安全闸门 hooks（脚本 + hooks.json 条目 + 批准状态目录）----
+echo "--> 卸载安全闸门 hooks"
+# 5.1 删闸门脚本（只删本工具链带来的，不动用户自己的 hook 文件）
+for hf in guard-atlassian.sh guard-atlassian.cmd guard_atlassian.py; do
+  rm_path "$CURSOR_HOME/hooks/$hf" "hook 脚本"
+done
+# 5.2 从 hooks.json 摘掉指向本闸门的条目（保留用户其他 hook）
+HOOKS_JSON="$CURSOR_HOME/hooks.json"
+if [ -f "$HOOKS_JSON" ]; then
+  PYU=""
+  command -v python3 >/dev/null 2>&1 && PYU="$(command -v python3)"
+  [ -z "$PYU" ] && command -v python >/dev/null 2>&1 && PYU="$(command -v python)"
+  if [ -n "$PYU" ]; then
+    if [ "$DRY_RUN" = 1 ]; then
+      echo "    [dry-run] 将从 ${HOOKS_JSON} 移除指向 guard-atlassian 的 hook 条目"
+    else
+      "$PYU" - "$HOOKS_JSON" <<'PYEOF'
+import json, os, sys
+target = sys.argv[1]
+try:
+    with open(target, encoding="utf-8") as f:
+        data = json.load(f)
+except Exception:
+    sys.exit(0)
+hooks = data.get("hooks") if isinstance(data, dict) else None
+if not isinstance(hooks, dict):
+    sys.exit(0)
+for ev in ("beforeMCPExecution", "beforeShellExecution"):
+    arr = hooks.get(ev)
+    if isinstance(arr, list):
+        kept = [h for h in arr
+                if not (isinstance(h, dict) and isinstance(h.get("command"), str)
+                        and "guard-atlassian" in h["command"])]
+        if kept:
+            hooks[ev] = kept
+        else:
+            hooks.pop(ev, None)  # 该事件下已无其他 hook，移除空键
+with open(target, "w", encoding="utf-8") as f:
+    json.dump(data, f, ensure_ascii=False, indent=2)
+print(f"    已从 {os.path.basename(target)} 移除本闸门 hook 条目（保留其他 hook）")
+PYEOF
+    fi
+  else
+    echo "    ⚠️ 未找到 python，无法自动清理 hooks.json。请手动删除其中 command 含 guard-atlassian 的条目。"
+  fi
+fi
+# 5.3 批准状态目录（一次性凭证 / pending 记录，卸载时清掉）
+rm_path "$CURSOR_HOME/ai-sdlc-guard" "安全闸门状态目录"
+
 echo ""
 echo "==> 卸载完成 ✅"
 echo "    已保留 $CURSOR_HOME/mcp.json（含用户凭证），未删除。"

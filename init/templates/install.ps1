@@ -60,6 +60,16 @@ if (Test-Path $profilesSrc) {
 Write-Host "--> 安装 mcp 示例到 $CursorHome"
 Copy-Contents (Join-Path $PkgDir "cursor-files") $CursorHome
 
+Write-Host "--> 安装 hooks（安全闸门）到 $CursorHome\hooks"
+# 把随包 hooks\ 复制到 ~\.cursor\hooks\（含 Atlassian 写操作 / Confluence 上传的人工确认闸门）。
+# hooks.json 合并放到后面。
+$hooksSrc = Join-Path $PkgDir "hooks"
+$hooksDst = Join-Path $CursorHome "hooks"
+if (Test-Path $hooksSrc) {
+    Copy-Contents $hooksSrc $hooksDst
+    Get-ChildItem -Path $hooksDst -Recurse -Force -Filter ".DS_Store" -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+}
+
 # ---- Windows 专属：解压运行时到 C:\ ----
 $runtimeZip = Join-Path $PkgDir "AI-SDLC-windows.zip"
 $runtimeRoot = "C:\AI-SDLC\runtime"
@@ -202,6 +212,64 @@ if (Test-Path $mcpTemplate) {
     Write-Warning "未找到 $mcpTemplate，跳过 mcp.json 生成。"
 }
 
+# ---- 幂等合并 ~\.cursor\hooks.json：注册安全闸门 hook（指向 Windows 启动器 .cmd）----
+# 保留用户已有的其他 hook，只确保本闸门的 beforeMCPExecution / beforeShellExecution 条目存在。
+$hooksJson = Join-Path $CursorHome "hooks.json"
+$guardCmd = Join-Path $hooksDst "guard-atlassian.cmd"
+if (Test-Path $guardCmd) {
+    Write-Host "--> 注册安全闸门 hook 到 $hooksJson"
+    $cmdRel = "hooks/guard-atlassian.cmd"
+    $events = @("beforeMCPExecution", "beforeShellExecution")
+
+    # 读入或新建（PS 5.1 的 ConvertFrom-Json 产出 PSCustomObject，这里统一用哈希表便于改写）
+    $root = [ordered]@{ version = 1; hooks = [ordered]@{} }
+    if (Test-Path $hooksJson) {
+        try {
+            $existing = Get-Content $hooksJson -Raw | ConvertFrom-Json
+            # 转成可改写的哈希表结构
+            $root = [ordered]@{}
+            $root["version"] = if ($existing.version) { $existing.version } else { 1 }
+            $hooksTable = [ordered]@{}
+            if ($existing.hooks) {
+                foreach ($p in $existing.hooks.PSObject.Properties) {
+                    $arr = @()
+                    foreach ($h in $p.Value) {
+                        $entry = [ordered]@{}
+                        foreach ($hp in $h.PSObject.Properties) { $entry[$hp.Name] = $hp.Value }
+                        $arr += $entry
+                    }
+                    $hooksTable[$p.Name] = @($arr)
+                }
+            }
+            $root["hooks"] = $hooksTable
+        } catch {
+            Write-Warning "已有 hooks.json 解析失败，将新建（原文件请自行备份）"
+            $root = [ordered]@{ version = 1; hooks = [ordered]@{} }
+        }
+    }
+    if (-not $root.Contains("hooks")) { $root["hooks"] = [ordered]@{} }
+
+    $changed = $false
+    foreach ($ev in $events) {
+        $arr = @()
+        if ($root["hooks"].Contains($ev)) { $arr = @($root["hooks"][$ev]) }
+        $exists = $false
+        foreach ($h in $arr) {
+            if ($h.command -and ("$($h.command)" -like "*guard-atlassian*")) { $exists = $true; break }
+        }
+        if (-not $exists) {
+            $arr += ([ordered]@{ command = $cmdRel; failClosed = $true })
+            $changed = $true
+        }
+        $root["hooks"][$ev] = @($arr)
+    }
+
+    $json = $root | ConvertTo-Json -Depth 20
+    [System.IO.File]::WriteAllText($hooksJson, $json, (New-Object System.Text.UTF8Encoding($false)))
+    if ($changed) { Write-Host "    hooks.json 已更新（新增闸门条目）" }
+    else { Write-Host "    hooks.json 已包含闸门条目，未改动" }
+}
+
 # 清理垃圾文件
 Get-ChildItem -Path (Join-Path $CursorHome "agents"),(Join-Path $CursorHome "skills") -Recurse -Force -Filter ".DS_Store" -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
 
@@ -214,3 +282,5 @@ Write-Host "     - Figma: FIGMA_API_KEY                https://www.figma.com/set
 Write-Host "     - GitHub: GITHUB_TOKEN                https://git.marriott.com/settings/tokens/new （到此页面创建）"
 Write-Host "  2) 在 Cursor 的 MCP 设置里确认 Atlassian / figma / marriott-github 三个 server 已连接"
 Write-Host "     （agents / skills 已放入 ~/.cursor/，Cursor 会自动识别，无需重启）"
+Write-Host "  3) 已启用安全闸门 hook：AI 向 Confluence/Jira 写入或运行 upload_confluence_v2.py 上传前，"
+Write-Host "     会被拦截并等待你在终端执行一行批准命令后才放行（对任何模型生效，含 grok）。"

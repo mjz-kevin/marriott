@@ -82,6 +82,45 @@ foreach ($f in $McpExamples) {
     if ($f) { Remove-One (Join-Path $CursorHome $f) "mcp 示例" }
 }
 
+# ---- 5) 安全闸门 hooks（脚本 + hooks.json 条目 + 批准状态目录）----
+Write-Host "--> 卸载安全闸门 hooks"
+# 5.1 删闸门脚本（只删本工具链带来的，不动用户自己的 hook 文件）
+foreach ($hf in @("guard-atlassian.sh", "guard-atlassian.cmd", "guard_atlassian.py")) {
+    Remove-One (Join-Path $CursorHome "hooks\$hf") "hook 脚本"
+}
+# 5.2 从 hooks.json 摘掉指向本闸门的条目（保留用户其他 hook）
+$hooksJson = Join-Path $CursorHome "hooks.json"
+if (Test-Path $hooksJson) {
+    if ($DryRun) {
+        Write-Host "    [dry-run] 将从 $hooksJson 移除指向 guard-atlassian 的 hook 条目"
+    } else {
+        try {
+            $data = Get-Content $hooksJson -Raw | ConvertFrom-Json
+            if ($data.hooks) {
+                foreach ($ev in @("beforeMCPExecution", "beforeShellExecution")) {
+                    if ($data.hooks.PSObject.Properties.Name -contains $ev) {
+                        $kept = @($data.hooks.$ev | Where-Object {
+                            -not ($_.command -and ("$($_.command)" -like "*guard-atlassian*"))
+                        })
+                        if ($kept.Count -gt 0) {
+                            $data.hooks.$ev = $kept
+                        } else {
+                            $data.hooks.PSObject.Properties.Remove($ev) | Out-Null
+                        }
+                    }
+                }
+            }
+            $json = $data | ConvertTo-Json -Depth 20
+            [System.IO.File]::WriteAllText($hooksJson, $json, (New-Object System.Text.UTF8Encoding($false)))
+            Write-Host "    已从 hooks.json 移除本闸门 hook 条目（保留其他 hook）"
+        } catch {
+            Write-Warning "hooks.json 解析失败，未自动清理。请手动删除其中 command 含 guard-atlassian 的条目。"
+        }
+    }
+}
+# 5.3 批准状态目录（一次性凭证 / pending 记录，卸载时清掉）
+Remove-One (Join-Path $CursorHome "ai-sdlc-guard") "安全闸门状态目录"
+
 Write-Host ""
 Write-Host "==> 卸载完成 ✅"
 Write-Host "    已保留 $CursorHome\mcp.json（含用户凭证），未删除。"

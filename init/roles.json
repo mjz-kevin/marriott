@@ -7,7 +7,7 @@
   },
 
   "common": {
-    "_comment": "所有角色都会收到的公共 Skill 与文件。",
+    "_comment": "所有角色都会收到的公共 Skill 与文件。此外 build.py 会把 .cursor/hooks/ 下的安全闸门 hook（Atlassian 写操作 + upload_confluence_v2.py 上传的人工确认，对任何模型硬拦）打入每个角色包，并由 install 脚本落到 ~/.cursor/hooks/ 且幂等合并进 ~/.cursor/hooks.json。",
     "skills": [
       "sensitive-data-guard",
       "profile-select"

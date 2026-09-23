@@ -94,9 +94,30 @@ zip 里已内置安装脚本、角色 README、离线运行时（Windows `AI-SDL
    - **Windows**：把随包 `AI-SDLC-windows.zip` 解压到 `C:\`，得到 `C:\AI-SDLC\runtime\`；
    - **macOS**：按机型自动选架构分包铺到 `~/.cursor/AI-SDLC/runtime/`（Apple Silicon → `AI-SDLC-macOS-Silicon.zip`，Intel → `AI-SDLC-macOS-Intel.zip`；也兼容通用 `AI-SDLC-macos.zip`/`.tar.gz` 或包内已解开的 `AI-SDLC/runtime/`）；已存在则幂等跳过；
 4. **自检 npx**（**运行时优先**，回退系统 PATH）并**生成 `~/.cursor/mcp.json`**：把 `figma` / `marriott-github` 的 `command` 填成 npx 绝对路径（Windows 用 `npx.cmd`，macOS 用运行时 `node-*/bin/npx`；删除注释、凭证字段留空；已存在则保留已填凭证）；
-5. 提示用户填 `~/.cursor/mcp.json` 凭证，再在 Cursor MCP 设置里确认三个 server 已连接（agents/skills 自动识别，无需重启）。
+5. **安装安全闸门 hooks**：把随包 `hooks/`（`guard_atlassian.py` + `guard-atlassian.sh` + `guard-atlassian.cmd`）复制到 `~/.cursor/hooks/`，并**幂等合并**进 `~/.cursor/hooks.json` 的 `beforeMCPExecution` 与 `beforeShellExecution`（macOS 指向 `.sh`，Windows 指向 `.cmd`；保留用户已有的其他 hook）；
+6. 提示用户填 `~/.cursor/mcp.json` 凭证，再在 Cursor MCP 设置里确认三个 server 已连接（agents/skills 自动识别，无需重启）。
 
 > 安装脚本在用户级 `~/.cursor/` 完成运行时铺开与 mcp.json 生成，用户装完只需填凭证，无需任何额外配置步骤。
+
+### 安全闸门 hooks（所有角色都装）
+
+为防止 AI（尤其是指令遵循较弱、常常不问就直接上传的模型，如 grok）在**未经人工确认**时就往
+Confluence / Jira 写数据，随包分发一组跨平台安全闸门 hook，安装时落到 `~/.cursor/hooks/`：
+
+- **拦两条写入路径**：
+  1. Atlassian MCP 写工具（`beforeMCPExecution`）：`createConfluencePage` / `createJiraIssue` /
+     `editJiraIssue` / `transitionJiraIssue` / 各类评论 / 建链 / 记工时等；只读的 get/search 放行。
+  2. 发布类 Skill 的 REST 上传脚本（`beforeShellExecution`）：`upload_confluence_v2.py` 的**正式上传**
+     （带 `--dry-run` / `--check-env` 的预检放行）。
+- **硬拦机制**：Cursor 当前只有 `deny` 会被可靠强制执行（`ask` 对不主动发问的模型拦不住），所以闸门
+  一律先 `deny`，并在拦截提示里给出一行**批准命令**；用户复制到终端执行后，让 AI **原样重试**即放行。
+  批准动作发生在文件系统、由用户手动执行，**模型碰不到、无法伪造、无法绕过**。
+- **批准方式**（`guard_atlassian.py` 提供 CLI）：
+  - `guard_atlassian.py --approve <操作码>`：精确批准某次内容的重试（一次性，默认 30 分钟有效）；
+  - `guard_atlassian.py --approve-next`：无差别批准"下一个"写操作（不校验内容）；
+  - `guard_atlassian.py --list`：查看待批准项。
+- **纯标准库、跨平台**：核心逻辑一份 `guard_atlassian.py`，mac 用 `.sh`、Windows 用 `.cmd` 轻量启动器
+  按平台选 Python（绿色运行时优先，回退系统 Python）。找不到 Python 时按 fail-safe 拦截（不误放行）。
 
 ## 卸载（发给最终用户）
 
@@ -104,8 +125,9 @@ zip 里已内置安装脚本、角色 README、离线运行时（Windows `AI-SDL
 「AI SDLC 全量资产清单」（构建时由 `build.py` 从 `roles.json` 汇总注入）清除**所有角色**相关资产：
 
 - 删除所有角色涉及的 **agents**、**skills**、全部 **profiles（含 `setup.json`）**、**mcp 示例模板**（`mcp.example.*.json`）；
+- 删除**安全闸门 hooks**：`~/.cursor/hooks/guard_atlassian.py` / `guard-atlassian.sh` / `guard-atlassian.cmd`，并从 `~/.cursor/hooks.json` 摘掉指向 `guard-atlassian` 的条目（**保留**用户自己的其他 hook），同时清理批准状态目录 `~/.cursor/ai-sdlc-guard/`；
 - **不删除** `~/.cursor/mcp.json`（含用户手填凭证，始终保留）；
-- **不删除**用户自己的 agent / skill（不在清单里的一律不动）；
+- **不删除**用户自己的 agent / skill / hook（不在清单里的一律不动）；
 - **不删除**运行时 `~/.cursor/AI-SDLC/`（由运行时包的卸载脚本负责）。
 
 **macOS / Linux**

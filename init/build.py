@@ -54,6 +54,7 @@ CURSOR_DIR = REPO_ROOT / ".cursor"
 AGENTS_SRC = CURSOR_DIR / "agents"
 SKILLS_SRC = CURSOR_DIR / "skills"
 PROFILES_SRC = CURSOR_DIR / "profiles"
+HOOKS_SRC = CURSOR_DIR / "hooks"
 PLACEHOLDER_DIR = INIT_DIR / "placeholders"
 DIST_DIR = INIT_DIR / "dist"
 RES_DIR = INIT_DIR / "res"
@@ -340,6 +341,26 @@ def build_role(role: str, cfg: dict, common: dict, version: str, assets: dict) -
     #      ~/.cursor/AI-SDLC/runtime/mcp-offline/。角色包安装脚本直接复用运行时里的即可，
     #      不再重复携带（若运行时未装则回退 npx 联网，与之前行为一致）。
 
+    # 4.6) 公共 hooks（所有角色都装）：把 .cursor/hooks/ 拷进包内 hooks/。
+    #      含跨平台安全闸门：Atlassian（Confluence/Jira）写操作 + upload_confluence_v2.py 上传
+    #      在放行前强制人工确认（对任何模型，含 grok，都以 deny 硬拦，绕不过）。
+    hooks_report = []
+    src_hooks = HOOKS_SRC
+    if src_hooks.is_dir():
+        dst_hooks = role_dir / "hooks"
+        dst_hooks.mkdir(parents=True, exist_ok=True)
+        for item in sorted(src_hooks.iterdir()):
+            if item.name in (".DS_Store", "__pycache__") or item.name.endswith((".pyc", ".pyo")):
+                continue
+            if item.is_file():
+                shutil.copy2(item, dst_hooks / item.name)
+                # .sh 保持可执行位
+                if item.suffix == ".sh":
+                    os.chmod(dst_hooks / item.name, 0o755)
+                hooks_report.append(item.name)
+    else:
+        warnings.append("公共 hooks（.cursor/hooks）不存在，本包未带安全闸门 hook")
+
     # 5) 安装 / 卸载脚本（从 init/templates 拷入每个包）
     #    install.sh / uninstall.sh 保持 LF + 可执行位；install.ps1 / uninstall.ps1 写成
     #    UTF-8 with BOM + CRLF（避免 PowerShell 5.1 按 ANSI/GBK 读中文乱码）。
@@ -357,6 +378,7 @@ def build_role(role: str, cfg: dict, common: dict, version: str, assets: dict) -
         "skills": skill_report,
         "profiles": common.get("profiles", []),
         "cursor_files": common.get("files", []),
+        "hooks": hooks_report,
         "warnings": warnings,
     }
     with (role_dir / "manifest.json").open("w", encoding="utf-8") as f:
@@ -413,6 +435,17 @@ def _write_role_readme(role_dir: Path, role: str, cfg: dict, manifest: dict) -> 
     for item in manifest["skills"]:
         flag = "" if item["present"] else " ⚠️（源缺失，未打入）"
         a(f"- `{item['name']}`{flag}")
+    hooks = manifest.get("hooks", [])
+    if hooks:
+        a("\n## 本包包含的安全闸门 hook\n")
+        a("安装后落到 `~/.cursor/hooks/`，并自动合并进 `~/.cursor/hooks.json` 的 "
+          "`beforeMCPExecution` 与 `beforeShellExecution`：\n")
+        for h in hooks:
+            a(f"- `{h}`")
+        a("\n作用：AI 向 Confluence / Jira 执行写操作（创建/修改/评论/流转/建链/工时），"
+          "或运行 `upload_confluence_v2.py` 正式上传（非 `--dry-run`）时，会被**硬拦**并等待你确认——"
+          "拦截提示里给出一行批准命令，复制到终端执行后让 AI 重试即放行。对任何模型生效（含 grok），"
+          "模型无法绕过、无法伪造确认。")
     a("\n## 说明\n")
     a("- 标注「占位」的 Agent / 「源缺失」的 Skill 表示该能力尚未在工具链落地，属预留；")
     a("  正式版本发布后重新运行安装脚本覆盖即可。")
