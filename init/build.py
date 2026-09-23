@@ -199,7 +199,95 @@ def _copy_runtime_dir(src: Path, dst: Path) -> None:
               f"首条：{errors[0]}")
 
 
-def build_role(role: str, cfg: dict, common: dict, version: str) -> dict:
+def _write_ps1(src: Path, dst: Path) -> None:
+    """把模板 .ps1 写成 UTF-8 with BOM + CRLF。
+
+    Windows PowerShell 5.1 默认按 ANSI/GBK 读取无 BOM 的 .ps1，会把中文字符串解码成
+    乱码并引发 parser error；加 BOM 可强制识别为 UTF-8。行尾用 CRLF 更贴合 Windows。
+    """
+    text = src.read_text(encoding="utf-8").replace("\r\n", "\n").replace("\n", "\r\n")
+    dst.write_bytes(b"\xef\xbb\xbf" + text.encode("utf-8"))
+
+
+def collect_all_assets(data: dict) -> dict:
+    """从 roles.json 汇总【所有角色 + 公共】的全量资产清单，供卸载脚本内置使用。
+
+    卸载与角色无关：任一角色包的 uninstall 脚本都按这份全量清单删除，彻底卸载工具链。
+    返回 {agents, skills, profiles, mcp_examples}，各为去重保序的名字列表。
+    """
+    common = data.get("common", {})
+    roles = data.get("roles", {})
+
+    def _dedup(seq):
+        out = []
+        for x in seq:
+            if x and x not in out:
+                out.append(x)
+        return out
+
+    agents, skills = [], []
+    for cfg in roles.values():
+        agents += cfg.get("agents", [])
+        skills += cfg.get("skills", [])
+    skills = common.get("skills", []) + skills  # 公共 skill 在前
+
+    return {
+        "agents": _dedup(agents),
+        "skills": _dedup(skills),
+        "profiles": _dedup(common.get("profiles", [])),
+        "mcp_examples": _dedup(common.get("files", [])),
+    }
+
+
+def _inject_uninstall_manifest(text: str, assets: dict, style: str) -> str:
+    """把全量资产清单注入卸载脚本模板的占位符。
+
+    style="sh"  → 每行  '  "name"'（bash 数组元素）
+    style="ps1" → 每行  '  "name"'（PowerShell 数组元素，末尾无逗号也合法）
+    """
+    def block(names: list[str]) -> str:
+        return "\n".join(f'  "{n}"' for n in names)
+
+    return (
+        text.replace("@@AGENTS@@", block(assets["agents"]))
+            .replace("@@SKILLS@@", block(assets["skills"]))
+            .replace("@@PROFILES@@", block(assets["profiles"]))
+            .replace("@@MCP_EXAMPLES@@", block(assets["mcp_examples"]))
+    )
+
+
+def _write_uninstall_sh(src: Path, dst: Path, assets: dict) -> None:
+    """写角色卸载 .sh：注入全量清单，保持 LF + 可执行位。"""
+    text = src.read_text(encoding="utf-8").replace("\r\n", "\n")
+    text = _inject_uninstall_manifest(text, assets, "sh")
+    dst.write_text(text, encoding="utf-8")
+    os.chmod(dst, 0o755)
+
+
+def _write_uninstall_ps1(src: Path, dst: Path, assets: dict) -> None:
+    """写角色卸载 .ps1：注入全量清单，UTF-8 with BOM + CRLF。"""
+    text = src.read_text(encoding="utf-8")
+    text = _inject_uninstall_manifest(text, assets, "ps1")
+    text = text.replace("\r\n", "\n").replace("\n", "\r\n")
+    dst.write_bytes(b"\xef\xbb\xbf" + text.encode("utf-8"))
+
+
+def _write_install_scripts(dst_dir: Path, assets: dict) -> None:
+    """把 install / uninstall 脚本拷入角色包目录。
+
+    - install.sh / uninstall.sh 保持 LF + 可执行位；
+    - install.ps1 / uninstall.ps1 写成 UTF-8 with BOM + CRLF（见 _write_ps1）；
+    - uninstall.* 额外注入「AI SDLC 全量资产清单」（与角色无关，卸载所有角色资产）。
+    """
+    tpl = INIT_DIR / "templates"
+    shutil.copy2(tpl / "install.sh", dst_dir / "install.sh")
+    os.chmod(dst_dir / "install.sh", 0o755)
+    _write_ps1(tpl / "install.ps1", dst_dir / "install.ps1")
+    _write_uninstall_sh(tpl / "uninstall.sh", dst_dir / "uninstall.sh", assets)
+    _write_uninstall_ps1(tpl / "uninstall.ps1", dst_dir / "uninstall.ps1", assets)
+
+
+def build_role(role: str, cfg: dict, common: dict, version: str, assets: dict) -> dict:
     """构建单个角色的分发目录（agents / skills / profiles / mcp 示例），返回构建摘要。
 
     角色包不含任何运行时；运行时由独立的运行时初始化包（--runtime）负责铺开。
@@ -255,16 +343,11 @@ def build_role(role: str, cfg: dict, common: dict, version: str) -> dict:
     else:
         warnings.append(f"离线 MCP 包 res/mcp-offline 不存在，未打入（figma/github 将回退 npx 联网）")
 
-    # 5) 安装脚本（从 init/templates 拷入每个包）
-    #    install.sh 直接复制（保持 LF）。
-    #    install.ps1 必须写成 UTF-8 with BOM：Windows PowerShell 5.1 默认按 ANSI/GBK
-    #    读取无 BOM 的 .ps1，会把中文字符串解码成乱码并引发 parser error；加 BOM 可强制
-    #    识别为 UTF-8。同时用 CRLF 行尾更贴合 Windows。
-    shutil.copy2(INIT_DIR / "templates" / "install.sh", role_dir / "install.sh")
-    os.chmod(role_dir / "install.sh", 0o755)
-    ps1_text = (INIT_DIR / "templates" / "install.ps1").read_text(encoding="utf-8")
-    ps1_text = ps1_text.replace("\r\n", "\n").replace("\n", "\r\n")
-    (role_dir / "install.ps1").write_bytes(b"\xef\xbb\xbf" + ps1_text.encode("utf-8"))
+    # 5) 安装 / 卸载脚本（从 init/templates 拷入每个包）
+    #    install.sh / uninstall.sh 保持 LF + 可执行位；install.ps1 / uninstall.ps1 写成
+    #    UTF-8 with BOM + CRLF（避免 PowerShell 5.1 按 ANSI/GBK 读中文乱码）。
+    #    uninstall.* 会注入「AI SDLC 全量资产清单」——卸载与角色无关，清除所有角色的资产。
+    _write_install_scripts(role_dir, assets)
 
     # 7) manifest.json（安装脚本据此把资产落到 ~/.cursor/）
     manifest = {
@@ -314,6 +397,17 @@ def _write_role_readme(role_dir: Path, role: str, cfg: dict, manifest: dict) -> 
       "（`AI-SDLC-Runtime-<平台>-<版本>.zip`）把绿色运行时铺到 `~/.cursor/AI-SDLC/runtime/`（Windows 为 `C:\\AI-SDLC\\runtime\\`）；"
       "否则安装脚本会回退到系统 PATH 上的 node/npx。\n")
     a("安装完成后：打开 `~/.cursor/mcp.json` 填入凭证，再在 Cursor 的 MCP 设置里确认 server 已连接即可。agents / skills 由 Cursor 自动识别，无需重启。\n")
+    a("## 一键卸载\n")
+    a("在包目录内执行（与角色无关，会清除**所有角色**的 agents/skills/profiles(含 setup.json)/mcp 示例；"
+      "**保留** `~/.cursor/mcp.json` 与你自己的 agent/skill；运行时另用运行时包的卸载脚本）：\n")
+    a("**macOS / Linux**")
+    a("```bash")
+    a("./uninstall.sh            # 加 --dry-run 可先演练")
+    a("```\n")
+    a("**Windows（PowerShell）**")
+    a("```powershell")
+    a(".\\uninstall.ps1          # 加 -DryRun 可先演练")
+    a("```\n")
     a("## 本包包含的 Agent\n")
     for item in manifest["agents"]:
         flag = " ⚠️（占位，能力尚未就绪）" if item["placeholder"] else ""
@@ -378,15 +472,17 @@ def build_runtime_pkg(platform: str, version: str) -> Path:
     else:
         log("  ⚠️ res/mcp-offline 不存在，运行时包未带离线 MCP（figma/github 将回退 npx 联网）")
 
-    # 2) 安装脚本：mac 平台带 install-runtime.sh，win 平台带 install-runtime.ps1（BOM+CRLF）
+    # 2) 安装 / 卸载脚本：mac 平台带 *-runtime.sh，win 平台带 *-runtime.ps1（BOM+CRLF）
     if platform.startswith("mac"):
         shutil.copy2(INIT_DIR / "templates" / "install-runtime.sh",
                      pkg_dir / "install.sh")
         os.chmod(pkg_dir / "install.sh", 0o755)
+        shutil.copy2(INIT_DIR / "templates" / "uninstall-runtime.sh",
+                     pkg_dir / "uninstall.sh")
+        os.chmod(pkg_dir / "uninstall.sh", 0o755)
     else:  # win
-        ps1_text = (INIT_DIR / "templates" / "install-runtime.ps1").read_text(encoding="utf-8")
-        ps1_text = ps1_text.replace("\r\n", "\n").replace("\n", "\r\n")
-        (pkg_dir / "install.ps1").write_bytes(b"\xef\xbb\xbf" + ps1_text.encode("utf-8"))
+        _write_ps1(INIT_DIR / "templates" / "install-runtime.ps1", pkg_dir / "install.ps1")
+        _write_ps1(INIT_DIR / "templates" / "uninstall-runtime.ps1", pkg_dir / "uninstall.ps1")
 
     # 3) manifest
     manifest = {
@@ -487,6 +583,8 @@ def main() -> int:
     data = load_roles()
     common = data["common"]
     roles = data["roles"]
+    # 卸载脚本与角色无关：汇总所有角色 + 公共的全量资产清单，注入每个包的 uninstall 脚本
+    assets = collect_all_assets(data)
 
     targets = args.roles or list(roles.keys())
     unknown = [r for r in targets if r not in roles]
@@ -497,7 +595,7 @@ def main() -> int:
     summaries = []
     for role in targets:
         log(f"构建角色 {role} ...")
-        manifest = build_role(role, roles[role], common, version)
+        manifest = build_role(role, roles[role], common, version, assets)
         for w in manifest["warnings"]:
             log(f"  ⚠️ {w}")
         if not args.no_zip:
