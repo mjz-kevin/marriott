@@ -1,5 +1,5 @@
 {
-    "_comment": "【macOS / Linux 版】复制本文件为同目录 mcp.json 后填写凭证。npx 已在系统 PATH，command 直接用 'npx'。API token 获取地址：https://id.atlassian.com/manage-profile/security/api-tokens。",
+    "_comment": "【macOS / Linux 版·离线】复制本文件为同目录 mcp.json 后填写凭证。figma / marriott-github 两个 server 已改为『本地 node 直跑离线包』——不再走 npx 联网，随 AI-SDLC 运行时一起铺开在 ~/.cursor/AI-SDLC/runtime/mcp-offline/ 下。API token 获取地址：https://id.atlassian.com/manage-profile/security/api-tokens。",
     "confluenceRest": {
         "base_url": "https://marriottcloud.atlassian.net/wiki",
         "email": "",
@@ -10,23 +10,21 @@
             "url": "https://mcp.atlassian.com/v1/mcp/authv2"
         },
         "figma": {
-            "_comment": "FIGMA_API_KEY 获取地址：https://www.figma.com/developers/api#access-tokens（Figma → Settings → Security → Personal access tokens）。PATH 字段：绿色版 npx 是 env node 脚本，需把 node 的 bin 目录放到 PATH 最前，否则报 env: node: No such file or directory。路径取自 setup.json 的 macos.node 所在 bin 目录（node v26.9.0-darwin-arm64）；${userHome} 由 Cursor 展开为用户主目录，Intel 机型请把 arm64 改为 x64。",
-            "command": "npx",
-            "args": ["-y", "figma-developer-mcp", "--stdio"],
+            "_comment": "FIGMA_API_KEY 获取地址：https://www.figma.com/developers/api#access-tokens（Figma → Settings → Security → Personal access tokens）。command 为绿色版 node 绝对路径；args[0] 为随运行时铺开的 figma-developer-mcp 入口。${userHome} 由 Cursor 展开为用户主目录；Intel 机型请把两处 arm64 改为 x64。安装脚本会按实际运行时目录自动改写这两条路径。",
+            "command": "${userHome}/.cursor/AI-SDLC/runtime/node-v26.9.0-darwin-arm64/bin/node",
+            "args": ["${userHome}/.cursor/AI-SDLC/runtime/mcp-offline/figma/node_modules/figma-developer-mcp/dist/bin.js", "--stdio"],
             "env": {
-                "FIGMA_API_KEY": "",
-                "PATH": "${userHome}/.cursor/AI-SDLC/runtime/node-v26.9.0-darwin-arm64/bin:${env:PATH}"
+                "FIGMA_API_KEY": ""
             }
         },
         "marriott-github": {
-            "_comment": "GITHUB_TOKEN 获取地址：git.marriott.com → Settings → Developer settings → Personal access tokens。PATH 同 figma：把 node 的 bin 目录放到最前，防止 env node 找不到 node。",
-            "command": "npx",
-            "args": ["-y", "github-mcp-server-js"],
+            "_comment": "GITHUB_TOKEN 获取地址：git.marriott.com → Settings → Developer settings → Personal access tokens。command 为绿色版 node 绝对路径；args[0] 为随运行时铺开的 github-mcp-server-js 入口。安装脚本会按实际运行时目录自动改写这两条路径。",
+            "command": "${userHome}/.cursor/AI-SDLC/runtime/node-v26.9.0-darwin-arm64/bin/node",
+            "args": ["${userHome}/.cursor/AI-SDLC/runtime/mcp-offline/github/node_modules/github-mcp-server-js/dist/cli.js"],
             "env": {
                 "GITHUB_TOKEN": "",
                 "GITHUB_SERVER_URL": "git.marriott.com",
-                "GITHUB_PERMISSION": "read-write",
-                "PATH": "${userHome}/.cursor/AI-SDLC/runtime/node-v26.9.0-darwin-arm64/bin:${env:PATH}"
+                "GITHUB_PERMISSION": "read-write"
             }
         }
     }

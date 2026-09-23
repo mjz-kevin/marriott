@@ -41,6 +41,38 @@ if (-not (Test-Path $runtimeRoot)) {
     exit 1
 }
 
+# ---- 铺开离线 MCP 包（figma / github）到 runtime\mcp-offline\ ----
+# 来源：包内 mcp-offline\ 下 figma-*.zip / github-*.zip（带版本号，纯 JS 跨架构通用）。
+# 每个 zip 内为 node_modules\...，分别解压到 mcp-offline\figma\ 与 mcp-offline\github\。
+$mcpSrc = Join-Path $PkgDir "mcp-offline"
+$mcpBase = Join-Path $runtimeRoot "mcp-offline"
+if (Test-Path $mcpSrc) {
+    New-Item -ItemType Directory -Force -Path $mcpBase | Out-Null
+    foreach ($spec in @(@{ sub = "figma"; glob = "figma-*.zip" }, @{ sub = "github"; glob = "github-*.zip" })) {
+        $dst = Join-Path $mcpBase $spec.sub
+        if (Test-Path $dst) {
+            Write-Host "--> 检测到 $dst 已存在，跳过 $($spec.sub)"
+            continue
+        }
+        $zipf = Get-ChildItem -Path $mcpSrc -Filter $spec.glob -ErrorAction SilentlyContinue |
+                Sort-Object Name | Select-Object -Last 1
+        if (-not $zipf) {
+            Write-Warning "未找到 $($spec.sub) 的离线包（$($spec.glob)），跳过"
+            continue
+        }
+        Write-Host "--> 解压 $($zipf.Name) 到 $dst ..."
+        try {
+            Expand-Archive -Path $zipf.FullName -DestinationPath $dst -Force
+        } catch {
+            Write-Warning "解压 $($zipf.Name) 失败：$($_.Exception.Message)"
+        }
+    }
+    Write-Host "    离线 MCP 包处理完成（figma / github）"
+} else {
+    Write-Host "--> 本包未带离线 MCP 包（mcp-offline\），跳过。"
+}
+
+
 Write-Host ""
 Write-Host "==> 运行时初始化完成 ✅"
 Write-Host "    后续安装任一角色包（PO/TL/Dev/QA）时会自动复用此运行时并生成 mcp.json。"

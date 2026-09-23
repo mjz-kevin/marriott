@@ -80,29 +80,70 @@ if (Test-Path $runtimeZip) {
     Write-Warning "本包未包含 AI-SDLC-windows.zip，跳过运行时解压。请另行获取绿色版运行时并解压到 C:\AI-SDLC\runtime\。"
 }
 
-# ---- 自检：定位 npx.cmd（绿色版运行时 → 系统 PATH）----
-function Resolve-Npx {
-    # 1) 环境变量 AI_SDLC_RUNTIME 或默认 C:\AI-SDLC\runtime 下的 node-*\npx.cmd（取字典序最大=最新）
+# ---- 铺开离线 MCP 包（figma / github）到 runtime\mcp-offline\ ----
+# 来源：包内 mcp-offline\ 下 figma-*.zip / github-*.zip（带版本号，纯 JS 跨架构通用）。
+# 每个 zip 内为 node_modules\...，分别解压到 mcp-offline\figma\ 与 mcp-offline\github\。
+$mcpSrc = Join-Path $PkgDir "mcp-offline"
+$mcpBase = Join-Path $runtimeRoot "mcp-offline"
+if (Test-Path $mcpSrc) {
+    New-Item -ItemType Directory -Force -Path $mcpBase | Out-Null
+    foreach ($spec in @(@{ sub = "figma"; glob = "figma-*.zip" }, @{ sub = "github"; glob = "github-*.zip" })) {
+        $dst = Join-Path $mcpBase $spec.sub
+        if (Test-Path $dst) {
+            Write-Host "--> 检测到 $dst 已存在，跳过 $($spec.sub)"
+            continue
+        }
+        $zipf = Get-ChildItem -Path $mcpSrc -Filter $spec.glob -ErrorAction SilentlyContinue |
+                Sort-Object Name | Select-Object -Last 1
+        if (-not $zipf) {
+            Write-Warning "未找到 $($spec.sub) 的离线包（$($spec.glob)），跳过"
+            continue
+        }
+        Write-Host "--> 解压 $($zipf.Name) 到 $dst ..."
+        try {
+            Expand-Archive -Path $zipf.FullName -DestinationPath $dst -Force
+        } catch {
+            Write-Warning "解压 $($zipf.Name) 失败：$($_.Exception.Message)"
+        }
+    }
+    Write-Host "    离线 MCP 包处理完成（figma / github）"
+} else {
+    Write-Host "--> 本包未带离线 MCP 包（mcp-offline\），跳过（figma/github 将回退到 npx 联网方式）。"
+}
+
+
+# ---- 自检：定位 node.exe（绿色版运行时 → 系统 PATH）----
+function Resolve-Node {
+    # 1) 环境变量 AI_SDLC_RUNTIME 或默认 C:\AI-SDLC\runtime 下的 node-*\node.exe（取字典序最大=最新）
     $root = if ($env:AI_SDLC_RUNTIME) { $env:AI_SDLC_RUNTIME } else { "C:\AI-SDLC\runtime" }
     if (Test-Path $root) {
         $nodeDir = Get-ChildItem -Path $root -Directory -Filter "node-*" -ErrorAction SilentlyContinue |
                    Sort-Object Name | Select-Object -Last 1
         if ($nodeDir) {
-            $npx = Join-Path $nodeDir.FullName "npx.cmd"
-            if (Test-Path $npx) { return @{ path = ($npx -replace '\\','/'); source = "runtime" } }
+            $node = Join-Path $nodeDir.FullName "node.exe"
+            if (Test-Path $node) { return @{ path = ($node -replace '\\','/'); source = "runtime" } }
         }
     }
     # 2) 系统 PATH
-    $cmd = Get-Command npx -ErrorAction SilentlyContinue
+    $cmd = Get-Command node -ErrorAction SilentlyContinue
     if ($cmd) { return @{ path = ($cmd.Source -replace '\\','/'); source = "path" } }
     return @{ path = ""; source = "default" }
 }
 
-# ---- 生成 ~/.cursor/mcp.json（Windows 模板 + 填 npx 绝对路径，凭证留空，幂等保留已填凭证）----
-$npxInfo = Resolve-Npx
-Write-Host "--> 自检 npx：$($npxInfo.path) [$($npxInfo.source)]"
-if ($npxInfo.source -eq "default") {
-    Write-Warning "未能定位 npx.cmd。请确认 C:\AI-SDLC\runtime\node-*\npx.cmd 存在，或设环境变量 AI_SDLC_RUNTIME 指向运行时根目录后重跑本脚本。"
+# ---- 生成 ~/.cursor/mcp.json（Windows 模板 + 填 node/入口 js 绝对路径，凭证留空，幂等保留已填凭证）----
+$nodeInfo = Resolve-Node
+Write-Host "--> 自检 node：$($nodeInfo.path) [$($nodeInfo.source)]"
+if ($nodeInfo.source -eq "default") {
+    Write-Warning "未能定位 node.exe。请确认 C:\AI-SDLC\runtime\node-*\node.exe 存在，或设环境变量 AI_SDLC_RUNTIME 指向运行时根目录后重跑本脚本。"
+}
+
+# 离线 MCP 包入口（随运行时铺开在 runtime\mcp-offline\ 下），转正斜杠供 JSON 使用
+$figmaEntry = ((Join-Path $runtimeRoot "mcp-offline\figma\node_modules\figma-developer-mcp\dist\bin.js") -replace '\\','/')
+$githubEntry = ((Join-Path $runtimeRoot "mcp-offline\github\node_modules\github-mcp-server-js\dist\cli.js") -replace '\\','/')
+if ((Test-Path $figmaEntry) -and (Test-Path $githubEntry)) {
+    Write-Host "--> 离线 MCP 包已就位：$($runtimeRoot)\mcp-offline"
+} else {
+    Write-Warning "未找到离线 MCP 包入口（$($runtimeRoot)\mcp-offline），figma/github 需自行提供或改回 npx 方式。"
 }
 
 $mcpTemplate = Join-Path $CursorHome "mcp.example.windows.json"
@@ -111,20 +152,19 @@ if (Test-Path $mcpTemplate) {
     Write-Host "--> 生成 $mcpTarget"
     $tpl = Get-Content $mcpTemplate -Raw | ConvertFrom-Json
 
-    # 用自检到的 npx 绝对路径替换 figma / marriott-github 的 command
-    if ($npxInfo.path) {
-        # node 目录 = npx.cmd 所在目录（正斜杠）。注入到 env.Path 最前，用 ; 拼系统 ${env:Path}，
-        # 保证 npx.cmd 及其内部脚本用到绿色版 node，同时不覆盖系统原 Path。
-        $nodeDirForPath = ($npxInfo.path -replace '/[^/]+$','')
-        foreach ($srv in @("figma", "marriott-github")) {
-            if ($tpl.mcpServers.$srv) {
-                $tpl.mcpServers.$srv.command = $npxInfo.path
-                $pathValue = "$nodeDirForPath;`${env:Path}"
-                if ($tpl.mcpServers.$srv.env) {
-                    $tpl.mcpServers.$srv.env | Add-Member -NotePropertyName "Path" -NotePropertyValue $pathValue -Force
-                } else {
-                    $tpl.mcpServers.$srv | Add-Member -NotePropertyName "env" -NotePropertyValue ([PSCustomObject]@{ Path = $pathValue }) -Force
-                }
+    # 用自检到的 node 绝对路径 + 离线包入口改写 figma / marriott-github 的 command/args。
+    # 离线 node 直跑不需要 Path 注入，改写时清掉模板可能残留的 Path/PATH。
+    $entryMap = @{ "figma" = @{ entry = $figmaEntry; extra = @("--stdio") }; "marriott-github" = @{ entry = $githubEntry; extra = @() } }
+    foreach ($srv in @("figma", "marriott-github")) {
+        if ($tpl.mcpServers.$srv) {
+            if ($nodeInfo.path) { $tpl.mcpServers.$srv.command = $nodeInfo.path }
+            $e = $entryMap[$srv]
+            if (Test-Path $e.entry) {
+                $tpl.mcpServers.$srv.args = @($e.entry) + $e.extra
+            }
+            if ($tpl.mcpServers.$srv.env) {
+                $tpl.mcpServers.$srv.env.PSObject.Properties.Remove("Path") | Out-Null
+                $tpl.mcpServers.$srv.env.PSObject.Properties.Remove("PATH") | Out-Null
             }
         }
     }

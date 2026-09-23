@@ -128,6 +128,45 @@ install_runtime() {
 
 install_runtime || true
 
+# ---- 铺开离线 MCP 包（figma / github）到 runtime/mcp-offline/ ----
+# 载荷来源：包内 mcp-offline/ 下的 figma-*.zip / github-*.zip（带版本号，纯 JS 跨架构通用）。
+# 每个 zip 内为 node_modules/...，分别解压到 mcp-offline/figma/ 与 mcp-offline/github/。
+# 幂等：对应子目录已存在则跳过该包。
+install_mcp_offline() {
+  local base="$RUNTIME_ROOT/mcp-offline"
+  local src="$PKG_DIR/mcp-offline"
+  if [ ! -d "$src" ]; then
+    echo "--> 本包未带离线 MCP 包（mcp-offline/），跳过（figma/github 将回退到 npx 联网方式）"
+    return 0
+  fi
+  mkdir -p "$base"
+  # $1=子目录名(figma/github)  $2=zip 通配前缀
+  _unzip_one() {
+    local sub="$1" glob="$2" dst="$base/$1"
+    if [ -d "$dst" ]; then
+      echo "    检测到 ${dst} 已存在，跳过 $sub"
+      return 0
+    fi
+    local zipf
+    zipf="$(ls "$src"/$glob 2>/dev/null | sort | tail -n1)"
+    if [ -z "$zipf" ] || [ ! -f "$zipf" ]; then
+      echo "    ⚠️ 未找到 $sub 的离线包（$glob），跳过"
+      return 1
+    fi
+    echo "--> 解压 $(basename "$zipf") 到 ${dst} ..."
+    mkdir -p "$dst"
+    if command -v unzip >/dev/null 2>&1; then
+      unzip -oq "$zipf" -d "$dst"
+    else
+      ditto -x -k "$zipf" "$dst"
+    fi
+  }
+  _unzip_one figma  "figma-*.zip"
+  _unzip_one github "github-*.zip"
+  echo "    离线 MCP 包处理完成（figma / github）"
+}
+install_mcp_offline || true
+
 # ---- 定位运行时里的可执行（按 CPU 架构选对应目录）----
 # 目录命名遵循官方/本项目约定：
 #   node   ：node-v<ver>-darwin-arm64 / node-v<ver>-darwin-x64
@@ -174,22 +213,33 @@ resolve_node_bin() { _find_runtime_bin node "$1"; }
 # python3 优先从独立 python-*-darwin-* 目录找
 resolve_python_bin() { _find_runtime_bin python "$1"; }
 
-# npx：运行时优先，回退系统 PATH
-NPX_PATH=""
-NPX_SOURCE="default"
-if NPX_PATH="$(resolve_node_bin npx)"; then
-  NPX_SOURCE="runtime"
-elif NPX_PATH="$(command -v npx 2>/dev/null)"; then
-  NPX_SOURCE="path"
+# node：运行时优先，回退系统 PATH（离线方案用 node 直跑 MCP 入口 js，不再依赖 npx）
+NODE_PATH_BIN=""
+NODE_SOURCE="default"
+if NODE_PATH_BIN="$(resolve_node_bin node)"; then
+  NODE_SOURCE="runtime"
+elif NODE_PATH_BIN="$(command -v node 2>/dev/null)"; then
+  NODE_SOURCE="path"
 fi
 
-if [ -n "$NPX_PATH" ]; then
-  echo "--> 自检 npx：$NPX_PATH [$NPX_SOURCE]"
+if [ -n "$NODE_PATH_BIN" ]; then
+  echo "--> 自检 node：$NODE_PATH_BIN [$NODE_SOURCE]"
 else
-  echo "--> 自检 npx：未定位到（运行时与系统 PATH 均无）[default]"
-  echo "    ⚠️ 缺少 Node.js（含 npx），figma / marriott-github 两个 MCP server 将无法启动。"
+  echo "--> 自检 node：未定位到（运行时与系统 PATH 均无）[default]"
+  echo "    ⚠️ 缺少 Node.js，figma / marriott-github 两个 MCP server 将无法启动。"
   echo "       请确认运行时已铺到 ${RUNTIME_ROOT}，或把 node 加入系统 PATH 后重跑本脚本。"
 fi
+
+# 离线 MCP 包入口（随运行时铺开在 runtime/mcp-offline/ 下）
+MCP_OFFLINE_ROOT="$RUNTIME_ROOT/mcp-offline"
+FIGMA_ENTRY="$MCP_OFFLINE_ROOT/figma/node_modules/figma-developer-mcp/dist/bin.js"
+GITHUB_ENTRY="$MCP_OFFLINE_ROOT/github/node_modules/github-mcp-server-js/dist/cli.js"
+if [ -f "$FIGMA_ENTRY" ] && [ -f "$GITHUB_ENTRY" ]; then
+  echo "--> 离线 MCP 包已就位：${MCP_OFFLINE_ROOT}"
+else
+  echo "--> ⚠️ 未找到离线 MCP 包入口（${MCP_OFFLINE_ROOT}），figma/github 需自行提供或改回 npx 方式。"
+fi
+
 
 # python3：生成 mcp.json 用（独立 python 运行时优先，回退系统 python3/python）
 PY=""
@@ -209,15 +259,15 @@ MCP_TARGET="$CURSOR_HOME/mcp.json"
 if [ -f "$MCP_TEMPLATE" ]; then
   echo "--> 生成 $MCP_TARGET"
   if [ -n "$PY" ]; then
-    "$PY" - "$MCP_TEMPLATE" "$MCP_TARGET" "$NPX_PATH" <<'PYEOF'
+    "$PY" - "$MCP_TEMPLATE" "$MCP_TARGET" "$NODE_PATH_BIN" "$FIGMA_ENTRY" "$GITHUB_ENTRY" <<'PYEOF'
 import json, sys, os
 
 template, target = sys.argv[1], sys.argv[2]
-npx_path = sys.argv[3] if len(sys.argv) > 3 else ""
-# 绿色版 npx 是 `#!/usr/bin/env node` 脚本，脱离系统 PATH 时找不到同目录 node，
-# 会报 `env: node: No such file or directory`。故把 node 的 bin 目录注入到
-# 各 MCP server 的 env["PATH"] 最前面，用 ${env:PATH} 拼接系统原 PATH（由 Cursor 解析）。
-node_bin_dir = os.path.dirname(npx_path) if npx_path else ""
+node_path = sys.argv[3] if len(sys.argv) > 3 else ""
+figma_entry = sys.argv[4] if len(sys.argv) > 4 else ""
+github_entry = sys.argv[5] if len(sys.argv) > 5 else ""
+# 离线方案：figma / marriott-github 用绿色版 node 直接跑离线包入口 js（不再走 npx，不联网）。
+# 安装脚本已按当前架构/运行时定位到 node 与两个入口的真实绝对路径，写死进 mcp.json。
 with open(template, encoding="utf-8") as f:
     tpl = json.load(f)
 
@@ -230,15 +280,23 @@ def strip_comments(obj):
 
 tpl = strip_comments(tpl)
 
-# 用自检到的 npx 绝对路径替换 figma / marriott-github 的 command（定位不到则保持模板里的 "npx"）
-if npx_path:
-    srv = tpl.setdefault("mcpServers", {})
-    for name in ("figma", "marriott-github"):
-        if name in srv:
-            srv[name]["command"] = npx_path
-            # 注入 PATH：node 的 bin 放最前，${env:PATH} 保留系统原 PATH，避免覆盖 git 等命令
-            if node_bin_dir:
-                srv[name].setdefault("env", {})["PATH"] = f"{node_bin_dir}:${{env:PATH}}"
+# 用自检到的 node 绝对路径 + 离线包入口改写 figma / marriott-github 的 command/args。
+# 定位不到 node 或入口时保持模板里的默认路径（含 ${userHome}，由 Cursor 展开）。
+srv = tpl.setdefault("mcpServers", {})
+entries = {"figma": (figma_entry, ["--stdio"]), "marriott-github": (github_entry, [])}
+for name, (entry, extra) in entries.items():
+    if name not in srv:
+        continue
+    if node_path:
+        srv[name]["command"] = node_path
+    if entry:
+        srv[name]["args"] = [entry] + extra
+    # 离线 node 直跑不需要 PATH 注入，清掉模板可能残留的 PATH，避免污染
+    env = srv[name].get("env")
+    if isinstance(env, dict):
+        env.pop("PATH", None)
+        env.pop("Path", None)
+
 
 # 幂等：保留已有 mcp.json 里用户已填的凭证
 if os.path.isfile(target):
@@ -263,20 +321,17 @@ if os.path.isfile(target):
 
 with open(target, "w", encoding="utf-8") as f:
     json.dump(tpl, f, ensure_ascii=False, indent=4)
-if npx_path:
-    print(f"    mcp.json 已生成（command={npx_path}，凭证字段留空，待你手动填写）")
+if node_path:
+    print(f"    mcp.json 已生成（command={node_path}，figma/github 用 node 直跑离线包，凭证字段留空，待你手动填写）")
 else:
-    print("    mcp.json 已生成（command=npx，凭证字段留空，待你手动填写）")
+    print("    mcp.json 已生成（未定位到 node，command 保留模板默认路径，凭证字段留空，待你手动填写）")
 PYEOF
   else
     # 无 python 时降级：直接复制模板（含 _comment），提示手动清理
     cp "$MCP_TEMPLATE" "$MCP_TARGET"
-    echo "    未找到 python，已直接复制模板为 mcp.json（含说明注释，可手动删除 _comment 行；command 仍为 npx）"
-    if [ -n "$NPX_PATH" ]; then
-      NODE_BIN_DIR="$(dirname "$NPX_PATH")"
-      echo "    ⚠️ 降级复制未注入绝对路径：请把 figma / marriott-github 的 command 改为 ${NPX_PATH}，"
-      echo "       并在其 env 里设 \"PATH\": \"${NODE_BIN_DIR}:\${env:PATH}\"（否则绿色版 npx 会报 env: node: No such file or directory）。"
-    fi
+    echo "    未找到 python，已直接复制模板为 mcp.json（含说明注释，可手动删除 _comment 行）"
+    echo "    ⚠️ 降级复制未按实际运行时改写路径：请确认 figma / marriott-github 的 command 指向"
+    echo "       ${NODE_PATH_BIN:-<node 绝对路径>}，args[0] 指向 ${MCP_OFFLINE_ROOT}/ 下对应入口 js。"
   fi
 else
   echo "    ⚠️ 未找到 ${MCP_TEMPLATE}，跳过 mcp.json 生成。"

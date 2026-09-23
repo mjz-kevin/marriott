@@ -5,6 +5,8 @@ dist/
 res/AI-SDLC-windows.zip
 res/AI-SDLC-macOS-Silicon.zip
 res/AI-SDLC-macOS-Intel.zip
+# 离线 MCP 包（figma / github，纯 JS 跨平台，体积大，另行分发，不提交）
+res/mcp-offline/
 # Python 缓存
 **/__pycache__/
 *.pyc

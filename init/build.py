@@ -247,6 +247,14 @@ def build_role(role: str, cfg: dict, common: dict, version: str) -> dict:
         else:
             warnings.append(f"公共文件『{fname}』不存在，已跳过")
 
+    # 4.5) 离线 MCP 包（figma / github）——纯 JS 跨平台通用，随包分发到 mcp-offline/
+    #      安装脚本会把它铺到 ~/.cursor/AI-SDLC/runtime/mcp-offline/，供 node 直跑（不再 npx 联网）。
+    mcp_src = RES_DIR / "mcp-offline"
+    if mcp_src.is_dir():
+        _copy_runtime_dir(mcp_src, role_dir / "mcp-offline")
+    else:
+        warnings.append(f"离线 MCP 包 res/mcp-offline 不存在，未打入（figma/github 将回退 npx 联网）")
+
     # 5) 安装脚本（从 init/templates 拷入每个包）
     #    install.sh 直接复制（保持 LF）。
     #    install.ps1 必须写成 UTF-8 with BOM：Windows PowerShell 5.1 默认按 ANSI/GBK
@@ -361,6 +369,14 @@ def build_runtime_pkg(platform: str, version: str) -> Path:
     # 1) 运行时 zip
     log(f"  拷入运行时 {zip_name}（{src_zip.stat().st_size // (1024*1024)} MB）...")
     shutil.copy2(src_zip, pkg_dir / zip_name)
+
+    # 1.5) 离线 MCP 包（figma / github）——纯 JS 跨平台通用，随运行时包一起分发
+    mcp_src = RES_DIR / "mcp-offline"
+    if mcp_src.is_dir():
+        log("  拷入离线 MCP 包 mcp-offline ...")
+        _copy_runtime_dir(mcp_src, pkg_dir / "mcp-offline")
+    else:
+        log("  ⚠️ res/mcp-offline 不存在，运行时包未带离线 MCP（figma/github 将回退 npx 联网）")
 
     # 2) 安装脚本：mac 平台带 install-runtime.sh，win 平台带 install-runtime.ps1（BOM+CRLF）
     if platform.startswith("mac"):
