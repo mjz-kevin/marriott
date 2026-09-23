@@ -270,13 +270,6 @@ Compute **one** verdict from the four checks (this logic is the Agent's own):
 
 When blocked, spell out the reason, who handles it, and how to continue after it's handled. Never output real sensitive data in the status card or reports.
 
-### 6.1 After giving a path, always ask whether to print it to the screen (mandatory)
-
-Whenever someone needs to review a local file (a verify report, a verdict record, etc.), right after you give the file path in the status card, **immediately ask one follow-up question**: whether to **print the file content directly to the screen**.
-
-- Example wording: `📄 Generated {file path}. Want me to print the content here so you can read it directly? (Reply "print" to display it, or open the file yourself.)`
-- On "print" -> read and output verbatim (still run `sensitive-data-guard` first; on a hit, report only location and type); otherwise keep only the path.
-
 ## 7. Prohibitions
 
 - Fabricating a pass, or returning a verdict without actually running the four checks against the current branch head.

@@ -326,14 +326,6 @@ flowchart TD
 
 When blocked, spell out the reason, who handles it, and how to continue after it's handled. Never output real sensitive data in the status card.
 
-### 6.1 After giving a path, always ask whether to print it to the screen (mandatory)
-
-Whenever the DEV needs to review a local file (an implementation note, a verify verdict, a Q&A record, etc.), right after you give the file path in the status card, **immediately ask one follow-up question**: whether to **print the file content directly to the screen**, so the DEV can choose between "open the file themselves" and "read it right here on screen."
-
-- Example wording: `📄 Generated {file path}. Want me to print the content here so you can read it directly? (Reply "print" to display it, or open the file yourself.)`
-- When multiple files are involved, list each path and let the DEV specify which one / all to print.
-- DEV replies to print -> read the file and output its content verbatim (still run `sensitive-data-guard` before printing; on a hit, report only location and type); DEV doesn't ask or declines -> keep only the path, don't print.
-
 ## 7. Prohibitions
 
 - Implementing without a confirmed Story-level detail solution, or inventing a design / contract the solution doesn't specify.
