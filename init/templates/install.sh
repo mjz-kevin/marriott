@@ -118,6 +118,10 @@ install_runtime() {
     return 1
   fi
 
+  # 清理 macOS 打包产生的资源分叉目录 / 垃圾文件（若运行时 zip 是在 macOS 上用 Finder/zip 打的）
+  rm -rf "$CURSOR_HOME/__MACOSX"
+  find "$CURSOR_HOME/AI-SDLC" -name ".DS_Store" -type f -delete 2>/dev/null || true
+
   if [ -d "$RUNTIME_ROOT" ]; then
     echo "    运行时已解压到 ${RUNTIME_ROOT}"
   else
@@ -160,6 +164,8 @@ install_mcp_offline() {
     else
       ditto -x -k "$zipf" "$dst"
     fi
+    rm -rf "$dst/__MACOSX"
+    find "$dst" -name ".DS_Store" -type f -delete 2>/dev/null || true
   }
   _unzip_one figma  "figma-*.zip"
   _unzip_one github "github-*.zip"

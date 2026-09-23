@@ -75,6 +75,9 @@ if (Test-Path $runtimeZip) {
             Write-Warning "解压到 C:\ 失败（可能无写入权限）。请手动把 AI-SDLC-windows.zip 解压到 C:\，得到 C:\AI-SDLC\runtime\。"
             Write-Warning $_.Exception.Message
         }
+        # 清理 macOS 打包产生的资源分叉目录 / 垃圾文件（若 zip 是在 macOS 上打的）
+        Remove-Item -Recurse -Force "C:\__MACOSX" -ErrorAction SilentlyContinue
+        Get-ChildItem -Path "C:\AI-SDLC" -Recurse -Force -Filter ".DS_Store" -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
     }
 } else {
     Write-Warning "本包未包含 AI-SDLC-windows.zip，跳过运行时解压。请另行获取绿色版运行时并解压到 C:\AI-SDLC\runtime\。"
@@ -105,6 +108,7 @@ if (Test-Path $mcpSrc) {
         } catch {
             Write-Warning "解压 $($zipf.Name) 失败：$($_.Exception.Message)"
         }
+        Remove-Item -Recurse -Force (Join-Path $dst "__MACOSX") -ErrorAction SilentlyContinue
     }
     Write-Host "    离线 MCP 包处理完成（figma / github）"
 } else {

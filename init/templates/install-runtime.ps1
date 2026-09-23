@@ -36,6 +36,10 @@ try {
     exit 1
 }
 
+# 清理 macOS 打包产生的资源分叉目录 / 垃圾文件（若 zip 是在 macOS 上打的）
+Remove-Item -Recurse -Force "C:\__MACOSX" -ErrorAction SilentlyContinue
+Get-ChildItem -Path "C:\AI-SDLC" -Recurse -Force -Filter ".DS_Store" -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+
 if (-not (Test-Path $runtimeRoot)) {
     Write-Warning "解压后未发现 $runtimeRoot，请检查运行时包内结构（应为 AI-SDLC\runtime\...）。"
     exit 1
@@ -66,6 +70,7 @@ if (Test-Path $mcpSrc) {
         } catch {
             Write-Warning "解压 $($zipf.Name) 失败：$($_.Exception.Message)"
         }
+        Remove-Item -Recurse -Force (Join-Path $dst "__MACOSX") -ErrorAction SilentlyContinue
     }
     Write-Host "    离线 MCP 包处理完成（figma / github）"
 } else {

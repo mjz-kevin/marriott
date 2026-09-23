@@ -48,6 +48,10 @@ else
   ditto -x -k "$ZIP_PKG" "$CURSOR_HOME"
 fi
 
+# 清理 macOS 打包产生的资源分叉目录 / 垃圾文件（若 zip 是在 macOS 上用 Finder/zip 打的）
+rm -rf "$CURSOR_HOME/__MACOSX"
+find "$CURSOR_HOME/AI-SDLC" -name ".DS_Store" -type f -delete 2>/dev/null || true
+
 if [ -d "$RUNTIME_ROOT" ]; then
   echo "    运行时已就位：${RUNTIME_ROOT}"
 else
@@ -80,6 +84,8 @@ if [ -d "$MCP_SRC" ]; then
     else
       ditto -x -k "$zipf" "$dst"
     fi
+    rm -rf "$dst/__MACOSX"
+    find "$dst" -name ".DS_Store" -type f -delete 2>/dev/null || true
   done
   echo "    离线 MCP 包处理完成（figma / github）"
 else
