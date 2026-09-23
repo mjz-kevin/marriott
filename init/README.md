@@ -35,8 +35,8 @@ init/
 | 角色 | Agents | 说明 |
 | --- | --- | --- |
 | **PO** | eval-agent, userstory-agent | Eval / User Story，PRD 与建单相关 Skill |
-| **TL** | tech-solution + dev + verify + code-review | 与 Dev **完全相同**的内容 |
-| **Dev** | tech-solution + dev + verify + code-review | 与 TL **完全相同**的内容 |
+| **TL** | tech-solution + dev + verify + code-review | 含 PRD 级技术方案（`tech-solution-prd`），其余与 Dev 相同 |
+| **Dev** | tech-solution + dev + verify + code-review | 与 TL 相同，但**不含** `tech-solution-prd` |
 | **QA** | test-agent | 用例生成、自动化测试、报告与 Bug 建单相关 Skill |
 
 > 公共 Skill（全部角色都装）：`sensitive-data-guard`、`profile-select`、`create-pr`。
