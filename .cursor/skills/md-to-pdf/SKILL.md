@@ -54,6 +54,7 @@ Conversion progress:
 - [ ] Step 2: Environment self-check (--check-env), confirm npx is available
 - [ ] Step 3: Run the conversion, produce the PDF
 - [ ] Step 4: Verify the result (mermaid_pending / images_missing are empty, PDF opens)
+- [ ] Step 5: Report the absolute path of the produced PDF back to the user
 ```
 
 ### Step 1: Locate the local .md
@@ -84,6 +85,10 @@ By default it outputs a `.pdf` with the same name in the same directory as the s
 - **Wide tables / Chinese**: injects a Chinese font stack (PingFang / Microsoft YaHei / Source Han Sans, etc.; Chromium picks an available one) and print backgrounds; wide tables default to landscape layout, and overly wide cells wrap by word.
 - **Image height**: images are scaled proportionally to a single printable-page height (about 250mm portrait, about 165mm landscape) so each tall design image fits on one page and isn't cut across pages; when there are many tall mobile design images, prefer `--orientation portrait`—landscape has a shorter available height and tall images break across pages more easily.
 
+### Step 5: Report the PDF path
+
+After the conversion succeeds, always tell the user the **absolute path** of the produced PDF (the `pdf` field returned by the script), so they can open, archive, or share it directly—don't stop at "conversion done" without giving the path. If `--out` was used, report that path; otherwise report the same-name, same-directory path next to the source `.md`.
+
 ## Mandatory rules
 
 | Rule | Description |
@@ -93,6 +98,7 @@ By default it outputs a `.pdf` with the same name in the same directory as the s
 | Diagrams must be truly rendered | mermaid is always rendered into real images via `mmdc`, not faked as code-block text; a non-empty `mermaid_pending` counts as not meeting the bar |
 | Single dependency | PDF output and diagram rendering both go through `npx`, introducing no extra Python / system-level dependencies; if `npx` is missing, follow the guidance to install it, don't fall back to another path |
 | Sensitive information | If the `.md` being converted contains real secrets, internal domains, member IDs, etc., handle it via the sensitive-data-guard step first, then decide whether to export |
+| Report the PDF path | After a successful export, must report the absolute path of the produced PDF back to the user; a "done" message without the path doesn't meet the bar |
 
 ## Quality gates
 
