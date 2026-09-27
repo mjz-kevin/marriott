@@ -28,6 +28,7 @@ metadata:
 |------|----|
 | 语言栈 | `profiles/{profile}.yaml` → `code.languages` |
 | 测试框架 | `profiles/{profile}.yaml` → `test.unit.*.framework` — 按被测代码所在端／仓库选取 |
+| 单测放置位置 | iOS（`test_style: spm_module_scheme`）：写入被测模块的 `modules.*.test_target` 对应目录（`{package_dir}/Tests/{test_target}/`），**不写主壳 `DragonAppTests`**；其余端按仓库既有单测目录约定 |
 | 覆盖率口径 | `profiles/{profile}.yaml` → `test.coverage`（`enabled` / `min_line`；作为生成时的覆盖目标提示） |
 
 所需配置键缺失（TBD）→ 停止并要求补齐；不臆测测试框架。
@@ -71,6 +72,20 @@ metadata:
 ### S3 生成单测代码
 
 按 `test.unit.*.framework` 声明的框架生成（如 APP：XCTest／JUnit；CMS：cncms=vitest、monorepo=jest）。风格与被测仓库既有单测一致；断言明确，不写只跑不断言的空测试。生成后做**静态自检**（语法正确、import／符号可解析、符合框架约定）；可选做一次编译自检，但**不执行测试**——跑测试与统计是验证环节的职责。
+
+**Android（gradle／JUnit）测试基类映射**（Dragon App 特有约定，按被测类的父类选测试基类，勿凭空另建基类）：
+
+| 被测类型 | 测试基类 |
+|------|------|
+| 继承 `MarriottBaseLegacyViewModel`（View UI） | `MarriottBaseViewModelTest` |
+| 继承 `MarriottBaseComposeViewModel`（Compose UI） | `MarriottBaseComposeViewModelTest` |
+| 继承 `MarriottNestedViewModel`（View UI） | `MarriottNestedViewModelTest` |
+| 继承 `MarriottComposeNestedViewModel`（Compose UI） | `MarriottComposeNestedViewModelTest` |
+| 继承 `MarriottStateGenericItem` | `MarriottStateGenericItemTest` |
+| Builder 类（构造领域模型，如 `GQLPropertyInfoBuilder`／`BookingModelBuilder`） | `MarriottBaseBuilderTest` |
+| Repository／Util／其他非 VM 非 Builder 类（如 `ValidationUtils`／`DateUtils`／`BookingRepository`） | `MarriottBaseTest` |
+
+Android 写法约定：测试文件名＝源文件名追加 `Test`、目录镜像源码结构；测试方法名用反引号包裹、遵循 given-when-then；mock 依赖用 `relaxed = true`；断言优先用自定义断言（`isTrue()`／`isEqualTo()` 等）；import 排序且无未用 import。
 
 ### S4 覆盖自检
 

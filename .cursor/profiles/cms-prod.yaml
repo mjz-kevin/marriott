@@ -80,8 +80,20 @@ code:
 
 # ---------------------------------------------------------------- 代码审核（代码审核类 skill 用）
 review:
-  rules_source: TBD                   # code-review-rules 用：CMS 团队编码规范来源（Confluence 规范页 URL/ID 或仓库内规范文件路径）；待补，缺失时 skill 停下要求补齐，不臆造规范
-  security_baseline: null             # 可选：安全基线来源；缺省用 skill 内置通用安全基线
+  rules_source:                       # code-review-rules 用：CMS 团队编码规范来源（已绑定业界标准；未来有团队自有规范可追加）
+    kind: industry_standard           # 来源类型：industry_standard（业界标准）/ confluence（团队规范页）/ repo_file（仓库内规范文件）
+    typescript:                       # TypeScript 适用标准
+      - name: Google TypeScript Style Guide
+        url: https://google.github.io/styleguide/tsguide.html
+        dimensions: [命名, 分层/职责, 异常处理, 日志, 性能]
+      - name: typescript-eslint recommended rules
+        url: https://typescript-eslint.io/rules/
+        dimensions: [命名, 异常处理, 性能]
+  security_baseline:                  # 安全基线来源：绑定 OWASP Web 标准；缺省则用 skill 内置通用安全基线
+    - name: OWASP ASVS (Application Security Verification Standard)
+      url: https://owasp.org/www-project-application-security-verification-standard/
+    - name: OWASP Top 10
+      url: https://owasp.org/www-project-top-ten/
   ignore_globs:                       # diff-fetch 免审文件：生成物/锁文件不纳入审核上下文
     - "pnpm-lock.yaml"
     - "**/dist/**"

@@ -31,6 +31,7 @@ Create tickets in Jira from the confirmed Story list, fill fields, establish bac
 | Jira site | `profiles/{profile}.yaml` → `mcp.jira.host` |
 | Jira project | By default derived from the Parent Epic key prefix (like Parent=CNAPP-5661 → project CNAPP); when `profiles/{profile}.yaml` → `mcp.jira.project_key` exists, it's used as an override |
 | Ticket type | `profiles/{profile}.yaml` → `mcp.jira.issue_type` |
+| Summary platform prefix | `profiles/{profile}.yaml` → `mcp.jira.summary_prefix` (e.g. `android: "[Android]"` / `ios: "[iOS]"`); prepend per the ticket's platform, don't duplicate if already present, omit when the team config has no `summary_prefix` |
 | Initial status after creation | `profiles/{profile}.yaml` → `mcp.jira.initial_status` |
 | Agile Team default | `profiles/{profile}.yaml` → `mcp.jira.agile_team` (empty means no default, needs manual entry) |
 | Label enum and auto-fill policy | `profiles/{profile}.yaml` → `mcp.jira.labels` (valid enum, case sensitivity, the `auto_fill` categories allowed to be auto-filled) |
@@ -95,6 +96,7 @@ Write per the Story template's field table:
 | Field | Handling |
 |------|------|
 | Type | Take `mcp.jira.issue_type` |
+| Summary | Prepend the platform prefix per `mcp.jira.summary_prefix` (Android ticket ⇒ `[Android]`, iOS ticket ⇒ `[iOS]`), consistent with the ticket's Component/`platform` label. Don't duplicate if the given summary already carries the prefix; omit when the team config has no `summary_prefix` or the platform doesn't apply |
 | Parent | Must fill the Epic |
 | Agile Team | Per `mcp.jira.agile_team`: fill if it has a value, leave empty for manual entry if empty |
 | Component | Per `mcp.jira.components.platform_rule`; teams without `components` configured don't handle it. When Component resolves to `iOS`, set the `iOS` label in `labels.platform` in tandem (keep Component ↔ platform label consistent) |

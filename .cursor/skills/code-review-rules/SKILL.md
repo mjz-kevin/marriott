@@ -26,18 +26,18 @@ metadata:
 
 | 用途 | 配置键 |
 |------|----|
-| 编码规范来源 | `profiles/{profile}.yaml` → `review.rules_source`（APP／CMS 各自的编码规范，如 Confluence 规范页 URL/ID 或仓库内规范文件路径）— **当前为 TBD，缺失则停止并要求补齐规范来源，不臆造规范** |
-| 语言栈 | `profiles/{profile}.yaml` → `code.languages`（决定按哪套语言规范审核，如 swift/kotlin/typescript） |
-| 安全基线 | `profiles/{profile}.yaml` → `review.security_baseline`（可选，缺省用内置通用安全基线） |
+| 编码规范来源 | `profiles/{profile}.yaml` → `review.rules_source`（APP／CMS 各自的编码规范；`kind` 标明来源类型：`industry_standard`（业界标准）/ `confluence`（团队规范页）/ `repo_file`（仓库内规范文件）；业界标准按语言栈子键给出标准名／URL／覆盖维度） |
+| 语言栈 | `profiles/{profile}.yaml` → `code.languages`（决定读 `rules_source` 下哪个语言子键，如 swift/kotlin/typescript） |
+| 安全基线 | `profiles/{profile}.yaml` → `review.security_baseline`（标准名＋URL 列表；缺省用内置通用安全基线） |
 
-规范来源为 TBD 或缺失 → 停止并回报「需补齐 `review.rules_source`」，不用臆造规范审核（否则审核结论不可信）。
+`rules_source` 已绑定业界标准（`kind: industry_standard`）时，按语言栈取对应标准的 URL 与覆盖维度作为审核基准；标准页不可读或对某维度无覆盖，按该维度「规范未覆盖」处理，不臆造标准。`rules_source` 整体缺失/为 TBD/不可读 → 停止并回报「需补齐 `review.rules_source`」，不臆造规范审核（否则审核结论不可信）。
 
 ## 1. 前置
 
 | # | 条件 |
 |---|------|
 | 1 | 已有 diff-fetch 产出的审核上下文（逐文件 patch），否则先做 diff-fetch |
-| 2 | 团队编码规范来源可读（`review.rules_source` 已配置且可访问）；为 TBD 则停止并要求补齐 |
+| 2 | 团队编码规范来源可读（`review.rules_source` 已配置且可访问；业界标准 URL 可达）；整体缺失/TBD 则停止并要求补齐 |
 | 3 | 能按语言栈解析出适用的规范维度 |
 
 ## 2. 工作流
@@ -52,7 +52,7 @@ metadata:
 
 ### S1 读取规范基准
 
-从 `review.rules_source` 读团队编码规范（缺失即停）。按 `code.languages` 选适用维度：命名、分层/职责边界、异常处理、日志、性能、以及安全基线。规范文档没覆盖的维度不臆造标准，只按已声明规范判定。
+从 `review.rules_source` 读团队编码规范（整体缺失即停）。按 `code.languages` 定位对应语言子键（swift/kotlin/typescript）取适用标准；`kind: industry_standard` 时以标准页（如 Swift API Design Guidelines / Kotlin Coding Conventions / Google TypeScript Style Guide）声明的规则为基准，各条目覆盖的维度以其 `dimensions` 为准；安全基线取 `review.security_baseline`（如 OWASP MASVS/ASVS），缺省用内置通用安全基线。规范/标准未覆盖的维度不臆造标准，只按已声明规范判定。
 
 ### S2 逐条审核维度
 
@@ -75,7 +75,7 @@ metadata:
 |------|------|
 | 等级 | 阻断（必须改，否则不应合并）／建议（应改）／提示（可选优化） |
 | 定位 | 文件路径＋行号（对应 diff 的新行号） |
-| 命中规则 | 依据规范的哪一条（引用规则条目/编号，来自 rules_source） |
+| 命中规则 | 依据规范/业界标准的哪一条（引用规则条目/编号或标准名＋章节，来自 rules_source） |
 | 根因 | 一句话说明为何违反 |
 | 修改建议 | 面向作者的可执行建议 |
 
@@ -85,8 +85,8 @@ metadata:
 
 | 规则 | 说明 |
 |------|------|
-| 规范为基准 | 审核依据来自 `review.rules_source`；规范未覆盖的不臆造标准 |
-| 规范缺失即停 | `rules_source` 为 TBD/不可读时停止并要求补齐，不臆造规范审核 |
+| 规范为基准 | 审核依据来自 `review.rules_source`（含绑定的业界标准）；规范/标准未覆盖的不臆造 |
+| 规范缺失即停 | `rules_source` 整体缺失/TBD/不可读时停止并要求补齐，不臆造规范审核 |
 | 只审本次 diff | 只审本 PR 触及的改动，不发散审历史代码 |
 | 每条可追溯 | 每个问题都引用命中的规则条目与 file:line，不凭主观 |
 | 安全默认阻断 | 硬编码密钥/注入/未校验输入等安全问题默认定「阻断」 |
@@ -95,7 +95,7 @@ metadata:
 
 ## 4. 质量门禁
 
-- 规范来源已成功读取（非 TBD、非臆造）
+- 规范来源已成功读取（`rules_source` 已配置、业界标准页可达，非 TBD、非臆造）
 - 每个待审文件的改动块都过了命名/分层/异常/日志/性能/安全六维
 - 每个问题含等级／file:line／命中规则／根因／修改建议
 - 安全问题已按阻断级标注（除非规范另有约定）
@@ -118,7 +118,8 @@ metadata:
 
 | 现象 | 处理 |
 |------|------|
-| `review.rules_source` 为 TBD/不可读 | 停止并回报需补齐规范来源；不臆造规范 |
+| `review.rules_source` 整体缺失/TBD/不可读 | 停止并回报需补齐规范来源；不臆造规范 |
+| 业界标准页某维度无覆盖 | 该维度不判定，注明「标准未覆盖」，不臆造标准 |
 | 规范未覆盖某维度 | 该维度不判定，注明「规范未覆盖」，不臆造标准 |
 | diff 过大无 patch 的文件 | 请 diff-fetch 单独拉取该文件后再审，不跳过 |
 | 疑似安全问题但不确定 | 标为「建议」并注明需人工确认，不误报为阻断也不漏报 |

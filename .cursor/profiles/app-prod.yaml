@@ -41,6 +41,10 @@ mcp:
         ios_only: iOS                # 仅 iOS 专属的票：Component 选 iOS
         android: none                # Android 票：不选任何 Component
         note: "只有 iOS 专属票选 Component=iOS；Android 票不选 Component。跨端/无关平台的票按需留空。同时按 labels.platform 规则打上对应平台标签（iOS 专属票必打 iOS 标签）。"
+    summary_prefix:                  # 建单标题（summary）平台前缀：与 components/labels 的平台判定同源
+      android: "[Android]"           # Android 票 summary 以 [Android] 开头
+      ios: "[iOS]"                   # iOS 票 summary 以 [iOS] 开头
+      note: "按票的平台在 summary 前加 [Android]/[iOS]；平台不明时先判定平台再建单，不臆测。用户已自带前缀则不重复添加。跨端/无关平台按需省略。"
     links: [prd, figma, tech_solution]
 
   confluence:
@@ -93,16 +97,35 @@ code:
       action: build                    # skill 组装为 `xcodebuild -project ... -scheme ... -destination ... build`
     android:
       tool: gradle                     # skill 按 OS 选 wrapper：Unix=./gradlew，Windows=gradlew.bat（不硬编码 ./gradlew）
-      tasks: [clean, assembleOneTstDebug] # gradle 8.11.1；PR 门禁 flavor=oneTst（见 PRValidation.yml）
-      static_check_tasks: [clean, detektAll] # PR 门禁静态检查是 detekt（非普通 lint），build-verify 可一并跑
+      tasks: [clean, assembleOneTstDebug] # gradle wrapper 8.11.1 / AGP 8.9.3 / Kotlin 2.1.10；构建 flavor=oneTst（PR 门禁在 Harness .harness/.../*.yaml，GitHub PRValidation.yml 的 pull_request 触发已注释、仅 workflow_dispatch）；须用 JDK 17（勿用 Android Studio 内置更高版本 JDK）；本地构建前置：仓库根目录需 Vault 密钥文件 secret_android_api_keys.json，私有依赖仓库（腾讯 EdgeOne maven.cnb.cool）需 EDGE_ONE_REPO_USER/PW 凭据
+      static_check_tasks: [clean, detekt] # 静态检查用标准 detekt 任务（gradle/detekt.gradle 提供；detektAll 未在 gradle 定义、勿用）；detekt 真实 PR 门禁在 Harness（.harness .../detekt.yaml 跑 ./gradlew --no-daemon detekt）
   contract:                           # contract-diff 口径：接口契约以技术方案 detail 的接口定义为基线
     source: tech_solution_detail       # 契约基线来源：Story 级明细方案的接口定义章节
     match: field_level                 # 比对粒度：逐字段（Swift 看 Codable/CodingKeys；Kotlin 看 data class/注解）
 
 # ---------------------------------------------------------------- 代码审核（代码审核类 skill 用）
 review:
-  rules_source: TBD                   # code-review-rules 用：APP 团队编码规范来源（Confluence 规范页 URL/ID 或仓库内规范文件路径）；待补，缺失时 skill 停下要求补齐，不臆造规范
-  security_baseline: null             # 可选：安全基线来源；缺省用 skill 内置通用安全基线
+  rules_source:                       # code-review-rules 用：APP 团队编码规范来源（已绑定业界标准；未来有团队自有规范可追加）
+    kind: industry_standard           # 来源类型：industry_standard（业界标准）/ confluence（团队规范页）/ repo_file（仓库内规范文件）
+    swift:                            # Swift 适用标准
+      - name: Swift API Design Guidelines
+        url: https://www.swift.org/documentation/api-design-guidelines/
+        dimensions: [命名, 分层/职责]
+      - name: Google Swift Style Guide
+        url: https://google.github.io/swift/
+        dimensions: [命名, 分层/职责, 异常处理, 日志, 性能]
+    kotlin:                           # Kotlin 适用标准
+      - name: Kotlin Coding Conventions
+        url: https://kotlinlang.org/docs/coding-conventions.html
+        dimensions: [命名, 分层/职责]
+      - name: Android Kotlin style guide
+        url: https://developer.android.com/kotlin/style-guide
+        dimensions: [命名, 分层/职责, 异常处理, 日志, 性能]
+  security_baseline:                  # 安全基线来源：绑定 OWASP 移动端标准；缺省则用 skill 内置通用安全基线
+    - name: OWASP MASVS (Mobile Application Security Verification Standard)
+      url: https://mas.owasp.org/MASVS/
+    - name: OWASP Mobile Top 10
+      url: https://owasp.org/www-project-mobile-top-10/
   ignore_globs:                       # diff-fetch 免审文件：生成物/锁文件不纳入审核上下文
     - "**/Package.resolved"           # SPM 锁文件
     - "**/*.pbxproj"                  # Xcode 工程文件（改动噪声大，非业务代码）
@@ -113,18 +136,27 @@ review:
 
 # ---------------------------------------------------------------- 测试（开发/验证类 skill 用）
 test:
-  unit:                               # 单元测试语义配置（unit-test-authoring / unit-test-runner 按 OS 组装命令）；对齐 CI
+  unit:                               # 单元测试语义配置（unit-test-authoring / unit-test-runner 按 OS 组装命令）
     ios:                               # 仅 macOS 可执行
       tool: xcodebuild
-      framework: XCTest                # 测试 target：DragonAppTests（单测）/ DragonAppUITests（UI）
-      project: DragonApp.xcodeproj
-      scheme: DragonApp
+      framework: XCTest                # 各模块用 XCTest / swift-testing；单测在各 SPM 模块的 Tests target 内
+      # 单测组织：本仓库单测分散在各 SPM 模块（Module/ios-dragon-*/Tests/），主壳 DragonAppTests 仅占位、勿用；
+      # 每个模块是独立 SPM 包，scheme=packageName，须在该模块目录内执行 xcodebuild（package_dir）。
+      # Harness CI（.harness/.../iOS_Dragon_App）只做 Archive/Sign/Upload，不跑单测——单测由本 skill 在本地/Agent 执行。
+      test_style: spm_module_scheme    # iOS 单测执行样式：按被测模块 scheme（区别于主壳单 target）
       destination: "platform=iOS Simulator,name={simulator}" # {simulator} 由 unit-test-runner 代入本机可用模拟器名，不写死型号（各机 Xcode/模拟器版本不同）
-      only_testing: DragonAppTests     # skill 组装为 `xcodebuild test -project ... -destination ... -only-testing:DragonAppTests`
+      modules_discovery:               # 模块清单由 unit-test-runner 运行时从各 SPM 包推导，不手工维护（避免与代码脱节）
+        glob: Module/ios-dragon-*/Package.swift # 扫描范围：每个匹配的目录即一个候选 SPM 模块
+        scheme_from: packageName       # scheme = 该 Package.swift 里 `let packageName = "..."` 的值（目录名 ≠ 包名，必须读文件）
+        test_target: "{scheme}Tests"   # test_target 命名恒为 包名+Tests（本仓库统一约定）
+        include_if: has_test_target    # 纳入条件：Package.swift 声明了 .testTarget（无测试 target 的模块自动排除，如 keys/uitest）
+        package_dir: "{glob_dir}"      # package_dir = 命中 glob 的模块目录（xcodebuild 在此目录内执行）
+      # skill 组装（在 package_dir 内）：xcodebuild test -scheme {scheme} -destination '{destination}' -only-testing:{test_target}/{测试类}
+      # only-testing 限定到本次改动的测试类，绕开同 target 内其他历史坏测试（XCTest 会编译整个 test target，任一文件编译不过即整体失败）
     android:
       tool: gradle                     # skill 按 OS 选 ./gradlew 或 gradlew.bat
       framework: JUnit                 # 覆盖率随单测一步产出：PR 门禁与 sonar 均用 jacocoCoverage（jacoco）
-      tasks: [jacocoCoverage]
+      tasks: [jacocoCoverage]           # jacocoCoverage 内部依赖 testOneTstDebugUnitTest（gradle/jacoco.gradle 选含 "tst" 的 flavor=oneTstDebug）；注意 gradle 会编译整个 test 源集，任一测试文件编译不过即整体失败
   coverage:                           # 覆盖率口径（unit-test-runner 汇总用）
     enabled: true                      # 是否统计并展示覆盖率（Android jacoco→sonar，projectKey=bmad）
     min_line: 0                        # 门禁阈值：0=只报告不卡门禁；>0=低于阈值判未通过（与 enabled 职责正交）
