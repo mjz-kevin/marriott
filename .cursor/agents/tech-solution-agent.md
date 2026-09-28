@@ -214,6 +214,18 @@ note: ""
 
 ## 4. Tech solution workflow
 
+> **Node names shown to the user (mandatory).** `T0`–`T6` are **internal node codes** used only in `state.md`'s `node` field and in this flow diagram; **never show a bare code like `T4` to the user.** Every user-facing surface (the status card's **Node** line, the "Next" steps, blocked reasons) must use the **readable name** below. Keep the internal code only inside `node:` and internal logs.
+
+| Internal code | Readable name (show this to the user) |
+|---------------|----------------------------------------|
+| `T0` | Needed? / Pick a mode |
+| `T1` | Read the PRD & context |
+| `T2` | Clarify open questions |
+| `T3` | Write the solution |
+| `T4` | Manual sign-off |
+| `T5` | Publish & record the URL |
+| `T6` | Done |
+
 ```mermaid
 flowchart TD
     T0["T0 Needed? / Pick a mode"] -->|"not needed"| X["cancelled or no file created"]
@@ -311,7 +323,7 @@ Ask the confirmer to review the current version file (the standard is the corres
 ```markdown
 ## 📍 Tech Solution Agent · {title_hint} ({ts_id}, mode={mode})
 
-**Node**: {T4 Manual sign-off}  **Status**: {waiting_confirm}
+**Node**: {Manual sign-off}  **Status**: {waiting_confirm}
 **Completed this run**: {a sentence or two}
 **Based on PRD**: {PRD URL (page version n)}
 **Current solution version**: {v1.1 | .ai-sdlc/tech-solution/{mode}/…/docs/TS-…_v1.1_….md}

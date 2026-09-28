@@ -204,6 +204,19 @@ note: ""
 
 ## 4. Development workflow
 
+> **Node names shown to the user (mandatory).** `D0`–`D7` are **internal node codes** used only in `state.md`'s `node` field and in this flow diagram; **never show a bare code like `D4` to the DEV.** Every user-facing surface (the status card's **Node** line, the "Next" steps, blocked reasons) must use the **readable name** below. Keep the internal code only inside `node:` and internal logs.
+
+| Internal code | Readable name (show this to the user) |
+|---------------|----------------------------------------|
+| `D0` | Initialize / pick profile |
+| `D1` | Read the Story, tech solution & repo |
+| `D2` | Check out the baseline |
+| `D3` | Create the Feature branch |
+| `D4` | Implement code + unit tests |
+| `D5` | Hand off to the Verify Agent |
+| `D6` | Commit & push |
+| `D7` | Done (DEV runs it, then opens the PR) |
+
 ```mermaid
 flowchart TD
     D0["D0 Initialize / pick profile"] --> D1["D1 Read Story, solution, repo"]
@@ -312,7 +325,7 @@ flowchart TD
 ```markdown
 ## 📍 Dev Agent · {title_hint} ({story_key})
 
-**Node**: {D4 Implement (attempt 2/3)}  **Status**: {in_progress | waiting_verify | blocked}
+**Node**: {Implement code + unit tests (attempt 2/3)}  **Status**: {in_progress | waiting_verify | blocked}
 **Completed this run**: {a sentence or two}
 **Based on solution**: {tech solution URL (page version n)}
 **Branch**: {ai/CNAPP-121-… | not yet created}  **Baseline**: {develop@abc123}

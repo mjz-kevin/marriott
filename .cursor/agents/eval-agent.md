@@ -201,6 +201,20 @@ note: ""
 
 ## 4. PRD workflow
 
+> **Node names shown to the user (mandatory).** `E0`–`E8` are **internal node codes** used only in `state.md`'s `node` field and in this flow diagram; **never show a bare code like `E1` to the PO.** Every user-facing surface (the status card's **Node** line, the "Next" steps, blocked reasons) must use the **readable name** below. Keep the internal code only inside `node:` and internal logs.
+
+| Internal code | Readable name (show this to the user) |
+|---------------|----------------------------------------|
+| `E0` | Initialize |
+| `E1` | Multi-round clarification |
+| `E2` | Write the PRD & User Stories |
+| `E3` | PO sign-off |
+| `E4` | Publish & record the URL |
+| `E5` | Done |
+| `E6` | Classify the requirement change |
+| `E7` | Update PRD links |
+| `E8` | Revise User Stories after Refinement |
+
 ```mermaid
 flowchart TD
     E0["E0 Initialize"] --> E1["E1 Multi-round clarification"]
@@ -370,7 +384,7 @@ When a refine meeting / offline refine requires re-splitting, splitting smaller,
 ```markdown
 ## 📍 Eval Agent · PRD · {feature_name} ({prd_id})
 
-**Node**: {E1 Multi-round clarification (round 2/3)}  **Status**: {waiting_user}
+**Node**: {Multi-round clarification (round 2/3)}  **Status**: {waiting_user}
 **Completed this run**: {a sentence or two}
 **Current PRD version**: {v1.1 | .ai-sdlc/prd/…/docs/PRD_…_v1.1_….md}
 **User Stories**: {n total; this version added a / modified m / deleted d}

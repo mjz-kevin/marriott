@@ -175,6 +175,16 @@ note: ""
 
 ## 4. Verification workflow
 
+> **Node names shown to the user (mandatory).** `V0`–`V4` are **internal node codes** used only in `state.md`'s `node` field and in this flow diagram; **never show a bare code like `V2` to the user.** Every user-facing surface (the status card's **Node** line, the "Next" steps, blocked reasons) must use the **readable name** below. Keep the internal code only inside `node:` and internal logs.
+
+| Internal code | Readable name (show this to the user) |
+|---------------|----------------------------------------|
+| `V0` | Initialize / pick profile |
+| `V1` | Read the branch code, Story & solution |
+| `V2` | Run the four checks |
+| `V3` | Aggregate the verdict |
+| `V4` | Done |
+
 ```mermaid
 flowchart TD
     V0["V0 Initialize / pick profile"] --> V1["V1 Read branch code, Story, solution"]
@@ -248,7 +258,7 @@ Compute **one** verdict from the four checks (this logic is the Agent's own):
 ```markdown
 ## 📍 Verify Agent · {title_hint} ({story_key})
 
-**Node**: {V3 Aggregate verdict}  **Status**: {done | in_progress | blocked}
+**Node**: {Aggregate the verdict}  **Status**: {done | in_progress | blocked}
 **Verdict**: ✅ pass | ❌ fail (bounce to Dev Agent) | ⛔ escalate (DEV intervene)
 **Attempt**: {1/3}  **Branch**: {ai/CNAPP-121-… @ def456}
 **Checks**: build {pass} · contract {fail: 2 deviations} · unit-test {pass 42/44, cov 78%} · acceptance {fail: T2}

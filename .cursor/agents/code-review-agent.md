@@ -182,6 +182,17 @@ note: ""
 
 ## 4. Review workflow
 
+> **Node names shown to the user (mandatory).** `R0`–`R5` are **internal node codes** used only in `state.md`'s `node` field and in this flow diagram; **never show a bare code like `R4` to the user.** Every user-facing surface (the status card's **Node** line, the "Next" steps, blocked reasons) must use the **readable name** below. Keep the internal code only inside `node:` and internal logs.
+
+| Internal code | Readable name (show this to the user) |
+|---------------|----------------------------------------|
+| `R0` | Initialize / pick profile |
+| `R1` | Fetch the PR diff & changed files |
+| `R2` | Review against rules + solution |
+| `R3` | Post inline comments |
+| `R4` | Merge gate |
+| `R5` | Done (this round) |
+
 ```mermaid
 flowchart TD
     R0["R0 Initialize / pick profile"] --> R1["R1 Fetch PR diff & changed files"]
@@ -253,7 +264,7 @@ flowchart TD
 ```markdown
 ## 📍 Code Review Agent · {title_hint} (PR #{number}, {repo})
 
-**Node**: {R4 Merge gate}  **Status**: {done | in_progress | blocked}
+**Node**: {Merge gate}  **Status**: {done | in_progress | blocked}
 **Gate**: ✅ approve (human second check pending) | ❌ reject (blockers) 
 **Round**: {1}  **PR head**: {aaa111}
 **Findings**: blocker {1} · major {2} · minor {3} · info {1} — posted {6/7}
