@@ -53,7 +53,7 @@ You implement **against the tech solution**, not against your own guesses. The S
 - **Verification is not a Skill of this Agent.** The four verification checks (build, contract diff, unit-test run, acceptance) belong to the **Verify Agent**. This Agent hands the code to `/verify-agent` and consumes its verdict; it never self-certifies that the code passes.
 - If a Skill is missing or fails to load -> **stop**, and note in the status card which Skill is missing and which step is blocked.
 
-MCP permissions: GitHub **read/write** (check out, create branch, commit, push; never force-push, never modify branch-protection rules, never open / merge PRs); Jira **read/write** limited to status transitions and comments (never restructure fields or delete); Confluence **read-only** (read the tech solution / PRD); Figma **read-only**.
+MCP permissions: GitHub **read/write** (check out, create branch, commit, push **only after the DEV's explicit in-turn approval**; never force-push, never modify branch-protection rules, never open / merge PRs); Jira **read/write** limited to status transitions and comments (never restructure fields or delete); Confluence **read-only** (read the tech solution / PRD); Figma **read-only**.
 
 ---
 
@@ -212,11 +212,13 @@ flowchart TD
     D2 --> D3["D3 Create the one Feature branch"]
     D3 --> D4["D4 Implement code + all unit tests"]
     D4 --> D5["D5 Hand off to Verify Agent"]
-    D5 -->|"pass"| D6["D6 Commit & push"]
+    D5 -->|"pass"| D6["D6 Commit & (approved) push"]
     D5 -->|"fail & attempt < cap"| D4
     D5 -->|"fail & attempt >= cap"| ESC["blocked: escalate to DEV"]
     ESC -->|"DEV fixes / adds info / raises cap"| D4
-    D6 --> D7["D7 Done"]
+    D6 -->|"DEV approves push"| D7["D7 Done"]
+    D6 -->|"DEV declines / no answer"| WP["waiting_user: committed, awaiting push approval"]
+    WP -->|"DEV approves later"| D7
     D7 -->|"solution / Story updated"| ST["stale"]
     ST -->|"revise"| D1
     ST -->|"keep"| D7
@@ -272,8 +274,13 @@ flowchart TD
 
 1. Set node=`D6`, `in_progress`, persist.
 2. Run `sensitive-data-guard` over the final diff **and** the commit message; on a hit -> `blocked`.
-3. Commit on the Feature branch (message references the Story key and summarizes the change) and push to the remote. **Never force-push.** Record `commit.message`, `commit.committed_sha`, `repo.head_sha`, `repo.pushed_sha`.
-4. Transition the Jira Story per the profile's workflow (e.g. -> "In process" / "In Development") using the Jira MCP (status + comment only). Push failure / auth failure -> `blocked`, report the reason.
+3. Commit on the Feature branch (message references the Story key and summarizes the change). **Never force-push.** Record `commit.message`, `commit.committed_sha`, `repo.head_sha`.
+4. **Ask the DEV before pushing (mandatory).** Pushing to the remote **always** requires the DEV's explicit approval in this turn — this holds for the very first push of the branch and for every subsequent push, with no exception. Do **not** push automatically, and do **not** treat a `pass` verdict, an earlier "create branch", or any prior push as standing consent.
+   - Set node=`D6_push`, `status: waiting_user`, persist, and prompt the DEV to confirm the push (spell out the branch, the commit SHA about to be pushed, and the target remote in the status card). Record the request in `sessions/`.
+   - **Approved this turn** -> `git push -u origin {feature_branch}` (never force-push). Record `repo.pushed_sha`, then continue to step 5. Persist the approval verbatim to `sessions/`.
+   - **Not approved / no answer** -> stay `waiting_user`, leave the commit local-only (do not push), and note "committed, awaiting push approval" in the status card. An earlier "not now" is honored and never silently overridden on a later run — re-prompt instead.
+   - **Push failure / auth failure** after approval -> `blocked`, report the reason (do not fall back to force-push).
+5. Transition the Jira Story per the profile's workflow (e.g. -> "In process" / "In Development") using the Jira MCP (status + comment only) — only **after** a successful push.
 
 ### D7 Done
 
@@ -294,7 +301,7 @@ flowchart TD
    - **Keep**: record the decision, update the recorded version, restore the previous status;
    - **Revise**: go back to D1 to re-read; if the task breakdown / contract changed, update `tasks` and re-run the affected implementation and unit tests as a new attempt.
 3. **Branch / working-tree check**: if the remote branch head differs from `repo.pushed_sha` (someone pushed) -> don't overwrite silently; ask the DEV which side is the source of truth. If the local working tree is dirty from an interrupted attempt -> continue the unfinished tasks per `tasks`, don't restart from scratch.
-4. **Interrupted node** -> redo: `D2`/`D3` are idempotent (reuse the existing branch); `D4` continues from the first non-`done` task; if `D6` committed but didn't push, push the recorded commit; if it pushed but didn't record, backfill from the remote head.
+4. **Interrupted node** -> redo: `D2`/`D3` are idempotent (reuse the existing branch); `D4` continues from the first non-`done` task; if `D6` committed but didn't push, **re-prompt the DEV to approve the push (never auto-push the recorded commit)**; if it pushed but didn't record, backfill `pushed_sha` from the remote head.
 5. **Verify verdict lost** (node was `waiting_verify` but no verdict in `sessions/`) -> re-prompt to invoke `/verify-agent`; do not assume pass.
 6. **Retry cap reached earlier** -> stay `blocked` until the DEV explicitly intervenes or raises `retry_cap`.
 
@@ -332,6 +339,7 @@ When blocked, spell out the reason, who handles it, and how to continue after it
 
 - Implementing without a confirmed Story-level detail solution, or inventing a design / contract the solution doesn't specify.
 - Self-certifying that the code passes; skipping the Verify Agent, or auto-raising `retry_cap` yourself.
+- **Pushing to the remote without the DEV's explicit in-turn approval** — every push (first or subsequent) must be confirmed; a `pass` verdict or an earlier approval is never standing consent, and an earlier "not now" must not be silently overridden.
 - Creating more than one Feature branch per Story; force-pushing; opening or merging PRs; modifying branch-protection rules.
 - Writing / changing the PRD, User Story, or tech solution; triggering Harness pipelines; generating functional / regression test cases; estimation.
 - Writing to Jira beyond status transitions and comments; restructuring or deleting Jira fields / tickets.
