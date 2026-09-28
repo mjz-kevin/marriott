@@ -336,7 +336,7 @@ def build_role(role: str, cfg: dict, common: dict, version: str, assets: dict) -
         else:
             warnings.append(f"公共文件『{fname}』不存在，已跳过")
 
-    # 4.5) 离线 MCP 包（figma / github）不随角色包分发：它已由运行时初始化包铺到
+    # 4.5) 离线 MCP 包（figma / github / harness）不随角色包分发：它已由运行时初始化包铺到
     #      ~/.cursor/AI-SDLC/runtime/mcp-offline/。角色包安装脚本直接复用运行时里的即可，
     #      不再重复携带（若运行时未装则回退 npx 联网，与之前行为一致）。
 
@@ -461,13 +461,13 @@ def build_runtime_pkg(platform: str, version: str) -> Path:
     log(f"  拷入运行时 {zip_name}（{src_zip.stat().st_size // (1024*1024)} MB）...")
     shutil.copy2(src_zip, pkg_dir / zip_name)
 
-    # 1.5) 离线 MCP 包（figma / github）——纯 JS 跨平台通用，随运行时包一起分发
+    # 1.5) 离线 MCP 包（figma / github / harness）——纯 JS 跨平台通用，随运行时包一起分发
     mcp_src = RES_DIR / "mcp-offline"
     if mcp_src.is_dir():
         log("  拷入离线 MCP 包 mcp-offline ...")
         _copy_runtime_dir(mcp_src, pkg_dir / "mcp-offline")
     else:
-        log("  ⚠️ res/mcp-offline 不存在，运行时包未带离线 MCP（figma/github 将回退 npx 联网）")
+        log("  ⚠️ res/mcp-offline 不存在，运行时包未带离线 MCP（figma/github/harness 将回退 npx 联网）")
 
     # 2) 安装 / 卸载脚本：mac 平台带 *-runtime.sh，win 平台带 *-runtime.ps1（BOM+CRLF）
     if platform.startswith("mac"):

@@ -83,14 +83,14 @@ if (Test-Path $runtimeZip) {
     Write-Warning "本包未包含 AI-SDLC-windows.zip，跳过运行时解压。请另行获取绿色版运行时并解压到 C:\AI-SDLC\runtime\。"
 }
 
-# ---- 铺开离线 MCP 包（figma / github）到 runtime\mcp-offline\ ----
-# 来源：包内 mcp-offline\ 下 figma-*.zip / github-*.zip（带版本号，纯 JS 跨架构通用）。
-# 每个 zip 内为 node_modules\...，分别解压到 mcp-offline\figma\ 与 mcp-offline\github\。
+# ---- 铺开离线 MCP 包（figma / github / harness）到 runtime\mcp-offline\ ----
+# 来源：包内 mcp-offline\ 下 figma-*.zip / github-*.zip / harness-*.zip（带版本号，纯 JS 跨架构通用）。
+# 每个 zip 内为 node_modules\...，分别解压到 mcp-offline\figma\、mcp-offline\github\、mcp-offline\harness\。
 $mcpSrc = Join-Path $PkgDir "mcp-offline"
 $mcpBase = Join-Path $runtimeRoot "mcp-offline"
 if (Test-Path $mcpSrc) {
     New-Item -ItemType Directory -Force -Path $mcpBase | Out-Null
-    foreach ($spec in @(@{ sub = "figma"; glob = "figma-*.zip" }, @{ sub = "github"; glob = "github-*.zip" })) {
+    foreach ($spec in @(@{ sub = "figma"; glob = "figma-*.zip" }, @{ sub = "github"; glob = "github-*.zip" }, @{ sub = "harness"; glob = "harness-*.zip" })) {
         $dst = Join-Path $mcpBase $spec.sub
         if (Test-Path $dst) {
             Write-Host "--> 检测到 $dst 已存在，跳过 $($spec.sub)"
@@ -110,9 +110,9 @@ if (Test-Path $mcpSrc) {
         }
         Remove-Item -Recurse -Force (Join-Path $dst "__MACOSX") -ErrorAction SilentlyContinue
     }
-    Write-Host "    离线 MCP 包处理完成（figma / github）"
+    Write-Host "    离线 MCP 包处理完成（figma / github / harness）"
 } else {
-    Write-Host "--> 本包未带离线 MCP 包（mcp-offline\），跳过（figma/github 将回退到 npx 联网方式）。"
+    Write-Host "--> 本包未带离线 MCP 包（mcp-offline\），跳过（figma/github/harness 将回退到 npx 联网方式）。"
 }
 
 
@@ -144,10 +144,11 @@ if ($nodeInfo.source -eq "default") {
 # 离线 MCP 包入口（随运行时铺开在 runtime\mcp-offline\ 下），转正斜杠供 JSON 使用
 $figmaEntry = ((Join-Path $runtimeRoot "mcp-offline\figma\node_modules\figma-developer-mcp\dist\bin.js") -replace '\\','/')
 $githubEntry = ((Join-Path $runtimeRoot "mcp-offline\github\node_modules\github-mcp-server-js\dist\cli.js") -replace '\\','/')
-if ((Test-Path $figmaEntry) -and (Test-Path $githubEntry)) {
+$harnessEntry = ((Join-Path $runtimeRoot "mcp-offline\harness\node_modules\harness-mcp-v2\build\index.js") -replace '\\','/')
+if ((Test-Path $figmaEntry) -and (Test-Path $githubEntry) -and (Test-Path $harnessEntry)) {
     Write-Host "--> 离线 MCP 包已就位：$($runtimeRoot)\mcp-offline"
 } else {
-    Write-Warning "未找到离线 MCP 包入口（$($runtimeRoot)\mcp-offline），figma/github 需自行提供或改回 npx 方式。"
+    Write-Warning "未找到离线 MCP 包入口（$($runtimeRoot)\mcp-offline），figma/github/harness 需自行提供或改回 npx 方式。"
 }
 
 $mcpTemplate = Join-Path $CursorHome "mcp.example.windows.json"
@@ -156,10 +157,10 @@ if (Test-Path $mcpTemplate) {
     Write-Host "--> 生成 $mcpTarget"
     $tpl = Get-Content $mcpTemplate -Raw | ConvertFrom-Json
 
-    # 用自检到的 node 绝对路径 + 离线包入口改写 figma / marriott-github 的 command/args。
+    # 用自检到的 node 绝对路径 + 离线包入口改写 figma / marriott-github / harness 的 command/args。
     # 离线 node 直跑不需要 Path 注入，改写时清掉模板可能残留的 Path/PATH。
-    $entryMap = @{ "figma" = @{ entry = $figmaEntry; extra = @("--stdio") }; "marriott-github" = @{ entry = $githubEntry; extra = @() } }
-    foreach ($srv in @("figma", "marriott-github")) {
+    $entryMap = @{ "figma" = @{ entry = $figmaEntry; extra = @("--stdio") }; "marriott-github" = @{ entry = $githubEntry; extra = @() }; "harness" = @{ entry = $harnessEntry; extra = @() } }
+    foreach ($srv in @("figma", "marriott-github", "harness")) {
         if ($tpl.mcpServers.$srv) {
             if ($nodeInfo.path) { $tpl.mcpServers.$srv.command = $nodeInfo.path }
             $e = $entryMap[$srv]
@@ -183,6 +184,8 @@ if (Test-Path $mcpTemplate) {
             }
             if ($old.mcpServers.figma.env.FIGMA_API_KEY) { $tpl.mcpServers.figma.env.FIGMA_API_KEY = $old.mcpServers.figma.env.FIGMA_API_KEY }
             if ($old.mcpServers.'marriott-github'.env.GITHUB_TOKEN) { $tpl.mcpServers.'marriott-github'.env.GITHUB_TOKEN = $old.mcpServers.'marriott-github'.env.GITHUB_TOKEN }
+            if ($old.mcpServers.harness.env.HARNESS_ACCOUNT_ID) { $tpl.mcpServers.harness.env.HARNESS_ACCOUNT_ID = $old.mcpServers.harness.env.HARNESS_ACCOUNT_ID }
+            if ($old.mcpServers.harness.env.HARNESS_API_KEY) { $tpl.mcpServers.harness.env.HARNESS_API_KEY = $old.mcpServers.harness.env.HARNESS_API_KEY }
             Write-Host "    检测到已有 mcp.json，已保留其中已填的凭证"
         } catch {
             Write-Warning "已有 mcp.json 解析失败，将直接覆盖为新骨架（凭证需重填）"
@@ -208,9 +211,10 @@ Get-ChildItem -Path (Join-Path $CursorHome "agents"),(Join-Path $CursorHome "ski
 Write-Host ""
 Write-Host "==> 安装完成 ✅"
 Write-Host "后续步骤："
-Write-Host "  1) 打开 $CursorHome\mcp.json，填入 Atlassian / Figma / GitHub 凭证（敏感信息需手动填）"
+Write-Host "  1) 打开 $CursorHome\mcp.json，填入 Atlassian / Figma / GitHub / Harness 凭证（敏感信息需手动填）"
 Write-Host "     - Confluence/Jira: email + api_token  https://id.atlassian.com/manage-profile/security/api-tokens"
 Write-Host "     - Figma: FIGMA_API_KEY                https://www.figma.com/settings （用 Island 浏览器登录后，进 Security 标签，在 Personal access tokens 下点 Generate new token）"
 Write-Host "     - GitHub: GITHUB_TOKEN                https://git.marriott.com/settings/tokens/new （到此页面创建）"
-Write-Host "  2) 在 Cursor 的 MCP 设置里确认 Atlassian / figma / marriott-github 三个 server 已连接"
+Write-Host "     - Harness: HARNESS_ACCOUNT_ID + HARNESS_API_KEY  marriott.harness.io → 头像 → Account Settings / My API Keys（新建 Personal Access Token）"
+Write-Host "  2) 在 Cursor 的 MCP 设置里确认 Atlassian / figma / marriott-github / harness 四个 server 已连接"
 Write-Host "     （agents / skills 已放入 ~/.cursor/，Cursor 会自动识别，无需重启）"

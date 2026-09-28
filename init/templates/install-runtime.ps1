@@ -45,14 +45,14 @@ if (-not (Test-Path $runtimeRoot)) {
     exit 1
 }
 
-# ---- 铺开离线 MCP 包（figma / github）到 runtime\mcp-offline\ ----
-# 来源：包内 mcp-offline\ 下 figma-*.zip / github-*.zip（带版本号，纯 JS 跨架构通用）。
-# 每个 zip 内为 node_modules\...，分别解压到 mcp-offline\figma\ 与 mcp-offline\github\。
+# ---- 铺开离线 MCP 包（figma / github / harness）到 runtime\mcp-offline\ ----
+# 来源：包内 mcp-offline\ 下 figma-*.zip / github-*.zip / harness-*.zip（带版本号，纯 JS 跨架构通用）。
+# 每个 zip 内为 node_modules\...，分别解压到 mcp-offline\figma\、mcp-offline\github\、mcp-offline\harness\。
 $mcpSrc = Join-Path $PkgDir "mcp-offline"
 $mcpBase = Join-Path $runtimeRoot "mcp-offline"
 if (Test-Path $mcpSrc) {
     New-Item -ItemType Directory -Force -Path $mcpBase | Out-Null
-    foreach ($spec in @(@{ sub = "figma"; glob = "figma-*.zip" }, @{ sub = "github"; glob = "github-*.zip" })) {
+    foreach ($spec in @(@{ sub = "figma"; glob = "figma-*.zip" }, @{ sub = "github"; glob = "github-*.zip" }, @{ sub = "harness"; glob = "harness-*.zip" })) {
         $dst = Join-Path $mcpBase $spec.sub
         if (Test-Path $dst) {
             Write-Host "--> 检测到 $dst 已存在，跳过 $($spec.sub)"
@@ -72,7 +72,7 @@ if (Test-Path $mcpSrc) {
         }
         Remove-Item -Recurse -Force (Join-Path $dst "__MACOSX") -ErrorAction SilentlyContinue
     }
-    Write-Host "    离线 MCP 包处理完成（figma / github）"
+    Write-Host "    离线 MCP 包处理完成（figma / github / harness）"
 } else {
     Write-Host "--> 本包未带离线 MCP 包（mcp-offline\），跳过。"
 }
