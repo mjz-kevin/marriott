@@ -52,6 +52,24 @@ mcp:
       monorepo:   { repo: cnexperience/cn-frontend-monorepo,  base: main }   # Nx monorepo（didi / member-day / legal-page 等 app）
     # 兼容旧引用：单一 default_branch 已废弃，基线分支改由 repos.*.base 提供
 
+  harness:                             # Harness 连接 scope；harness-invoke（CI/CD 环节）触发流水线并查执行状态的落点。
+    base_url: https://marriott.harness.io   # Harness 实例地址（UI URL 前缀；skill 可用 url 快捷方式让 MCP 自动抽取 scope）
+    org_id: cnexperience                    # Harness Organization 标识（MCP 调用必传）
+    project_id: cncms                       # Harness Project 标识（CMS；MCP 调用必传）
+    pipelines:                         # 构建/部署类流水线扁平清单（真实 identifier）；harness-invoke 按 app 定位唯一 id。CMS 按应用分（非按仓库/环境），已排除 REMEDIATION 占位/integrity/migration/utility 等非常规部署
+      - { id: cncms_cicd_custom, name: "cncms-CICD",                app: cncms,          env: deploy }   # cncms 主 CI/CD 部署
+      - { id: DiDiCICDFE,        name: "DiDi-CICD-FE",              app: didi,           env: deploy }   # 滴滴前端部署
+      - { id: memberdaycicd,     name: "member-day-deploy",         app: member-day,     env: deploy }   # member-day 部署
+      - { id: legalpagedeploy,   name: "legal-page-deploy",         app: legal-page,     env: deploy }   # legal-page 部署
+      - { id: MBYCICDFE,         name: "MBY-CICD-FE",               app: mby,            env: deploy }   # MBY 前端部署
+      - { id: PaymentConsoleCICD,name: "Payment-Console-CICD",      app: payment-console,env: deploy }   # 支付控制台部署
+      - { id: CDONLY,            name: "travelpartner-proxy-deploy",app: travelpartner,  env: deploy }   # travelpartner 代理部署
+    high_risk_envs: [staging, prod]    # 高风险环境：触发前必须人工确认；这些部署流水线内部按目标环境选择，触发 prod 前须人工确认
+    poll:                              # 触发后轮询执行状态的口径（harness-invoke 用）
+      timeout_seconds: 3600            # 轮询总超时；超时回报「仍在运行」并给 execution 句柄，不判成败
+      interval_seconds: 30             # 轮询间隔
+
+
 # ---------------------------------------------------------------- 代码工程（开发/验证类 skill 用）
 code:
   languages: [typescript]              # 语言栈：TypeScript
@@ -80,20 +98,39 @@ code:
 
 # ---------------------------------------------------------------- 代码审核（代码审核类 skill 用）
 review:
-  rules_source:                       # code-review-rules 用：CMS 团队编码规范来源（已绑定业界标准；未来有团队自有规范可追加）
-    kind: industry_standard           # 来源类型：industry_standard（业界标准）/ confluence（团队规范页）/ repo_file（仓库内规范文件）
-    typescript:                       # TypeScript 适用标准
-      - name: Google TypeScript Style Guide
-        url: https://google.github.io/styleguide/tsguide.html
-        dimensions: [命名, 分层/职责, 异常处理, 日志, 性能]
-      - name: typescript-eslint recommended rules
-        url: https://typescript-eslint.io/rules/
-        dimensions: [命名, 异常处理, 性能]
-  security_baseline:                  # 安全基线来源：绑定 OWASP Web 标准；缺省则用 skill 内置通用安全基线
-    - name: OWASP ASVS (Application Security Verification Standard)
-      url: https://owasp.org/www-project-application-security-verification-standard/
-    - name: OWASP Top 10
-      url: https://owasp.org/www-project-top-ten/
+  rules_source:                       # code-review-rules 用：CMS 团队编码规范来源。扫描本地仓库得到：cncms 与 monorepo 各有 ESLint + Prettier 配置。
+    kind: repo_file                   # 来源类型：confluence（团队规范页）/ repo_file（仓库内规范文件）/ url（官方规范页）；本节按来源就近标注
+    common:                           # 跨语言通用规范：对所有语言子键（typescript）一并适用
+      - name: Marriott Naming Conventions
+        url: https://git.marriott.com/pages/Productcore/marriott-naming-conventions/   # 官方权威页（字段/类型/枚举/日期命名 + Code Review Checklist）
+        repo_url: https://git.marriott.com/cnexperience/cncms/blob/main/docs/marriott_docs/marriott-naming-conventions.md   # 仓库内同步的规范文件（远端地址，人人可访问）
+        dimensions: [命名, 分层/职责]
+      - name: UXL Schema Design Standards
+        url: https://ui-dev-portal.fnd-uxl-test.test.cld.marriott.com/guides/schema-design-standards   # 官方 GraphQL/UXL schema 设计规范（查询/变更命名、类型前缀、可空性、错误建模、分页）
+        repo_url: https://git.marriott.com/cnexperience/cncms/blob/main/docs/marriott_docs/uxl-schema-design-standards.md   # 仓库内同步的规范文件（远端地址，人人可访问）
+        dimensions: [命名, 分层/职责, 异常处理]                                          # 主要适用 cncms 的 GraphQL schema 层
+    typescript:                       # 两个仓库各自的仓库内规范文件
+      - name: ESLint config (cncms)
+        repo: cncms                   # 对应 mcp.github.repos.cncms
+        path: eslint.config.mjs       # typescript-eslint recommended + Next.js + react-hooks + cspell
+        url: https://git.marriott.com/cnexperience/cncms/blob/main/eslint.config.mjs
+        dimensions: [命名, 分层/职责, 异常处理, 性能]
+      - name: Prettier config (cncms)
+        repo: cncms
+        path: .prettierrc.json
+        url: https://git.marriott.com/cnexperience/cncms/blob/main/.prettierrc.json
+        dimensions: [命名]
+      - name: ESLint config (monorepo)
+        repo: monorepo                # 对应 mcp.github.repos.monorepo
+        path: eslint.config.mjs       # Nx flat base/typescript/javascript + enforce-module-boundaries
+        url: https://git.marriott.com/cnexperience/cn-frontend-monorepo/blob/main/eslint.config.mjs
+        dimensions: [命名, 分层/职责, 异常处理, 性能]
+      - name: Prettier config (monorepo)
+        repo: monorepo
+        path: .prettierrc
+        url: https://git.marriott.com/cnexperience/cn-frontend-monorepo/blob/main/.prettierrc
+        dimensions: [命名]
+  security_baseline: []               # 安全基线来源：当前为空 → 用 skill 内置通用安全基线；后续可由团队在 Confluence 维护后填入（name + url 列表）
   ignore_globs:                       # diff-fetch 免审文件：生成物/锁文件不纳入审核上下文
     - "pnpm-lock.yaml"
     - "**/dist/**"

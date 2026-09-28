@@ -26,6 +26,16 @@
                 "GITHUB_SERVER_URL": "git.marriott.com",
                 "GITHUB_PERMISSION": "read-write"
             }
+        },
+        "harness": {
+            "_comment": "harness-invoke（CI/CD 环节触发流水线并查执行状态）的 MCP server。HARNESS_ACCOUNT_ID 与 HARNESS_API_KEY 获取地址：marriott.harness.io → 右上头像 → Account Settings / My API Keys（新建 Personal Access Token）；account id 在 URL 或 Account Settings 里。凭据仅填在本机 mcp.json，切勿提交。",
+            "command": "npx",
+            "args": ["-y", "harness-mcp-v2@latest"],
+            "env": {
+                "HARNESS_BASE_URL": "https://marriott.harness.io",
+                "HARNESS_ACCOUNT_ID": "",
+                "HARNESS_API_KEY": ""
+            }
         }
     }
 }
