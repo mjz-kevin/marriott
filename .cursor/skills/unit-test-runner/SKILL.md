@@ -138,7 +138,9 @@ metadata:
 | 单测因「其他测试文件」编译失败而整体跑不起来（iOS/Android 通用） | XCTest 的 test target 与 gradle 的 test 源集都是**整体编译**：同一 target 内任一测试文件编译不过（常见于生产代码变更但旧单测未同步）即导致整个单测任务失败，即便 `-only-testing` 只指定单个类也会先编译整个 target。回报为「测试 target 编译失败」并列出编译不过的测试文件交开发环节同步修复，不判为被测代码失败。iOS 例：`type 'X' has no member 'Y'` 来自同 target 的历史坏测试 |
 | iOS 主壳 `DragonAppTests` 命不中真实单测 | 主壳 target 仅占位；真实单测在各 SPM 模块 `Module/ios-dragon-*/Tests/`。按 `test_style: spm_module_scheme` 经 `modules_discovery` 推导出的模块 scheme 执行，不跑主壳 |
 | iOS 裸 `swift test` 报 `no library for this platform` | 模块依赖含仅 iOS slice 的 xcframework，macOS 编译失败。须用 `xcodebuild test -destination 'platform=iOS Simulator'`（模块 scheme），不用裸 `swift test`。属固有约束，非代码失败 |
+| Agent 沙箱内跑 iOS xcodebuild 连不上模拟器服务（`CoreSimulatorService connection became invalid` / `Operation not permitted` / `Unable to discover any Simulator runtimes`） | Agent 默认命令沙箱会拦截 CoreSimulatorService、DerivedData、SPM 缓存等访问，导致 `xcodebuild`/`simctl` 无法启动。属沙箱环境限制，非代码失败：须在**沙箱外执行**（放开命令沙箱／授予完整权限）后重跑，不据此判单测失败或打回 |
 | Android 环境/密钥前置（同 build-verify） | 单测同样依赖 JDK 17、仓库根目录的 `secret_android_api_keys.json`、私有仓库凭据；缺失属环境/凭据问题，不判为代码失败 |
+| Android 公共依赖下载失败 / `--offline` 无缓存（同 build-verify） | 受限执行环境（agent 沙箱）Gradle(JDK) 出站 TLS 被拦，单测联网下依赖同样会 `SSLHandshakeException: protocol_version` 失败。按 build-verify 的离线约定：先在正常终端预热 `~/.gradle`，agent 侧用 `GRADLE_USER_HOME=$HOME/.gradle ./gradlew <单测 tasks> --offline`。属环境问题，不判为代码失败 |
 
 ## 7. 相关
 
