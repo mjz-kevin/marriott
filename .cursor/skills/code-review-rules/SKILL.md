@@ -26,11 +26,12 @@ metadata:
 
 | 用途 | 配置键 |
 |------|----|
-| 编码规范来源 | `profiles/{profile}.yaml` → `review.rules_source`（APP／CMS 各自的编码规范；`kind` 标明来源类型：`confluence`（团队规范页）/ `repo_file`（仓库内规范文件）/ `url`（官方规范页）；`common` 子键为跨语言通用规范（对所有语言适用），其余按语言栈子键给出规范名／来源／覆盖维度。允许为空——团队规范未就绪时留空） |
+| 编码规范来源 | `profiles/{profile}.yaml` → `review.rules_source`（APP／CMS 各自的编码规范；条目按 `kind` 或就近字段标明来源：`confluence`（团队/官方规范页，经 Atlassian MCP 读）/ `repo_file`（仓库内规范文件，经 GitHub MCP 读）。`common` 子键为跨语言通用规范（对所有语言适用），其余按语言栈子键给出规范名／来源／覆盖维度。允许为空——团队规范未就绪时留空） |
 | 语言栈 | `profiles/{profile}.yaml` → `code.languages`（决定读 `rules_source` 下哪个语言子键，如 swift/kotlin/typescript；`common` 子键恒适用，与语言栈无关） |
-| 安全基线 | `profiles/{profile}.yaml` → `review.security_baseline`（标准名＋URL 列表；允许为空——为空时用内置通用安全基线） |
+| Confluence 站点 | `profiles/{profile}.yaml` → `mcp.confluence.base_url`（`confluence` 条目经 Atlassian MCP 读页；cloudId 由 `getAccessibleAtlassianResources` 解析该站点得到） |
+| 安全基线 | 内置通用安全基线（硬编码密钥/口令、注入、未校验的外部输入、不安全依赖等），审核「安全」维度时恒用 |
 
-`rules_source` 已配置时，按语言栈取对应规范的来源与覆盖维度作为审核基准；规范来源不可读或对某维度无覆盖，按该维度「规范未覆盖」处理，不臆造标准。`rules_source` 整体为空/未配置/为 TBD → 降级：只按内置通用六维（命名／分层／异常／日志／性能／安全）审核，不引用具体规范条目，产出仍带等级／file:line／根因／建议，并在输出注明「团队规范未配置，按通用维度审核」。`security_baseline` 同理，为空时用内置通用安全基线。
+`rules_source` 已配置时，按语言栈取对应规范的来源与覆盖维度作为审核基准；规范来源不可读或对某维度无覆盖，按该维度「规范未覆盖」处理，不臆造标准。`rules_source` 整体为空/未配置/为 TBD → 降级：只按内置通用六维（命名／分层／异常／日志／性能／安全）审核，不引用具体规范条目，产出仍带等级／file:line／根因／建议，并在输出注明「团队规范未配置，按通用维度审核」。「安全」维度恒按内置通用安全基线审核。
 
 ## 1. 前置
 
@@ -38,6 +39,7 @@ metadata:
 |---|------|
 | 1 | 已有 diff-fetch 产出的审核上下文（逐文件 patch），否则先做 diff-fetch |
 | 2 | 能按语言栈解析出适用的规范维度（`rules_source` 为空时用内置通用六维降级审核） |
+| 3 | `confluence` 条目需 Atlassian MCP 鉴权可用、`repo_file` 条目需 GitHub MCP 鉴权可用；`mcp_auth` 失败则**该条**按规范未覆盖处理，不停止整次审核 |
 
 ## 2. 工作流
 
@@ -51,7 +53,17 @@ metadata:
 
 ### S1 读取规范基准
 
-从 `review.rules_source` 读团队编码规范。先取 `common` 子键（跨语言通用规范，对所有语言恒适用），再按 `code.languages` 定位对应语言子键（swift/kotlin/typescript）取该语言适用规范；规范来源（`kind: confluence` 的规范页 / `kind: repo_file` 的仓库文件 / `kind: url` 的官方页）声明的规则为基准，各条目覆盖的维度以其 `dimensions` 为准；安全基线取 `review.security_baseline`（如 OWASP MASVS/ASVS）。`rules_source` 整体为空/未配置时，降级为按内置通用六维审核、不引用具体规范条目；`security_baseline` 为空时用内置通用安全基线。规范/标准未覆盖的维度不臆造标准，只按已声明规范或内置通用维度判定。
+从 `review.rules_source` 读团队编码规范。先取 `common` 子键（跨语言通用规范，对所有语言恒适用），再按 `code.languages` 定位对应语言子键（swift/kotlin/typescript）取该语言适用规范。各条目覆盖的维度以其 `dimensions` 为准；「安全」维度按内置通用安全基线审核。`rules_source` 整体为空/未配置时，降级为按内置通用六维审核、不引用具体规范条目。规范未覆盖的维度不臆造标准，只按已声明规范或内置通用维度判定。
+
+**规范正文必须按条目字段读取，禁止 WebFetch `git.marriott.com/pages/...`（GHES Pages 需 SSO，Agent 只能拿到登录页）：**
+
+| 条目字段 | 读取方式 |
+|------|------|
+| `kind: confluence`（`confluence.page_id` / `confluence.url`） | 经 Atlassian MCP `getConfluencePage`（`cloudId`=站点解析所得、`pageId`=`confluence.page_id`，`contentFormat: markdown`）读正文 |
+| `repo`（profile 键）+ `path` | 用 `mcp.github.repos.{repo}` 解析出 `owner/name`，再经 GitHub MCP `get_file_contents`（可选 `ref`） |
+| 仅有 `url` 且为 GHES Pages（`/pages/`） | 视为不可读：该条「规范未覆盖」，不 WebFetch、不臆造 |
+
+`getConfluencePage` / `get_file_contents` 失败时 `mcp_auth` 后重试一次；仍失败则该条按「规范未覆盖」处理并注明，不停止整次审核。
 
 ### S2 逐条审核维度
 
@@ -85,7 +97,8 @@ metadata:
 | 规则 | 说明 |
 |------|------|
 | 规范为基准 | 审核依据来自 `review.rules_source`；规范未配置时按内置通用六维审核，不臆造具体规范条目 |
-| 规范为空即降级 | `rules_source`／`security_baseline` 为空/未配置时降级为通用维度/内置安全基线审核，并在输出注明，不停止 |
+| 规范正文按来源读 | `confluence` 走 Atlassian MCP `getConfluencePage`；`repo_file` 走 GitHub MCP `get_file_contents`；禁止 WebFetch GHES Pages |
+| 规范为空即降级 | `rules_source` 为空/未配置时降级为通用维度审核，并在输出注明，不停止；「安全」维度恒按内置通用安全基线审核 |
 | 只审本次 diff | 只审本 PR 触及的改动，不发散审历史代码 |
 | 每条可追溯 | 每个问题都引用命中的规则条目（或注明「通用维度」）与 file:line，不凭主观 |
 | 安全默认阻断 | 硬编码密钥/注入/未校验输入等安全问题默认定「阻断」 |
@@ -94,7 +107,7 @@ metadata:
 
 ## 4. 质量门禁
 
-- 规范来源已按配置读取（`rules_source` 已配置则读取成功且非臆造；为空则已降级为通用维度审核并注明）
+- 规范来源已按配置读取（`confluence` 已走 Atlassian MCP；`repo_file` 已走 GitHub MCP；为空则已降级为通用维度审核并注明；未 WebFetch GHES Pages）
 - 每个待审文件的改动块都过了命名/分层/异常/日志/性能/安全六维
 - 每个问题含等级／file:line／命中规则（或「通用维度」）／根因／修改建议
 - 安全问题已按阻断级标注（除非规范另有约定）
@@ -118,6 +131,9 @@ metadata:
 | 现象 | 处理 |
 |------|------|
 | `review.rules_source` 整体为空/未配置/TBD | 降级为按内置通用六维审核，输出注明「团队规范未配置，按通用维度审核」，不停止 |
+| 条目是 GHES Pages URL（`/pages/`） | 不 WebFetch；命名规范正文改经同条 `confluence.page_id` 读 Confluence；无 Confluence 来源则该条「规范未覆盖」 |
+| `getConfluencePage` 失败 | 核 `confluence.page_id` 与站点 cloudId；`mcp_auth` 后重试一次；仍失败则该条「规范未覆盖」，不臆造 |
+| `get_file_contents` 404 / 失败 | 核 `owner`/`repo`/`path`/`ref`；`mcp_auth` 后重试一次；仍失败则该条「规范未覆盖」，不臆造 |
 | 规范页某维度无覆盖 | 该维度不判定，注明「规范未覆盖」，不臆造标准 |
 | 规范未覆盖某维度 | 该维度不判定，注明「规范未覆盖」，不臆造标准 |
 | diff 过大无 patch 的文件 | 请 diff-fetch 单独拉取该文件后再审，不跳过 |

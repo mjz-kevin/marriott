@@ -122,10 +122,14 @@ code:
 # ---------------------------------------------------------------- 代码审核（代码审核类 skill 用）
 review:
   rules_source:                       # code-review-rules 用：APP 团队编码规范来源。扫描本地仓库得到：Android 有 detekt/editorconfig；iOS 暂无 lint 规范文件。
-    kind: repo_file                   # 来源类型：confluence（团队规范页）/ repo_file（仓库内规范文件）/ url（官方规范页）；本节按来源就近标注
+    kind: repo_file                   # 来源类型：confluence（团队规范页）/ repo_file（仓库内规范文件）/ github（GitHub MCP get_file_contents）；本节按来源就近标注
     common:                           # 跨语言通用规范：对所有语言子键（swift/kotlin/typescript）一并适用
       - name: Marriott Naming Conventions
-        url: https://git.marriott.com/pages/Productcore/marriott-naming-conventions/   # 官方权威页（字段/类型/枚举/日期命名 + Code Review Checklist），跨团队通用
+        kind: confluence                # 经 Atlassian(Confluence) MCP getConfluencePage 读取
+        confluence:
+          space: TIP
+          page_id: "262439119"
+          url: https://marriottcloud.atlassian.net/wiki/spaces/TIP/pages/262439119/Marriott+Naming+Conventions
         dimensions: [命名, 分层/职责]
     swift: []                         # iOS（ios-dragon-app）暂无 SwiftLint/SwiftFormat 规范文件 → 该语言仅按 common + 内置通用维度审核；有规范后追加
     kotlin:                           # Android（android-dragon-app）仓库内规范文件
@@ -139,7 +143,6 @@ review:
         path: .editorconfig
         url: https://git.marriott.com/cnexperience/android-dragon-app/blob/dev/.editorconfig
         dimensions: [命名]
-  security_baseline: []               # 安全基线来源：当前为空 → 用 skill 内置通用安全基线；后续可由团队在 Confluence 维护后填入（name + url 列表）
   ignore_globs:                       # diff-fetch 免审文件：生成物/锁文件不纳入审核上下文
     - "**/Package.resolved"           # SPM 锁文件
     - "**/*.pbxproj"                  # Xcode 工程文件（改动噪声大，非业务代码）
