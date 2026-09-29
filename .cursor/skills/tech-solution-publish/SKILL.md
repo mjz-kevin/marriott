@@ -83,7 +83,7 @@ If any required landing-spot key (`space` / `parent_pages.root`) is empty or `TB
 ```
 - S1 Pre-checks
 - S2 Resolve the landing spot (space / root / epic / kind / title)
-- S3 Environment pre-check (--check-env: when mermaid is present, verify Node.js/npx is ready)
+- S3 Environment pre-check (--check-env: when mermaid is present, verify the render toolchain — offline mmdc/Chromium or npx — is ready)
 - S4 Dry-run pre-check (verify stats and completeness)
 - S5 Script upload to Confluence (idempotent create/update, complete body)
 - S6 Write back (prd->requirements doc link-write-back / spike & detail->Jira Web remote link, this Agent writes it via --jira-remote-link)
@@ -107,7 +107,7 @@ The script auto-layers with `--root/--epic/--kind tech_solution` per the "Archiv
 
 ### S3 Environment pre-check
 
-For a solution containing mermaid, run `--check-env` before publishing (doesn't write to Confluence) to confirm the machine can render diagrams. The script outputs `ready_to_publish`: `true` -> continue; `false` -> follow its `hint` (the Node.js install command per OS) to guide the user to install Node.js (including `npx`), then rerun this step until `ready_to_publish` is `true`. For a solution without mermaid, this step is always `true`.
+For a solution containing mermaid, run `--check-env` before publishing (doesn't write to Confluence) to confirm the machine can render diagrams. The script prefers the offline render toolchain laid down by the AI-SDLC runtime (`runtime/tools/mermaid-cli` + offline `runtime/tools/chromium`, run by the bundled Node — fully offline, no system Chrome needed) and falls back to `npx -y` only when it's absent; the report's `offline_mmdc` / `npx_available` show which is in play. It outputs `ready_to_publish`: `true` -> continue; `false` -> follow its `hint` (install the AI-SDLC runtime for offline packages, or Node.js incl. `npx` for the fallback), then rerun this step until `ready_to_publish` is `true`. For a solution without mermaid, this step is always `true`.
 
 ```bash
 python .cursor/skills/tech-solution-publish/scripts/upload_confluence_v2.py --md "<path to tech-solution.md>" --space "<space>" --root "<parent_pages.root>" --epic "<Jira Epic key, e.g. CNAPP-5661>" --kind tech_solution --title "<prefix+key, e.g. APP-TS-Prd-CNAPP-5661>" --title-key "<title key: PRD level = Epic key / spike = Spike key / detail = Story key>" --check-env
@@ -117,7 +117,7 @@ python .cursor/skills/tech-solution-publish/scripts/upload_confluence_v2.py --md
 
 First run `--dry-run`; the script doesn't write to Confluence and only outputs the title (`title` is the complete title after appending the summary, `title_prefix` is the unique-key prefix), `stats` (h2 section count, Story count, AC count, mermaid diagram count), `storage_chars`, and `target` (root/initiative/epic/kind). Verify that `title_prefix` is the expected "prefix+key," `stats` matches the locally confirmed version, `target.epic` points to the expected epic, and `target.initiative` (the parent the script auto-looked-up from Jira; present -> four-level archive, `null` -> three-level) meets expectations before the actual upload.
 
-> **Command form (cross-platform, unified)**: the command is a single line with no line continuations, and can run directly in Windows PowerShell / CMD, macOS, and Linux. `python` in the examples below is a placeholder for the interpreter resolved from `.cursor/profiles/setup.json`: before running, read that short file and take the `python` field from the section matching the current platform (`windows` / `macos` / `linux`), falling back to the `common` section (expand a leading `~`); only when both leave it empty (or the file is missing) fall back to the `python` / `python3` on your PATH. After running, the script auto-resolves `npx` (for rendering mermaid) from the same `setup.json`, so there's no need to specify a Node path in the command.
+> **Command form (cross-platform, unified)**: the command is a single line with no line continuations, and can run directly in Windows PowerShell / CMD, macOS, and Linux. `python` in the examples below is a placeholder for the interpreter resolved from `.cursor/profiles/setup.json`: before running, read that short file and take the `python` field from the section matching the current platform (`windows` / `macos` / `linux`), falling back to the `common` section (expand a leading `~`); only when both leave it empty (or the file is missing) fall back to the `python` / `python3` on your PATH. For rendering mermaid the script auto-resolves the toolchain from the same `setup.json` / AI-SDLC runtime (offline mmdc + Chromium first, `npx` fallback), so there's no need to specify a Node path in the command.
 
 ```bash
 python .cursor/skills/tech-solution-publish/scripts/upload_confluence_v2.py --md "<path to tech-solution.md>" --space "<space>" --root "<parent_pages.root>" --epic "<Jira Epic key, e.g. CNAPP-5661>" --kind tech_solution --title "<prefix+key, e.g. APP-TS-Prd-CNAPP-5661>" --title-key "<title key>" --dry-run
@@ -132,7 +132,7 @@ python .cursor/skills/tech-solution-publish/scripts/upload_confluence_v2.py --md
 ```
 
 - **Complete body, MCP page-writes forbidden (hard constraint, no exception)**: the script submits the whole storage in one shot, not bound by the MCP size limit. Publishing/updating always goes through this script over REST; manual summarizing or trimming sections is forbidden, and writing pages via Atlassian MCP's `updateConfluencePage`/`createConfluencePage` is forbidden **in every scenario, including the S6 write-back** (the whole-page replace truncates the body, drops images, and corrupts storage — an observed incident wiped a full PRD to one table via a single MCP write-back). On a script error, only fix the arguments or credentials and rerun—don't fall back to MCP. The only allowed differences are mermaid-to-image and markdown-to-storage-HTML; MCP read-only queries (locating the page, reading it back for verification) aren't subject to this.
-- **Diagrams**: mermaid is rendered by mmdc into high-resolution image attachments and inlined, supporting all diagram types; the result is recorded in `mermaid_pending` (empty means all succeeded). When mermaid is present, the machine must have Node.js (`npx`); a missing one blocks (`--allow-degraded-diagrams` explicitly degrades, off by default).
+- **Diagrams**: mermaid is rendered by mmdc into high-resolution image attachments and inlined, supporting all diagram types; the result is recorded in `mermaid_pending` (empty means all succeeded). When mermaid is present, the machine needs the render toolchain — the offline packages under `runtime/tools/` (mmdc + Chromium, no network / no system Chrome) or, failing that, Node.js (`npx`) which downloads on first run; neither available blocks (`--allow-degraded-diagrams` explicitly degrades, off by default).
 
 ### S6 Write back
 
@@ -172,7 +172,7 @@ Parse the script's output JSON, confirm exit code 0 and that `action`, `page_id`
 | Gate | Passing criteria | Handling when it fails |
 |------|---------|-------------|
 | Body completeness | `stats` (section / Story / AC) matches the locally confirmed version | Fix the local `.md`, then rerun the update |
-| Diagrams | `mermaid_pending` is empty | Locate by diagram number (mmdc unavailable / network download / source syntax), fix, and rerun |
+| Diagrams | `mermaid_pending` is empty | Locate by diagram number (toolchain unavailable -> install the AI-SDLC runtime offline packages or Node.js; only the npx fallback needs network; source syntax), fix, and rerun |
 | Title hit | A unique hit by title prefix (prefix+key) under the leaf folder (`{epic}-Tech Solution`) (update, `action=update`) or no hit (create, `action=create`); on a rename hit, `renamed_from` records the original title | When the prefix match returns multiple (>=2), stop and hand to the user to decide, don't create a duplicate page on your own |
 | Call channel | Everything goes through the script over REST | On non-zero exit or containing `error`, fix per HTTP status and rerun; falling back to MCP `updateConfluencePage` / `createConfluencePage` is forbidden |
 

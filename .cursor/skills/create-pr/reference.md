@@ -54,8 +54,11 @@
 
 ## gh CLI 说明
 
+`gh` CLI 本身跨平台；差异只在"把正文写入临时文件"的 shell 写法。二选一：
+
+**POSIX（macOS / Linux / Git Bash / WSL）：**
+
 ```bash
-# 把正文写入临时文件以保留 markdown，然后创建 PR
 TMP=$(mktemp)
 cat > "$TMP" <<'EOF'
 <填好的正文>
@@ -64,6 +67,18 @@ gh pr create --base <base-branch> --title "<title>" --body-file "$TMP"
 rm -f "$TMP"
 ```
 
+**Windows PowerShell：**
+
+```powershell
+$TMP = New-TemporaryFile
+@'
+<填好的正文>
+'@ | Set-Content -Path $TMP -Encoding utf8
+gh pr create --base <base-branch> --title "<title>" --body-file $TMP
+Remove-Item $TMP
+```
+
+- 也可跳过临时文件、直接把正文写到仓库内一个文件再 `--body-file` 指向它（最省事、完全跨平台）。
 - `?template=<name>.md` 仅为 GitHub **网页版** 功能，对 `gh pr create` 无效。
   本 skill 通过直接读取文件来选择模板。
 - 草稿 PR：加 `--draft`。指定审查者用 `--reviewer <user>`（CODEOWNERS 的自动请求

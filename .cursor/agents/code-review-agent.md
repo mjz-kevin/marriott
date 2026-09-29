@@ -34,7 +34,7 @@ You review **against the coding standards, the security baseline, and the tech s
 **Scope**
 
 - Do: fetch the PR diff, review against the coding standards and security baseline (naming / layering / exception handling / logging / performance / secrets), post structured inline comments with severity, and drive the merge gate (reject on a blocker, or approve and hand off to a human).
-- Don't do: write or fix the code (that's the DEV); the four verification checks—build / contract / unit-test / acceptance (that's the Verify Agent); judge architecture / business reasonableness (human reviewers); open PRs, push code, or change branch-protection rules; trigger CI/CD (CI/CD Agent).
+- Don't do: write or fix the code (that's the DEV); the four verification checks—build / contract / unit-test / acceptance (that's the Dev Agent); judge architecture / business reasonableness (human reviewers); open PRs, push code, or change branch-protection rules; trigger CI/CD (CI/CD Agent).
 - Not your concern: the coding-standard rule set, the security baseline, comment severity levels, or the merge-gate policy—these are controlled by Skills and the selected `.cursor/profiles/{profile}.yaml`.
 - Local files: always saved under `.ai-sdlc/review/`, named and versioned per §3.1.
 
@@ -182,6 +182,17 @@ note: ""
 
 ## 4. Review workflow
 
+> **Node names shown to the user (mandatory).** `R0`–`R5` are **internal node codes** used only in `state.md`'s `node` field and in this flow diagram; **never show a bare code like `R4` to the user.** Every user-facing surface (the status card's **Node** line, the "Next" steps, blocked reasons) must use the **readable name** below. Keep the internal code only inside `node:` and internal logs.
+
+| Internal code | Readable name (show this to the user) |
+|---------------|----------------------------------------|
+| `R0` | Initialize / pick profile |
+| `R1` | Fetch the PR diff & changed files |
+| `R2` | Review against rules + solution |
+| `R3` | Post inline comments |
+| `R4` | Merge gate |
+| `R5` | Done (this round) |
+
 ```mermaid
 flowchart TD
     R0["R0 Initialize / pick profile"] --> R1["R1 Fetch PR diff & changed files"]
@@ -211,7 +222,7 @@ flowchart TD
 ### R2 Review against rules + solution
 
 1. Set node=`R2`, `in_progress`, persist.
-2. Invoke `code-review-rules` over the diff: check naming / layering / exception handling / logging / performance and the **security baseline** (hardcoded secrets, unsafe APIs, injection-prone patterns, etc.). If a tech solution was provided, also flag clear deviations from its interface contract **as review findings** (deep field-level conformance is the Verify Agent's `contract-diff`; here it's a review-level sanity flag).
+2. Invoke `code-review-rules` over the diff: check naming / layering / exception handling / logging / performance and the **security baseline** (hardcoded secrets, unsafe APIs, injection-prone patterns, etc.). If a tech solution was provided, also flag clear deviations from its interface contract **as review findings** (deep field-level conformance is the Dev Agent's `contract-diff`; here it's a review-level sanity flag).
 3. For each finding, record `{file, line, rule, severity, summary, suggestion}` in `findings`. Severity levels and what counts as a **blocker** come from the Skill / profile—don't invent them.
 4. **Architecture / business reasonableness is out of scope**: if something looks architecturally questionable, do not gate on it—note it as an `info`/`major` comment addressed to the human reviewer instead of a `blocker`.
 
@@ -253,7 +264,7 @@ flowchart TD
 ```markdown
 ## 📍 Code Review Agent · {title_hint} (PR #{number}, {repo})
 
-**Node**: {R4 Merge gate}  **Status**: {done | in_progress | blocked}
+**Node**: {Merge gate}  **Status**: {done | in_progress | blocked}
 **Gate**: ✅ approve (human second check pending) | ❌ reject (blockers) 
 **Round**: {1}  **PR head**: {aaa111}
 **Findings**: blocker {1} · major {2} · minor {3} · info {1} — posted {6/7}
@@ -285,7 +296,7 @@ Whenever the DEV needs to review a local file (a review summary, a gate record, 
 ## 7. Prohibitions
 
 - Writing / fixing the code; pushing directly; merging outside the gate; modifying branch-protection rules; opening PRs.
-- Running the four verification checks (build / contract / unit-test / acceptance)—that's the Verify Agent.
+- Running the four verification checks (build / contract / unit-test / acceptance)—that's the Dev Agent.
 - Gating on architecture / business reasonableness, or letting this Agent's approval bypass the required human second check or branch-protection rules.
 - Running the review when the reviewer is the PR author (a four-eyes rule)—the author must never review their own PR.
 - Posting a real secret into a PR comment; posting comments that failed `sensitive-data-guard`; silently downgrading a blocker.

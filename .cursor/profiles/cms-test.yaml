@@ -52,20 +52,45 @@ mcp:
       monorepo:   { repo: cnexperience/cn-frontend-monorepo,  base: main }   # Nx monorepo（didi / member-day / legal-page 等 app）
     # 兼容旧引用：单一 default_branch 已废弃，基线分支改由 repos.*.base 提供
 
+  harness:                             # Harness 连接 scope；harness-invoke（CI/CD 环节）触发流水线并查执行状态的落点。
+    base_url: https://marriott.harness.io   # Harness 实例地址（UI URL 前缀；skill 可用 url 快捷方式让 MCP 自动抽取 scope）
+    org_id: cnexperience                    # Harness Organization 标识（MCP 调用必传）
+    project_id: cncms                       # Harness Project 标识（CMS；MCP 调用必传）
+    pipelines:                         # 构建/部署类流水线扁平清单（真实 identifier）；harness-invoke 按 app 定位唯一 id。CMS 按应用分（非按仓库/环境），已排除 REMEDIATION 占位/integrity/migration/utility 等非常规部署
+      - { id: cncms_cicd_custom, name: "cncms-CICD",                app: cncms,          env: deploy }   # cncms 主 CI/CD 部署
+      - { id: DiDiCICDFE,        name: "DiDi-CICD-FE",              app: didi,           env: deploy }   # 滴滴前端部署
+      - { id: memberdaycicd,     name: "member-day-deploy",         app: member-day,     env: deploy }   # member-day 部署
+      - { id: legalpagedeploy,   name: "legal-page-deploy",         app: legal-page,     env: deploy }   # legal-page 部署
+      - { id: MBYCICDFE,         name: "MBY-CICD-FE",               app: mby,            env: deploy }   # MBY 前端部署
+      - { id: PaymentConsoleCICD,name: "Payment-Console-CICD",      app: payment-console,env: deploy }   # 支付控制台部署
+      - { id: CDONLY,            name: "travelpartner-proxy-deploy",app: travelpartner,  env: deploy }   # travelpartner 代理部署
+    high_risk_envs: [staging, prod]    # 高风险环境：触发前必须人工确认；这些部署流水线内部按目标环境选择，触发 prod 前须人工确认
+    poll:                              # 触发后轮询执行状态的口径（harness-invoke 用）
+      timeout_seconds: 3600            # 轮询总超时；超时回报「仍在运行」并给 execution 句柄，不判成败
+      interval_seconds: 30             # 轮询间隔
+
+
 # ---------------------------------------------------------------- 代码工程（开发/验证类 skill 用）
 code:
   languages: [typescript]              # 语言栈：TypeScript
-  # 分支命名：唯一 AI Feature 分支模板；{story_key}=Jira Story key，{slug}=Story 摘要短横线化
+  # 分支命名：对齐团队 Branching Strategy 的 {KEY}-Xxx-Xxx；AI 套 prefix。{slug}=2–3 个 Title-Case 词，非整句摘要
   branch:
-    prefix: ai/feature                 # AI 专属分支前缀，与人工分支隔离
-    template: "ai/feature/{story_key}-{slug}"
-  build:                              # 编译/构建命令（build-verify 用），按 repo 键区分；对齐各仓 CI
+    prefix: feat-ai                    # AI 专属前缀，与人工 Feature（无前缀）隔离
+    template: "feat-ai/{story_key}-{slug}"
+  build:                              # 构建校验的语义配置（build-verify 按 OS 组装命令），按 repo 键区分；对齐各仓 CI
     cncms:                             # Next.js + payload；pnpm 10.x；precommit=generate:all && lint:tsc && build:compile
-      tool: pnpm
-      command: "pnpm install --frozen-lockfile && pnpm lint:tsc && pnpm build"
+      tool: pnpm                       # 执行器；skill 分步执行 steps（不用 && 拼接，兼容 PowerShell/CMD）
+      steps:                           # 逐步执行的 pnpm 参数（每步 = 一次 pnpm 调用）
+        - "install --frozen-lockfile"
+        - "lint:tsc"
+        - "build"
     monorepo:                          # Nx monorepo；pnpm 11.x；构建校验只跑 lint/build/typecheck，单测交 unit-test-runner（职责不重叠）
-      tool: pnpm-nx
-      command: "pnpm install --frozen-lockfile && npx nx run-many -t lint build typecheck"
+      tool: pnpm-nx                    # 执行器；skill 先 pnpm 装依赖，再 pnpm exec nx（不用 npx，避免 && 与命令替换）
+      steps:
+        - "install --frozen-lockfile"
+      nx:                              # nx 语义：skill 组装为 `pnpm exec nx run-many -t lint build typecheck`
+        command: run-many
+        targets: [lint, build, typecheck]
   contract:                           # contract-diff 口径：接口契约以技术方案 detail 的接口定义为基线
     source: tech_solution_detail       # 契约基线来源：Story 级明细方案的接口定义章节
     match: field_level                 # 比对粒度：逐字段（TS 看 interface/type/zod schema；payload 看 collection field）
@@ -73,8 +98,39 @@ code:
 
 # ---------------------------------------------------------------- 代码审核（代码审核类 skill 用）
 review:
-  rules_source: TBD                   # code-review-rules 用：CMS 团队编码规范来源（Confluence 规范页 URL/ID 或仓库内规范文件路径）；待补，缺失时 skill 停下要求补齐，不臆造规范
-  security_baseline: null             # 可选：安全基线来源；缺省用 skill 内置通用安全基线
+  rules_source:                       # code-review-rules 用：CMS 团队编码规范来源。扫描本地仓库得到：cncms 与 monorepo 各有 ESLint + Prettier 配置。
+    kind: repo_file                   # 来源类型：confluence（团队规范页）/ repo_file（仓库内规范文件）/ url（官方规范页）；本节按来源就近标注
+    common:                           # 跨语言通用规范：对所有语言子键（typescript）一并适用
+      - name: Marriott Naming Conventions
+        url: https://git.marriott.com/pages/Productcore/marriott-naming-conventions/   # 官方权威页（字段/类型/枚举/日期命名 + Code Review Checklist）
+        repo_url: https://git.marriott.com/cnexperience/cncms/blob/main/docs/marriott_docs/marriott-naming-conventions.md   # 仓库内同步的规范文件（远端地址，人人可访问）
+        dimensions: [命名, 分层/职责]
+      - name: UXL Schema Design Standards
+        url: https://ui-dev-portal.fnd-uxl-test.test.cld.marriott.com/guides/schema-design-standards   # 官方 GraphQL/UXL schema 设计规范（查询/变更命名、类型前缀、可空性、错误建模、分页）
+        repo_url: https://git.marriott.com/cnexperience/cncms/blob/main/docs/marriott_docs/uxl-schema-design-standards.md   # 仓库内同步的规范文件（远端地址，人人可访问）
+        dimensions: [命名, 分层/职责, 异常处理]                                          # 主要适用 cncms 的 GraphQL schema 层
+    typescript:                       # 两个仓库各自的仓库内规范文件
+      - name: ESLint config (cncms)
+        repo: cncms                   # 对应 mcp.github.repos.cncms
+        path: eslint.config.mjs       # typescript-eslint recommended + Next.js + react-hooks + cspell
+        url: https://git.marriott.com/cnexperience/cncms/blob/main/eslint.config.mjs
+        dimensions: [命名, 分层/职责, 异常处理, 性能]
+      - name: Prettier config (cncms)
+        repo: cncms
+        path: .prettierrc.json
+        url: https://git.marriott.com/cnexperience/cncms/blob/main/.prettierrc.json
+        dimensions: [命名]
+      - name: ESLint config (monorepo)
+        repo: monorepo                # 对应 mcp.github.repos.monorepo
+        path: eslint.config.mjs       # Nx flat base/typescript/javascript + enforce-module-boundaries
+        url: https://git.marriott.com/cnexperience/cn-frontend-monorepo/blob/main/eslint.config.mjs
+        dimensions: [命名, 分层/职责, 异常处理, 性能]
+      - name: Prettier config (monorepo)
+        repo: monorepo
+        path: .prettierrc
+        url: https://git.marriott.com/cnexperience/cn-frontend-monorepo/blob/main/.prettierrc
+        dimensions: [命名]
+  security_baseline: []               # 安全基线来源：当前为空 → 用 skill 内置通用安全基线；后续可由团队在 Confluence 维护后填入（name + url 列表）
   ignore_globs:                       # diff-fetch 免审文件：生成物/锁文件不纳入审核上下文
     - "pnpm-lock.yaml"
     - "**/dist/**"
@@ -86,14 +142,20 @@ review:
 
 # ---------------------------------------------------------------- 测试（开发/验证类 skill 用）
 test:
-  unit:                               # 单元测试框架与执行命令（unit-test-authoring / unit-test-runner 用）；对齐 CI
+  unit:                               # 单元测试语义配置（unit-test-authoring / unit-test-runner 按 OS 组装命令）；对齐 CI
     cncms:
+      tool: pnpm                       # skill 组装为 `pnpm run test:unit`
       framework: vitest                # 单测 test:unit（vitest.config.unit.mts）；另有 test:int 集成、playwright e2e
-      command: "pnpm test:unit"
+      script: "test:unit"              # package.json script 名
       needs_services: [postgres, redis] # 集成/部分单测依赖 docker 服务（docker compose up -d，见 .harness/ci-test.env）；纯单测 test:unit 一般不依赖
     monorepo:
+      tool: pnpm-nx                    # skill 组装为 `pnpm exec nx affected -t test --base <sha> --head HEAD`
       framework: jest                  # Nx + jest（jest.preset.js）；本地 Agent 无 Nx Cloud 分布式，用 affected 只测受 Feature 分支改动影响的 project（比 run-many 全量快）
-      command: "npx nx affected -t test --base=$(git merge-base HEAD origin/{base}) --head=HEAD"  # {base} 由 unit-test-runner 代入 repos.monorepo.base，不硬编码基线分支
+      nx:                              # nx 语义；base_ref 由 skill 先跑 `git merge-base HEAD origin/<base>` 求出 SHA 再作为 --base 传入（分两步，不用 $() 命令替换）
+        command: affected
+        targets: [test]
+        base_ref: "origin/{base}"      # {base} 代入 repos.monorepo.base；仅表示比较基准，非直接拼进 shell
+        head_ref: HEAD
   coverage:                           # 覆盖率口径（unit-test-runner 汇总用）
     enabled: true                      # 是否统计并展示覆盖率（cncms 接 sonar，sonar-project.properties）
     min_line: 0                        # 门禁阈值：0=只报告不卡门禁；>0=低于阈值判未通过（与 enabled 职责正交）

@@ -17,14 +17,14 @@ metadata:
 
 Convert a finished local PRD / tech-solution `.md` (along with its referenced local images and mermaid diagrams) offline into a readable, well-formatted PDF—no online publishing and no changes to the source.
 
-**Conversion method**: use `scripts/export_pdf.py` in this directory uniformly. The script first renders mermaid code blocks into high-resolution PNGs with `mmdc` (`@mermaid-js/mermaid-cli`) (the same rendering as the publishing step, so the graphics match), then produces the PDF with `md-to-pdf` (headless Chromium); mermaid images and local images are always base64-inlined to work around Chromium's restrictions on loading local resources. Both the PDF and mermaid rendering go through `npx` and share the same Node runtime, introducing no extra Python / system dependencies.
+**Conversion method**: use `scripts/export_pdf.py` in this directory uniformly. The script first renders mermaid code blocks into high-resolution PNGs with `mmdc` (`@mermaid-js/mermaid-cli`) (the same rendering as the publishing step, so the graphics match), then produces the PDF with `md-to-pdf` (headless Chromium); mermaid images and local images are always base64-inlined to work around Chromium's restrictions on loading local resources. **Offline-first**: both mmdc and md-to-pdf prefer the offline packages laid down under the AI-SDLC runtime (`runtime/tools/mermaid-cli`, `runtime/tools/md-to-pdf`), run by the bundled green Node, and use the offline Chromium (`runtime/tools/chromium`, injected as puppeteer's `executablePath`); only when the offline packages are absent does it fall back to `npx -y` (which downloads over the network). So on a machine where the AI-SDLC runtime is installed, the whole flow needs no network and doesn't depend on a system-installed Chrome.
 
 | Dimension | Description |
 | --- | --- |
 | Purpose | Convert a finalized local PRD / tech-solution `.md` offline into a readable, well-formatted PDF |
-| Input | A local `.md` file (and its referenced local images), and an available `npx` (Node.js) on the machine |
+| Input | A local `.md` file (and its referenced local images); the AI-SDLC runtime installed (offline node + `runtime/tools`), or failing that an available `npx` (Node.js) on the machine |
 | Output | A `.pdf` with the same name in the same directory as the source `.md` (or the path given by `--out`), plus stats and pending items |
-| Method | `scripts/export_pdf.py` (mmdc renders mermaid + md-to-pdf produces the PDF, both via npx) |
+| Method | `scripts/export_pdf.py` (mmdc renders mermaid + md-to-pdf produces the PDF; offline packages + offline Chromium first, npx fallback) |
 | Scope | Only handles a finalized local `.md`; doesn't write content, publish to Confluence, or download from Figma; missing images block the export by default so no incomplete draft is produced |
 
 ## 0. Config values
@@ -35,12 +35,13 @@ This skill doesn't read the team profile; conversion is a purely local operation
 | ------ | ------ |
 | python path | Prefer the `python` in the current platform's (`windows` / `macos` / `linux`) / `common` section of `.cursor/profiles/setup.json` (expand a leading `~`); otherwise fall back to the system `python` / `python3` on `PATH` |
 | npx path | Prefer the `npx` in the current platform's / `common` section of `.cursor/profiles/setup.json`; otherwise the system `PATH`; otherwise scan `node-*` under the runtime directory `AI_SDLC_RUNTIME` (default `C:/AI-SDLC/runtime`) |
+| offline tools | Under `AI_SDLC_RUNTIME/tools`: `mermaid-cli/` (mmdc), `md-to-pdf/` (PDF), and `chromium/` (headless browser). Present -> fully offline; absent -> fall back to `npx -y` + system/downloaded Chromium |
 
-A missing `npx` blocks the run; follow the install guidance the script prints, then retry.
+The run is blocked only when neither the offline toolchain nor `npx` is available; follow the install guidance the script prints, then retry.
 
 ## 1. Prerequisite: environment self-check
 
-Before converting, confirm `npx` is available (both `md-to-pdf` and `mmdc` depend on it). The first run fetches `md-to-pdf`, `@mermaid-js/mermaid-cli`, and headless Chromium over the network via `npx`, then uses the npm cache afterward; when the network is restricted, warm the cache manually once first.
+Run `--check-env` first. `ready: true` means it can convert: either the offline toolchain (`offline_pdf` + `offline_mmdc` + `offline_chromium`, laid down by the AI-SDLC runtime under `runtime/tools/`) is in place — fully offline, no network and no system Chrome needed — or `npx` is available as a fallback (the first `npx -y` run fetches `md-to-pdf`, `@mermaid-js/mermaid-cli`, and headless Chromium over the network, then uses the npm cache; warm the cache once when the network is restricted).
 
 ```bash
 python .cursor/skills/md-to-pdf/scripts/export_pdf.py --check-env
@@ -51,7 +52,7 @@ python .cursor/skills/md-to-pdf/scripts/export_pdf.py --check-env
 ```
 Conversion progress:
 - [ ] Step 1: Locate the local .md (finalized version); if it's still in the conversation and not saved, save it as .md first
-- [ ] Step 2: Environment self-check (--check-env), confirm npx is available
+- [ ] Step 2: Environment self-check (--check-env), confirm `ready: true` (offline toolchain in place, or npx available)
 - [ ] Step 3: Run the conversion, produce the PDF
 - [ ] Step 4: Verify the result (mermaid_pending / images_missing are empty, PDF opens)
 - [ ] Step 5: Report the absolute path of the produced PDF back to the user
@@ -96,7 +97,7 @@ After the conversion succeeds, always tell the user the **absolute path** of the
 | Don't modify the source | Only read the source `.md`; conversion works on a temporary copy and never writes back or modifies the source file or its images |
 | Missing image stops | A broken local image path blocks by default and won't silently produce an incomplete PDF; to ignore it, you must explicitly add `--allow-missing-images` |
 | Diagrams must be truly rendered | mermaid is always rendered into real images via `mmdc`, not faked as code-block text; a non-empty `mermaid_pending` counts as not meeting the bar |
-| Single dependency | PDF output and diagram rendering both go through `npx`, introducing no extra Python / system-level dependencies; if `npx` is missing, follow the guidance to install it, don't fall back to another path |
+| Single dependency | PDF output and diagram rendering share one Node runtime and need no extra Python / system-level dependency. Prefer the offline packages under `runtime/tools/` (mermaid-cli / md-to-pdf / chromium) — fully offline; if they're absent it falls back to `npx -y`, which needs Node.js + network. Don't hand-roll another path. |
 | Sensitive information | If the `.md` being converted contains real secrets, internal domains, member IDs, etc., handle it via the sensitive-data-guard step first, then decide whether to export |
 | Report the PDF path | After a successful export, must report the absolute path of the produced PDF back to the user; a "done" message without the path doesn't meet the bar |
 
@@ -105,7 +106,7 @@ After the conversion succeeds, always tell the user the **absolute path** of the
 | Gate | Passing criteria | Handling when it fails |
 | ---- | ---------------------------------- | ----------------------------------------------------------------------------------------- |
 | Export succeeds | Exit code 0 and `ok=true`, `pdf` path returned, file opens | Read `log` to locate the md-to-pdf error, fix it, and rerun |
-| Diagrams complete | `mermaid_pending` is empty | Locate by diagram number: `npx` unavailable -> install Node.js; the first render needs network to download mermaid-cli and Chromium, restricted network -> warm the cache; source syntax error -> fix the mermaid and rerun |
+| Diagrams complete | `mermaid_pending` is empty | Locate by diagram number: offline toolchain missing and `npx` unavailable -> install the AI-SDLC runtime (offline `runtime/tools/`) or Node.js; only the `npx -y` fallback needs network to download mermaid-cli and Chromium (restricted network -> warm the cache or use the offline packages); source syntax error -> fix the mermaid and rerun |
 | Images complete | `images_missing` is empty | Locate by record: fix the relative path or add the file; to ignore, add `--allow-missing-images` |
 | Layout readable | Chinese renders, wide tables don't overflow, mermaid diagrams are clear and complete, individual design images aren't cut across pages | Wide table overflow -> keep the default landscape or change `--orientation`; a tall design image cut across pages -> use `--orientation portrait`; a large image pushing to the top of a page -> normal pagination, doesn't affect content completeness |
 

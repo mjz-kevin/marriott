@@ -1,5 +1,5 @@
 {
-    "_comment": "【macOS / Linux 版·离线】复制本文件为同目录 mcp.json 后填写凭证。figma / marriott-github 两个 server 已改为『本地 node 直跑离线包』——不再走 npx 联网，随 AI-SDLC 运行时一起铺开在 ~/.cursor/AI-SDLC/runtime/mcp-offline/ 下。API token 获取地址：https://id.atlassian.com/manage-profile/security/api-tokens。",
+    "_comment": "【macOS / Linux 版·离线】复制本文件为同目录 mcp.json 后填写凭证。figma / marriott-github / harness 三个 server 已改为『本地 node 直跑离线包』——不再走 npx 联网，随 AI-SDLC 运行时一起铺开在 ~/.cursor/AI-SDLC/runtime/mcp-offline/ 下。API token 获取地址：https://id.atlassian.com/manage-profile/security/api-tokens。",
     "confluenceRest": {
         "base_url": "https://marriottcloud.atlassian.net/wiki",
         "email": "",
@@ -25,6 +25,16 @@
                 "GITHUB_TOKEN": "",
                 "GITHUB_SERVER_URL": "git.marriott.com",
                 "GITHUB_PERMISSION": "read-write"
+            }
+        },
+        "harness": {
+            "_comment": "harness-invoke（CI/CD 环节触发流水线并查执行状态）的 MCP server。HARNESS_ACCOUNT_ID 与 HARNESS_API_KEY 获取地址：marriott.harness.io → 右上头像 → Account Settings / My API Keys（新建 Personal Access Token）；account id 在 URL 或 Account Settings 里。command 为绿色版 node 绝对路径；args[0] 为随运行时铺开的 harness-mcp-v2 入口。凭据仅填在本机 mcp.json，切勿提交。",
+            "command": "${userHome}/.cursor/AI-SDLC/runtime/node-v26.9.0-darwin-arm64/bin/node",
+            "args": ["${userHome}/.cursor/AI-SDLC/runtime/mcp-offline/harness/node_modules/harness-mcp-v2/build/index.js"],
+            "env": {
+                "HARNESS_BASE_URL": "https://marriott.harness.io",
+                "HARNESS_ACCOUNT_ID": "",
+                "HARNESS_API_KEY": ""
             }
         }
     }

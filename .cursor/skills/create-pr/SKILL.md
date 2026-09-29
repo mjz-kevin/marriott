@@ -34,14 +34,22 @@ description: >-
 - [ ] 步骤 6：创建 PR（仅当用户要求时）
 ```
 
-**步骤 1 — 收集上下文。** 确定基线分支并检查改动：
+**步骤 1 — 收集上下文。** 确定基线分支并检查改动。**分步执行、不用 `$(...)` 命令替换与
+`2>/dev/null`（Windows 原生 shell 不支持）**：
 
 ```bash
+# 1) 当前分支
 git rev-parse --abbrev-ref HEAD
-git log --oneline origin/HEAD..HEAD 2>/dev/null || git log --oneline -20
-git diff --stat $(git merge-base origin/HEAD HEAD 2>/dev/null || echo HEAD~1)..HEAD
-git diff $(git merge-base origin/HEAD HEAD 2>/dev/null || echo HEAD~1)..HEAD
+# 2) 求与基线的合并基点（拿到 SHA 后再用于后续 diff；失败则回退 HEAD~1）
+git merge-base origin/HEAD HEAD
+# 3) 用上一步的 SHA（记为 <base_sha>）看改动
+git log --oneline <base_sha>..HEAD
+git diff --stat <base_sha>..HEAD
+git diff <base_sha>..HEAD
 ```
+
+若 `git merge-base` 无输出（无 origin/HEAD 等），回退用 `HEAD~1` 作为 `<base_sha>`。
+这些 git 子命令本身跨平台一致；关键是把"求 SHA"与"用 SHA"分成两步、不内联命令替换。
 
 从分支名中提取 Jira 工单号（命名约定：`[JIRA-TICKET]-[description]`，
 例如 `GTI-1234-config-data-new-arch`）。

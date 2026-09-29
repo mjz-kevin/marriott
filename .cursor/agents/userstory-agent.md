@@ -192,6 +192,18 @@ note: ""
 
 ## 4. Sync workflow
 
+> **Node names shown to the user (mandatory).** `S0`–`S6` are **internal node codes** used only in `state.md`'s `node` field and in this flow diagram; **never show a bare code like `S4` to the PO.** Every user-facing surface (the status card's **Node** line, the "Next" steps, blocked reasons) must use the **readable name** below. Keep the internal code only inside `node:` and internal logs.
+
+| Internal code | Readable name (show this to the user) |
+|---------------|----------------------------------------|
+| `S0` | Initialize |
+| `S1` | Read the PRD & extract Stories |
+| `S2` | Query the current Jira state |
+| `S3` | Generate the sync plan |
+| `S4` | PO sign-off |
+| `S5` | Execute the sync |
+| `S6` | Done |
+
 ```mermaid
 flowchart TD
     S0["S0 Initialize"] --> S1["S1 Read PRD and extract Stories"]
@@ -315,7 +327,7 @@ Handling the reply:
 ```markdown
 ## 📍 UserStory Agent · Jira sync · {feature_name} ({us_id})
 
-**Node**: {S4 PO sign-off}  **Status**: {waiting_confirm}
+**Node**: {PO sign-off}  **Status**: {waiting_confirm}
 **Completed this run**: {a sentence or two}
 **PRD**: {Confluence link (page version n) | local path}
 **Sync plan**: {v1.0 | .ai-sdlc/userstory/…/docs/SYNC-PLAN_…_v1.0_….md}

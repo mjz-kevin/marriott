@@ -132,19 +132,19 @@ install_runtime() {
 
 install_runtime || true
 
-# ---- 铺开离线 MCP 包（figma / github）到 runtime/mcp-offline/ ----
-# 载荷来源：包内 mcp-offline/ 下的 figma-*.zip / github-*.zip（带版本号，纯 JS 跨架构通用）。
-# 每个 zip 内为 node_modules/...，分别解压到 mcp-offline/figma/ 与 mcp-offline/github/。
+# ---- 铺开离线 MCP 包（figma / github / harness）到 runtime/mcp-offline/ ----
+# 载荷来源：包内 mcp-offline/ 下的 figma-*.zip / github-*.zip / harness-*.zip（带版本号，纯 JS 跨架构通用）。
+# 每个 zip 内为 node_modules/...，分别解压到 mcp-offline/figma/、mcp-offline/github/、mcp-offline/harness/。
 # 幂等：对应子目录已存在则跳过该包。
 install_mcp_offline() {
   local base="$RUNTIME_ROOT/mcp-offline"
   local src="$PKG_DIR/mcp-offline"
   if [ ! -d "$src" ]; then
-    echo "--> 本包未带离线 MCP 包（mcp-offline/），跳过（figma/github 将回退到 npx 联网方式）"
+    echo "--> 本包未带离线 MCP 包（mcp-offline/），跳过（figma/github/harness 将回退到 npx 联网方式）"
     return 0
   fi
   mkdir -p "$base"
-  # $1=子目录名(figma/github)  $2=zip 通配前缀
+  # $1=子目录名(figma/github/harness)  $2=zip 通配前缀
   _unzip_one() {
     local sub="$1" glob="$2" dst="$base/$1"
     if [ -d "$dst" ]; then
@@ -167,9 +167,10 @@ install_mcp_offline() {
     rm -rf "$dst/__MACOSX"
     find "$dst" -name ".DS_Store" -type f -delete 2>/dev/null || true
   }
-  _unzip_one figma  "figma-*.zip"
-  _unzip_one github "github-*.zip"
-  echo "    离线 MCP 包处理完成（figma / github）"
+  _unzip_one figma   "figma-*.zip"
+  _unzip_one github  "github-*.zip"
+  _unzip_one harness "harness-*.zip"
+  echo "    离线 MCP 包处理完成（figma / github / harness）"
 }
 install_mcp_offline || true
 
@@ -232,7 +233,7 @@ if [ -n "$NODE_PATH_BIN" ]; then
   echo "--> 自检 node：$NODE_PATH_BIN [$NODE_SOURCE]"
 else
   echo "--> 自检 node：未定位到（运行时与系统 PATH 均无）[default]"
-  echo "    ⚠️ 缺少 Node.js，figma / marriott-github 两个 MCP server 将无法启动。"
+  echo "    ⚠️ 缺少 Node.js，figma / marriott-github / harness 三个 MCP server 将无法启动。"
   echo "       请确认运行时已铺到 ${RUNTIME_ROOT}，或把 node 加入系统 PATH 后重跑本脚本。"
 fi
 
@@ -240,10 +241,11 @@ fi
 MCP_OFFLINE_ROOT="$RUNTIME_ROOT/mcp-offline"
 FIGMA_ENTRY="$MCP_OFFLINE_ROOT/figma/node_modules/figma-developer-mcp/dist/bin.js"
 GITHUB_ENTRY="$MCP_OFFLINE_ROOT/github/node_modules/github-mcp-server-js/dist/cli.js"
-if [ -f "$FIGMA_ENTRY" ] && [ -f "$GITHUB_ENTRY" ]; then
+HARNESS_ENTRY="$MCP_OFFLINE_ROOT/harness/node_modules/harness-mcp-v2/build/index.js"
+if [ -f "$FIGMA_ENTRY" ] && [ -f "$GITHUB_ENTRY" ] && [ -f "$HARNESS_ENTRY" ]; then
   echo "--> 离线 MCP 包已就位：${MCP_OFFLINE_ROOT}"
 else
-  echo "--> ⚠️ 未找到离线 MCP 包入口（${MCP_OFFLINE_ROOT}），figma/github 需自行提供或改回 npx 方式。"
+  echo "--> ⚠️ 未找到离线 MCP 包入口（${MCP_OFFLINE_ROOT}），figma/github/harness 需自行提供或改回 npx 方式。"
 fi
 
 
@@ -265,15 +267,16 @@ MCP_TARGET="$CURSOR_HOME/mcp.json"
 if [ -f "$MCP_TEMPLATE" ]; then
   echo "--> 生成 $MCP_TARGET"
   if [ -n "$PY" ]; then
-    "$PY" - "$MCP_TEMPLATE" "$MCP_TARGET" "$NODE_PATH_BIN" "$FIGMA_ENTRY" "$GITHUB_ENTRY" <<'PYEOF'
+    "$PY" - "$MCP_TEMPLATE" "$MCP_TARGET" "$NODE_PATH_BIN" "$FIGMA_ENTRY" "$GITHUB_ENTRY" "$HARNESS_ENTRY" <<'PYEOF'
 import json, sys, os
 
 template, target = sys.argv[1], sys.argv[2]
 node_path = sys.argv[3] if len(sys.argv) > 3 else ""
 figma_entry = sys.argv[4] if len(sys.argv) > 4 else ""
 github_entry = sys.argv[5] if len(sys.argv) > 5 else ""
-# 离线方案：figma / marriott-github 用绿色版 node 直接跑离线包入口 js（不再走 npx，不联网）。
-# 安装脚本已按当前架构/运行时定位到 node 与两个入口的真实绝对路径，写死进 mcp.json。
+harness_entry = sys.argv[6] if len(sys.argv) > 6 else ""
+# 离线方案：figma / marriott-github / harness 用绿色版 node 直接跑离线包入口 js（不再走 npx，不联网）。
+# 安装脚本已按当前架构/运行时定位到 node 与三个入口的真实绝对路径，写死进 mcp.json。
 with open(template, encoding="utf-8") as f:
     tpl = json.load(f)
 
@@ -286,10 +289,14 @@ def strip_comments(obj):
 
 tpl = strip_comments(tpl)
 
-# 用自检到的 node 绝对路径 + 离线包入口改写 figma / marriott-github 的 command/args。
+# 用自检到的 node 绝对路径 + 离线包入口改写 figma / marriott-github / harness 的 command/args。
 # 定位不到 node 或入口时保持模板里的默认路径（含 ${userHome}，由 Cursor 展开）。
 srv = tpl.setdefault("mcpServers", {})
-entries = {"figma": (figma_entry, ["--stdio"]), "marriott-github": (github_entry, [])}
+entries = {
+    "figma": (figma_entry, ["--stdio"]),
+    "marriott-github": (github_entry, []),
+    "harness": (harness_entry, []),
+}
 for name, (entry, extra) in entries.items():
     if name not in srv:
         continue
@@ -321,6 +328,11 @@ if os.path.isfile(target):
         gt = srv_old.get("marriott-github", {}).get("env", {}).get("GITHUB_TOKEN")
         if gt and "marriott-github" in srv_new:
             srv_new["marriott-github"].setdefault("env", {})["GITHUB_TOKEN"] = gt
+        h_old = srv_old.get("harness", {}).get("env", {})
+        if "harness" in srv_new:
+            for hk in ("HARNESS_ACCOUNT_ID", "HARNESS_API_KEY"):
+                if h_old.get(hk):
+                    srv_new["harness"].setdefault("env", {})[hk] = h_old[hk]
         print("    检测到已有 mcp.json，已保留其中已填的凭证")
     except Exception:
         print("    已有 mcp.json 解析失败，将覆盖为新骨架（凭证需重填）")
@@ -328,7 +340,7 @@ if os.path.isfile(target):
 with open(target, "w", encoding="utf-8") as f:
     json.dump(tpl, f, ensure_ascii=False, indent=4)
 if node_path:
-    print(f"    mcp.json 已生成（command={node_path}，figma/github 用 node 直跑离线包，凭证字段留空，待你手动填写）")
+    print(f"    mcp.json 已生成（command={node_path}，figma/github/harness 用 node 直跑离线包，凭证字段留空，待你手动填写）")
 else:
     print("    mcp.json 已生成（未定位到 node，command 保留模板默认路径，凭证字段留空，待你手动填写）")
 PYEOF
@@ -336,7 +348,7 @@ PYEOF
     # 无 python 时降级：直接复制模板（含 _comment），提示手动清理
     cp "$MCP_TEMPLATE" "$MCP_TARGET"
     echo "    未找到 python，已直接复制模板为 mcp.json（含说明注释，可手动删除 _comment 行）"
-    echo "    ⚠️ 降级复制未按实际运行时改写路径：请确认 figma / marriott-github 的 command 指向"
+    echo "    ⚠️ 降级复制未按实际运行时改写路径：请确认 figma / marriott-github / harness 的 command 指向"
     echo "       ${NODE_PATH_BIN:-<node 绝对路径>}，args[0] 指向 ${MCP_OFFLINE_ROOT}/ 下对应入口 js。"
   fi
 else
@@ -346,9 +358,10 @@ fi
 echo ""
 echo "==> 安装完成 ✅"
 echo "后续步骤："
-echo "  1) 打开 $CURSOR_HOME/mcp.json，填入 Atlassian / Figma / GitHub 凭证（敏感信息需手动填）："
+echo "  1) 打开 $CURSOR_HOME/mcp.json，填入 Atlassian / Figma / GitHub / Harness 凭证（敏感信息需手动填）："
 echo "     - Confluence/Jira: email + api_token  https://id.atlassian.com/manage-profile/security/api-tokens"
 echo "     - Figma: FIGMA_API_KEY                https://www.figma.com/settings （用 Island 浏览器登录后，进 Security 标签，在 Personal access tokens 下点 Generate new token）"
 echo "     - GitHub: GITHUB_TOKEN                https://git.marriott.com/settings/tokens/new （到此页面创建）"
-echo "  2) 在 Cursor 的 MCP 设置里确认 Atlassian / figma / marriott-github 三个 server 已连接"
+echo "     - Harness: HARNESS_ACCOUNT_ID + HARNESS_API_KEY  marriott.harness.io → 头像 → Account Settings / My API Keys（新建 Personal Access Token）"
+echo "  2) 在 Cursor 的 MCP 设置里确认 Atlassian / figma / marriott-github / harness 四个 server 已连接"
 echo "     （agents / skills 已放入 ~/.cursor/，Cursor 会自动识别，无需重启）"
