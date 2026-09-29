@@ -469,6 +469,42 @@ def build_runtime_pkg(platform: str, version: str) -> Path:
     else:
         log("  ⚠️ res/mcp-offline 不存在，运行时包未带离线 MCP（figma/github/harness 将回退 npx 联网）")
 
+    # 1.6) 离线工具包（tools/）：mermaid-cli（跨架构通用）+ 对应平台的 Chromium。
+    #      按平台只带该平台需要的 Chromium，避免每个包都塞进三个平台的浏览器。
+    #      平台 → chromium zip 文件名。
+    CHROMIUM_ZIPS = {
+        "win": "chromium-win64.zip",
+        "mac-intel": "chromium-mac-intel.zip",
+        "mac-silicon": "chromium-mac-silicon.zip",
+    }
+    tools_src = RES_DIR / "tools"
+    if tools_src.is_dir():
+        tools_dst = pkg_dir / "tools"
+        tools_dst.mkdir(parents=True, exist_ok=True)
+        # mermaid-cli（取最新版本号的那个，跨架构通用）
+        cli_zips = sorted(tools_src.glob("mermaid-cli-*.zip"))
+        if cli_zips:
+            log(f"  拷入离线 mermaid-cli {cli_zips[-1].name} ...")
+            shutil.copy2(cli_zips[-1], tools_dst / cli_zips[-1].name)
+        else:
+            log("  ⚠️ res/tools 无 mermaid-cli-*.zip（mermaid 渲染将回退 npx 联网）")
+        # md-to-pdf（跨架构通用，md-to-pdf skill 出 PDF 用）
+        m2p_zips = sorted(tools_src.glob("md-to-pdf-*.zip"))
+        if m2p_zips:
+            log(f"  拷入离线 md-to-pdf {m2p_zips[-1].name} ...")
+            shutil.copy2(m2p_zips[-1], tools_dst / m2p_zips[-1].name)
+        else:
+            log("  ⚠️ res/tools 无 md-to-pdf-*.zip（md-to-pdf skill 将回退 npx 联网）")
+        # 对应平台的 Chromium
+        chrome_zip = tools_src / CHROMIUM_ZIPS[platform]
+        if chrome_zip.is_file():
+            log(f"  拷入离线 Chromium {chrome_zip.name}（{chrome_zip.stat().st_size // (1024*1024)} MB）...")
+            shutil.copy2(chrome_zip, tools_dst / chrome_zip.name)
+        else:
+            log(f"  ⚠️ res/tools 无 {CHROMIUM_ZIPS[platform]}（mmdc 将回退到系统 Chrome）")
+    else:
+        log("  ⚠️ res/tools 不存在，运行时包未带离线工具包（mermaid 渲染将回退 npx 联网 + 系统 Chrome）")
+
     # 2) 安装 / 卸载脚本：mac 平台带 *-runtime.sh，win 平台带 *-runtime.ps1（BOM+CRLF）
     if platform.startswith("mac"):
         shutil.copy2(INIT_DIR / "templates" / "install-runtime.sh",

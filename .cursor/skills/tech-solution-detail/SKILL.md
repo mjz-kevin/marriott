@@ -66,7 +66,7 @@ S1–S10 are logical steps, not chapter numbers; fill by the actual chapter name
 
 ### S3 Main flow
 
-Fill the template's main-flow section: entry, request timing, data loading, business exceptions, state transitions, redirect after a key action, with a flowchart or architecture diagram. mermaid diagrams follow the diagram spec: declare the diagram type and direction on the first line, double-quote node text and edge labels, use ASCII node IDs, cover all branch outlets, and do a previewer render self-check when finished; publishing renders them into images via mmdc, so Node.js (`npx`) must be installed.
+Fill the template's main-flow section: entry, request timing, data loading, business exceptions, state transitions, redirect after a key action, with a flowchart or architecture diagram. mermaid diagrams follow the diagram spec: declare the diagram type and direction on the first line, double-quote node text and edge labels, use ASCII node IDs, cover all branch outlets, and do a previewer render self-check when finished; publishing renders them into images via mmdc, using the AI-SDLC runtime's offline packages (`runtime/tools/` mmdc + Chromium) first and falling back to Node.js (`npx`) only if they're absent.
 
 ### S4 Contracts and dependencies
 

@@ -26,7 +26,7 @@ upload_confluence_v2.py — 将本地 Markdown 发布到 Confluence（storage �
       [--mcp <mcp.json>] [--version-msg <msg>] [--dry-run]
 退出码: 0 成功 / 非 0 失败。结果 JSON 打印到 stdout。
 """
-import argparse, base64, html, json, os, platform, re, shutil, ssl, subprocess, sys, tempfile, uuid
+import argparse, base64, glob, html, json, os, platform, re, shutil, ssl, subprocess, sys, tempfile, uuid
 import urllib.request, urllib.error, urllib.parse
 from collections import deque
 
@@ -129,6 +129,83 @@ def _npx_available():
     if shutil.which("npx"):
         return True
     return bool(_scan_runtime_npx())
+
+
+def _scan_runtime_node():
+    """定位可用的 node 可执行：setup.json 的 node（存在才用）→ 运行时目录 node-* → PATH。找不到返回空串。"""
+    p = os.path.join(_repo_root(), ".cursor", "profiles", "setup.json")
+    if os.path.isfile(p):
+        try:
+            with open(p, encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                for section in (_platform_key(), "common"):
+                    seg = data.get(section)
+                    if isinstance(seg, dict):
+                        val = seg.get("node")
+                        if isinstance(val, str) and val.strip():
+                            cand = os.path.expanduser(val.strip())
+                            if os.path.isfile(cand):
+                                return cand.replace("\\", "/")
+        except Exception:
+            pass
+    root = os.environ.get("AI_SDLC_RUNTIME", _DEFAULT_RUNTIME_ROOT)
+    if root and os.path.isdir(root):
+        dirs = sorted(d for d in glob.glob(os.path.join(root, "node-*")) if os.path.isdir(d))
+        if dirs:
+            base = dirs[-1]
+            cands = ([os.path.join(base, "node.exe")] if sys.platform == "win32"
+                     else [os.path.join(base, "bin", "node"), os.path.join(base, "node")])
+            for c in cands:
+                if os.path.isfile(c):
+                    return c.replace("\\", "/")
+    hit = shutil.which("node")
+    return hit or ""
+
+
+def _offline_mmdc_cli():
+    """定位离线 mermaid-cli 入口 cli.js（随运行时铺开在 runtime/tools/mermaid-cli/）。找不到返回空串。"""
+    root = os.environ.get("AI_SDLC_RUNTIME", _DEFAULT_RUNTIME_ROOT)
+    if not root or not os.path.isdir(root):
+        return ""
+    cli = os.path.join(root, "tools", "mermaid-cli", "node_modules",
+                       "@mermaid-js", "mermaid-cli", "src", "cli.js")
+    return cli.replace("\\", "/") if os.path.isfile(cli) else ""
+
+
+def _offline_chromium():
+    """定位离线 Chromium 可执行（随运行时铺开在 runtime/tools/chromium/）。找不到返回空串。
+
+    zip 内保留 @puppeteer/browsers 布局：chrome/<plat>-<ver>/<chrome-*>/...
+      macOS：.../Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing
+      Windows：.../chrome.exe
+    """
+    root = os.environ.get("AI_SDLC_RUNTIME", _DEFAULT_RUNTIME_ROOT)
+    if not root or not os.path.isdir(root):
+        return ""
+    base = os.path.join(root, "tools", "chromium", "chrome")
+    if not os.path.isdir(base):
+        return ""
+    if sys.platform == "win32":
+        pats = [os.path.join(base, "*", "chrome-*", "chrome.exe")]
+    elif sys.platform == "darwin":
+        pats = [os.path.join(base, "*", "chrome-*",
+                             "Google Chrome for Testing.app", "Contents", "MacOS",
+                             "Google Chrome for Testing")]
+    else:
+        pats = [os.path.join(base, "*", "chrome-*", "chrome")]
+    for pat in pats:
+        hits = sorted(glob.glob(pat))
+        if hits:
+            return hits[-1].replace("\\", "/") if sys.platform == "win32" else hits[-1]
+    return ""
+
+
+def _mmdc_available():
+    """mmdc 是否可用：离线包（node + cli.js）或 npx 任一可用即为真。"""
+    if _scan_runtime_node() and _offline_mmdc_cli():
+        return True
+    return _npx_available()
 
 
 # ============================= 凭证 & HTTP =============================
@@ -382,20 +459,30 @@ def render_mermaid_mmdc(code, out_path, scale=3):
     global _MMDC_UNAVAILABLE
     if _MMDC_UNAVAILABLE:
         return False
-    npx = _resolve_npx() if _npx_available() else None
-    if not npx:
-        _MMDC_UNAVAILABLE = True
-        return False
+    # 优先离线包：绿色 node 直跑 runtime/tools/mermaid-cli 的 cli.js（无需联网）；否则回退 npx -y。
+    node = _scan_runtime_node()
+    cli = _offline_mmdc_cli()
+    if node and cli:
+        base_cmd = [node, cli]
+    else:
+        npx = _resolve_npx() if _npx_available() else None
+        if not npx:
+            _MMDC_UNAVAILABLE = True
+            return False
+        base_cmd = [npx, "-y", "@mermaid-js/mermaid-cli"]
     src = out_path + ".mmd"
     cfg = out_path + ".mmdc.json"
     try:
         with open(src, "w", encoding="utf-8") as f:
             f.write(code)
         # puppeteer 在受限环境需 --no-sandbox；配置文件让 CJK 字体与背景可控。
+        pp = {"args": ["--no-sandbox", "--disable-setuid-sandbox"]}
+        chromium = _offline_chromium()
+        if chromium:
+            pp["executablePath"] = chromium  # 用离线 Chromium，不依赖系统是否装 Chrome
         with open(cfg, "w", encoding="utf-8") as f:
-            json.dump({"args": ["--no-sandbox", "--disable-setuid-sandbox"]}, f)
-        cmd = [npx, "-y", "@mermaid-js/mermaid-cli", "-i", src, "-o", out_path,
-               "-b", "white", "-p", cfg]
+            json.dump(pp, f)
+        cmd = base_cmd + ["-i", src, "-o", out_path, "-b", "white", "-p", cfg]
         if out_path.lower().endswith(".png"):
             cmd += ["-s", str(scale)]
         proc = subprocess.run(
@@ -467,10 +554,11 @@ def ensure_mermaid_available():
     既校验 npx/node 存在，也校验能拉起 mermaid-cli 与无头 Chromium（首次需联网下载）。
     不可用则抛 MermaidUnavailable，附带安装指引；发布/更新一律不进行，避免图表降级上线。
     """
-    if not _npx_available():
+    if not _mmdc_available():
         raise MermaidUnavailable(
-            "图表渲染前置未满足：未找到 npx（Node.js）。\n"
-            "本脚本用 mmdc（@mermaid-js/mermaid-cli）渲染 mermaid。\n"
+            "图表渲染前置未满足：未找到可用的 mmdc（离线包 node+cli.js 或 npx 均不可用）。\n"
+            "本脚本用 mmdc（@mermaid-js/mermaid-cli）渲染 mermaid：优先离线包"
+            "（随运行时铺开在 runtime/tools/mermaid-cli/），否则回退 npx 联网。\n"
             + nodejs_install_hint() + "\n"
             "或显式加 --allow-degraded-diagrams 允许降级（flowchart 退化为低质量自绘、"
             "sequenceDiagram 等无法出图），但不推荐。"
@@ -1071,12 +1159,15 @@ def main():
 
     # 环境预检：只报告不发布，供 skill 在正式发布前提前暴露"本机能否出图"。
     if args.check_env:
-        has_npx = _npx_available()
+        has_mmdc = _mmdc_available()
         need_mermaid = bool(mermaid_blocks)
-        ready = (not need_mermaid) or has_npx or args.allow_degraded_diagrams
+        ready = (not need_mermaid) or has_mmdc or args.allow_degraded_diagrams
         report = {"check_env": True, "mermaid_in_doc": need_mermaid,
-                  "npx_available": has_npx, "ready_to_publish": ready}
-        if need_mermaid and not has_npx and not args.allow_degraded_diagrams:
+                  "mmdc_available": has_mmdc,
+                  "offline_mmdc": bool(_scan_runtime_node() and _offline_mmdc_cli()),
+                  "npx_available": _npx_available(),
+                  "ready_to_publish": ready}
+        if need_mermaid and not has_mmdc and not args.allow_degraded_diagrams:
             report["hint"] = nodejs_install_hint()
         print(json.dumps(report, ensure_ascii=False, indent=2))
         return 0 if ready else 2

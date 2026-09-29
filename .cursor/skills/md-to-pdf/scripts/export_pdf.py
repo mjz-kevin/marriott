@@ -109,6 +109,102 @@ def _resolve_npx():
     return "npx"
 
 
+def _scan_runtime_node():
+    """扫描固定运行时目录下 node-* 的 node 可执行（Windows: node.exe；*nix: bin/node）。
+
+    优先取 setup.json 配置的 node（存在才用），再扫描运行时目录，最后回退 PATH 上的 node。
+    找不到返回空串。
+    """
+    # 1) setup.json 的 node（复用 _configured_npx 的读取逻辑，改字段为 node）
+    p = os.path.join(_repo_root(), ".cursor", "profiles", "setup.json")
+    if os.path.isfile(p):
+        try:
+            with open(p, encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                for section in (_platform_key(), "common"):
+                    seg = data.get(section)
+                    if isinstance(seg, dict):
+                        val = seg.get("node")
+                        if isinstance(val, str) and val.strip():
+                            cand = os.path.expanduser(val.strip())
+                            if os.path.isfile(cand):
+                                return cand.replace("\\", "/")
+        except Exception:
+            pass
+    # 2) 扫描运行时目录 node-*
+    root = os.environ.get("AI_SDLC_RUNTIME", _DEFAULT_RUNTIME_ROOT)
+    if root and os.path.isdir(root):
+        dirs = sorted(d for d in glob.glob(os.path.join(root, "node-*")) if os.path.isdir(d))
+        if dirs:
+            base = dirs[-1]
+            cands = ([os.path.join(base, "node.exe")] if sys.platform == "win32"
+                     else [os.path.join(base, "bin", "node"), os.path.join(base, "node")])
+            for c in cands:
+                if os.path.isfile(c):
+                    return c.replace("\\", "/")
+    # 3) PATH
+    hit = shutil.which("node")
+    return hit or ""
+
+
+def _offline_mmdc_cli():
+    """定位离线 mermaid-cli 的入口 cli.js（随运行时铺开在 runtime/tools/mermaid-cli/）。
+
+    路径：<runtime>/tools/mermaid-cli/node_modules/@mermaid-js/mermaid-cli/src/cli.js
+    找不到返回空串。允许 $AI_SDLC_RUNTIME 覆盖运行时根目录。
+    """
+    root = os.environ.get("AI_SDLC_RUNTIME", _DEFAULT_RUNTIME_ROOT)
+    if not root or not os.path.isdir(root):
+        return ""
+    cli = os.path.join(root, "tools", "mermaid-cli", "node_modules",
+                       "@mermaid-js", "mermaid-cli", "src", "cli.js")
+    return cli.replace("\\", "/") if os.path.isfile(cli) else ""
+
+
+def _offline_chromium():
+    """定位离线 Chromium 可执行（随运行时铺开在 runtime/tools/chromium/）。
+
+    zip 内保留 @puppeteer/browsers 布局：chrome/<plat>-<ver>/<chrome-*>/...
+      macOS：.../Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing
+      Windows：.../chrome.exe
+    用 glob 兼容版本号变化；找不到返回空串。
+    """
+    root = os.environ.get("AI_SDLC_RUNTIME", _DEFAULT_RUNTIME_ROOT)
+    if not root or not os.path.isdir(root):
+        return ""
+    base = os.path.join(root, "tools", "chromium", "chrome")
+    if not os.path.isdir(base):
+        return ""
+    if sys.platform == "win32":
+        pats = [os.path.join(base, "*", "chrome-*", "chrome.exe")]
+    elif sys.platform == "darwin":
+        pats = [os.path.join(base, "*", "chrome-*",
+                             "Google Chrome for Testing.app", "Contents", "MacOS",
+                             "Google Chrome for Testing")]
+    else:
+        pats = [os.path.join(base, "*", "chrome-*", "chrome")]
+    for pat in pats:
+        hits = sorted(glob.glob(pat))
+        if hits:
+            return hits[-1].replace("\\", "/") if sys.platform == "win32" else hits[-1]
+    return ""
+
+
+def _offline_md_to_pdf_cli():
+    """定位离线 md-to-pdf 的入口 cli.js（随运行时铺开在 runtime/tools/md-to-pdf/）。
+
+    路径：<runtime>/tools/md-to-pdf/node_modules/md-to-pdf/dist/cli.js
+    找不到返回空串。允许 $AI_SDLC_RUNTIME 覆盖运行时根目录。
+    """
+    root = os.environ.get("AI_SDLC_RUNTIME", _DEFAULT_RUNTIME_ROOT)
+    if not root or not os.path.isdir(root):
+        return ""
+    cli = os.path.join(root, "tools", "md-to-pdf", "node_modules",
+                       "md-to-pdf", "dist", "cli.js")
+    return cli.replace("\\", "/") if os.path.isfile(cli) else ""
+
+
 def _npx_available():
     # _configured_npx() 已保证返回的配置路径存在，故命中即可用。
     if _configured_npx():
@@ -137,25 +233,39 @@ _MMDC_UNAVAILABLE = False
 def render_mermaid_mmdc(code, out_path, scale=3):
     """用 mermaid-cli 把 mermaid 源码渲染为 PNG。成功返回 True，不可用/失败返回 False。
 
-    首次调用由 npx 拉取 @mermaid-js/mermaid-cli 与无头 Chromium（需联网），之后走 npm 缓存。
+    渲染引擎优先级：
+      1) 离线包：绿色 node 直跑 runtime/tools/mermaid-cli 的 cli.js（无需联网，推荐）；
+      2) 回退：npx -y @mermaid-js/mermaid-cli（首次需联网拉取）。
+    两者都需要系统上有可用的 Chromium/Chrome（离线包不含浏览器）。
     -s 提高分辨率，保证 PDF 缩放后文字清晰。
     """
     global _MMDC_UNAVAILABLE
     if _MMDC_UNAVAILABLE:
         return False
-    npx = _resolve_npx() if _npx_available() else None
-    if not npx:
-        _MMDC_UNAVAILABLE = True
-        return False
+    # 优先离线：node + 本地 cli.js
+    node = _scan_runtime_node()
+    cli = _offline_mmdc_cli()
+    if node and cli:
+        base_cmd = [node, cli]
+    else:
+        npx = _resolve_npx() if _npx_available() else None
+        if not npx:
+            _MMDC_UNAVAILABLE = True
+            return False
+        base_cmd = [npx, "-y", "@mermaid-js/mermaid-cli"]
     src = out_path + ".mmd"
     cfg = out_path + ".mmdc.json"
     try:
         with open(src, "w", encoding="utf-8") as f:
             f.write(code)
+        pp = {"args": ["--no-sandbox", "--disable-setuid-sandbox"]}
+        chromium = _offline_chromium()
+        if chromium:
+            pp["executablePath"] = chromium  # 用离线 Chromium，不依赖系统是否装 Chrome
         with open(cfg, "w", encoding="utf-8") as f:
-            json.dump({"args": ["--no-sandbox", "--disable-setuid-sandbox"]}, f)
-        cmd = [npx, "-y", "@mermaid-js/mermaid-cli", "-i", src, "-o", out_path,
-               "-b", "white", "-p", cfg, "-s", str(scale)]
+            json.dump(pp, f)
+        cmd = base_cmd + ["-i", src, "-o", out_path,
+                          "-b", "white", "-p", cfg, "-s", str(scale)]
         proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=180)
         if proc.returncode == 0 and os.path.exists(out_path) and os.path.getsize(out_path) > 200:
             return True
@@ -173,12 +283,20 @@ def render_mermaid_mmdc(code, out_path, scale=3):
                 pass
 
 
+def _offline_pdf_ready():
+    """离线出 PDF 是否就绪：绿色 node + 离线 md-to-pdf cli.js 都在。"""
+    return bool(_scan_runtime_node() and _offline_md_to_pdf_cli())
+
+
 def ensure_npx_ready():
-    """确认 npx 可用；否则报错阻断（PDF 出稿与 mermaid 渲染都依赖它）。"""
+    """确认出 PDF 的运行时可用：离线工具链（node + md-to-pdf）就绪、或 npx 可用；否则报错阻断。"""
+    if _offline_pdf_ready():
+        return
     if not _npx_available():
         raise SystemExit(
-            "环境未就绪：未找到 npx（Node.js）。本 skill 用 npx md-to-pdf 出 PDF、"
-            "用 mmdc 渲染 mermaid，均需 Node.js。\n" + nodejs_install_hint())
+            "环境未就绪：既无离线工具链（runtime/tools/md-to-pdf + node），也未找到 npx（Node.js）。\n"
+            "本 skill 用 md-to-pdf 出 PDF、用 mmdc 渲染 mermaid：优先离线包，其次回退 npx，均需 Node.js。\n"
+            + nodejs_install_hint())
 
 
 # ============================= Markdown 预处理 =============================
@@ -412,6 +530,10 @@ def export_pdf(new_md, out_pdf, orientation, css_extra=""):
         with open(css_file, "w", encoding="utf-8") as f:
             f.write(css_body + "\n" + css_extra)
         # md-to-pdf 配置：注入 CSS、页边距、方向、打印背景、允许无头 Chromium 无沙箱。
+        launch_opts = {"args": ["--no-sandbox", "--disable-setuid-sandbox"]}
+        chromium = _offline_chromium()
+        if chromium:
+            launch_opts["executablePath"] = chromium  # 用离线 Chromium，不依赖系统装 Chrome / 联网下载
         cfg = {
             "stylesheet": [css_file],
             "css": "",
@@ -422,15 +544,22 @@ def export_pdf(new_md, out_pdf, orientation, css_extra=""):
                 "printBackground": True,
                 "margin": {"top": "16mm", "bottom": "16mm", "left": "14mm", "right": "14mm"},
             },
-            "launch_options": {"args": ["--no-sandbox", "--disable-setuid-sandbox"]},
+            "launch_options": launch_opts,
             "marked_options": {"headerIds": True},
         }
         with open(cfg_file, "w", encoding="utf-8") as f:
             json.dump(cfg, f, ensure_ascii=False)
-        cmd = [npx, "-y", "md-to-pdf", "--config-file", cfg_file,
-               "--pdf-options", json.dumps(cfg["pdf_options"]),
-               "--launch-options", json.dumps(cfg["launch_options"]),
-               tmp_md]
+        # 优先离线 md-to-pdf（绿色 node 直跑 cli.js，无需联网）；否则回退 npx -y md-to-pdf。
+        node = _scan_runtime_node()
+        m2p_cli = _offline_md_to_pdf_cli()
+        if node and m2p_cli:
+            base_cmd = [node, m2p_cli]
+        else:
+            base_cmd = [npx, "-y", "md-to-pdf"]
+        cmd = base_cmd + ["--config-file", cfg_file,
+                          "--pdf-options", json.dumps(cfg["pdf_options"]),
+                          "--launch-options", json.dumps(cfg["launch_options"]),
+                          tmp_md]
         proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=300)
         produced = os.path.splitext(tmp_md)[0] + ".pdf"
         log = (proc.stdout.decode("utf-8", "replace") + proc.stderr.decode("utf-8", "replace")).strip()
@@ -463,12 +592,22 @@ def main():
     args = ap.parse_args()
 
     if args.check_env:
-        has = _npx_available()
-        report = {"check_env": True, "npx_available": has, "npx_path": _resolve_npx() if has else None}
-        if not has:
+        has_npx = _npx_available()
+        offline_pdf = _offline_pdf_ready()
+        offline_mmdc = bool(_scan_runtime_node() and _offline_mmdc_cli())
+        offline_chromium = bool(_offline_chromium())
+        ready = offline_pdf or has_npx
+        report = {"check_env": True,
+                  "ready": ready,
+                  "offline_pdf": offline_pdf,
+                  "offline_mmdc": offline_mmdc,
+                  "offline_chromium": offline_chromium,
+                  "npx_available": has_npx,
+                  "npx_path": _resolve_npx() if has_npx else None}
+        if not ready:
             report["hint"] = nodejs_install_hint()
         print(json.dumps(report, ensure_ascii=False, indent=2))
-        return 0 if has else 2
+        return 0 if ready else 2
 
     if not args.md:
         raise SystemExit("缺少 --md 参数")
