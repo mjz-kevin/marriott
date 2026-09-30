@@ -269,9 +269,14 @@ flowchart TD
 
 ### D1 Read the Story, tech solution, and repo
 
-1. **A confirmed Story-level detail solution is required.** If the DEV didn't provide one -> `waiting_user`, prompt "Please provide the confirmed Story-level tech solution (URL or local path); if there isn't one yet, ask the TL to produce it via `/tech-solution-agent`."
-2. Read the solution read-only via the Confluence MCP (or the local file), recording `page_id` / `page_version` / `read_at`; run it through `sensitive-data-guard` and save as `inputs/{timestamp}_solution-snapshot.md`. Read failure -> `blocked`.
-3. Read the Jira Story read-only (summary, AC, links); record `sources.story`. If the Story key is invalid / unreadable -> `blocked`.
+1. Read the Jira Story read-only (summary, AC, **and all its links**) and record `sources.story`; an invalid / unreadable Story key -> `blocked`. "Links" here is deliberately broader than the issue-link list — a published Story-level tech solution is usually a **Confluence page** attached to the Story as a **Jira remote / web link**, not an issue↔issue link, and it is frequently absent from both `issuelinks` and the description's reference list. So read **all** of: (a) the description's reference / linked-documents section, (b) `issuelinks`, and (c) the Story's **remote issue links / web links** (a separate Jira read from the issue fields). Treat the tech-solution page found via any of these as the confirmed solution.
+2. **A confirmed Story-level detail solution is required — but do not conclude one is missing until you have actively looked for it.** Resolve it in this order, stopping at the first hit:
+   1. an explicit URL / local path the DEV provided;
+   2. any solution link discovered on the Story in step 1 (remote/web link, issue link, or description reference);
+   3. a read-only Confluence full-text search keyed on the **Story key** (and, if it returns too much, narrowed by the Story summary / space) — the team publishes the detail solution to Confluence and searching the Story key reliably surfaces it. **Do not hardcode any title-naming pattern**; search by the Story key as free text and let the result match.
+   
+   Only after (i)–(iii) all come back empty do you treat the solution as missing -> `waiting_user`, prompting "No confirmed Story-level tech solution found on {story_key} (checked the DEV-provided input, the Story's links/remote-links, and a Confluence search); please provide its URL / local path, or ask the TL to produce it via `/tech-solution-agent`." Record in `sessions/` which of (i)–(iii) you tried.
+3. Read the resolved solution read-only via the Confluence MCP (or the local file), recording `page_id` / `page_version` / `read_at`; run it through `sensitive-data-guard` and save as `inputs/{timestamp}_solution-snapshot.md`. Read failure -> `blocked`.
 4. Read optional inputs: PRD URL, Figma (read-only), the code repo and existing API implementations, using `kb-query` as needed; record in `sources`. Determine the target `repo` from the profile's `code.repos`.
 5. **Build the task checklist** from the solution's task breakdown: mirror every task and its acceptance criteria into `tasks`, and every unit test the solution lists into each task's `unit_tests`. If the solution has no task breakdown or no field-level contract -> `blocked`, prompt the DEV to have the detail solution completed (this Agent does not invent the design).
 
@@ -317,14 +322,22 @@ flowchart TD
 ### D6 Commit & push
 
 1. Set node=`D6`, `in_progress`, persist.
-2. Run `sensitive-data-guard` over the final diff **and** the commit message; on a hit -> `blocked`.
-3. Commit on the Feature branch (message references the Story key and summarizes the change). **Never force-push.** Record `commit.message`, `commit.committed_sha`, `repo.head_sha`.
-4. **Ask the DEV before pushing (mandatory).** Pushing to the remote **always** requires the DEV's explicit approval in this turn — this holds for the very first push of the branch and for every subsequent push, with no exception. Do **not** push automatically, and do **not** treat a `pass` verdict, an earlier "create branch", or any prior push as standing consent.
+2. **Pre-commit hook alignment (do this before committing, so you pass the hook on the first try instead of discovering it on rejection).** Read the target repo's `code.git_hooks.<repo>` from the profile:
+   - **`pre_commit`** — the repo's pre-commit hook runs this (e.g. `lint-staged` → `generate:all`/`lint:tsc`/`build:compile` on cncms; `detekt` on android). Run the equivalent check yourself first; if it fails, fix within scope (a fix is a new attempt, D4→D5) rather than committing into a hook that will reject you. If the profile declares no hook (`none`/`null`), skip.
+   - **`commit_msg`** — if the repo has a commit-msg hook (e.g. android's `[CNAPP-XXXXX] description`: issue tag **required**, English-only, ≥ min chars/words), you **must** generate a message that satisfies it, or the commit is rejected. Honor `code.commit.<repo>` too (convention, issue-tag optional/required, language). Never emit a message the profile says the hook will reject (e.g. a Chinese description on android, or a bare Conventional-Commits subject where an issue tag is required).
+   - **Assemble the message to the profile's convention (do not free-form it).** Resolve `code.commit` (per-repo when keyed) and build the message from it:
+     - `convention: conventional_commits` → `type(scope): subject` (pick an accurate `type` — feat/fix/docs/refactor/chore/test… — and a `scope` matching the area), a concise imperative subject, then a body summarizing the change; place the Story key per `subject_issue_tag` (append `[KEY]` to the subject when `optional`/desired, omit when the convention doesn't use it).
+     - `convention: jira_bracket_prefix` (e.g. android) → first line **exactly** `[<STORY-KEY>] <description>` with the description in the profile's `language`, meeting `min_desc_chars` / `min_words`, under `max_desc_chars`; never a `type(scope):` subject where the hook wants the bracket prefix.
+     - Respect `language` (e.g. English-only where required), keep the subject within the hook's length bounds, and **when in doubt match the repo's own recent `git log` style** so the message reads consistent with history rather than merely legal.
+   - These are **declared in the profile, not hardcoded**; if the profile lacks a `git_hooks`/`commit` entry for the repo, fall back to reading the repo's actual hook scripts (`.husky/`, `.git/hooks/`, `config/hooks/`, `core.hooksPath`) read-only, and infer the convention from recent `git log`, before committing.
+3. Run `sensitive-data-guard` over the final diff **and** the commit message; on a hit -> `blocked`.
+4. Commit on the Feature branch, using the profile-compliant message from step 2 (references the Story key per the repo's convention and summarizes the change). If the commit is still rejected by a hook, treat the hook output as a failed check -> fix within scope and retry, do **not** `--no-verify` to bypass it. **Never force-push.** Record `commit.message`, `commit.committed_sha`, `repo.head_sha`.
+5. **Ask the DEV before pushing (mandatory).** Pushing to the remote **always** requires the DEV's explicit approval in this turn — this holds for the very first push of the branch and for every subsequent push, with no exception. Do **not** push automatically, and do **not** treat a `pass` verdict, an earlier "create branch", or any prior push as standing consent.
    - Set node=`D6_push`, `status: waiting_user`, persist, and prompt the DEV to confirm the push (spell out the branch, the commit SHA about to be pushed, and the target remote in the status card). Record the request in `sessions/`.
-   - **Approved this turn** -> `git push -u origin {feature_branch}` (never force-push). Record `repo.pushed_sha`, then continue to step 5. Persist the approval verbatim to `sessions/`.
+   - **Approved this turn** -> `git push -u origin {feature_branch}` (never force-push). Record `repo.pushed_sha`, then continue to step 6. Persist the approval verbatim to `sessions/`.
    - **Not approved / no answer** -> stay `waiting_user`, leave the commit local-only (do not push), and note "committed, awaiting push approval" in the status card. An earlier "not now" is honored and never silently overridden on a later run — re-prompt instead.
    - **Push failure / auth failure** after approval -> `blocked`, report the reason (do not fall back to force-push).
-5. Transition the Jira Story per the profile's workflow (e.g. -> "In process" / "In Development") using the Jira MCP (status + comment only) — only **after** a successful push.
+6. Transition the Jira Story per the profile's workflow (e.g. -> "In process" / "In Development") using the Jira MCP (status + comment only) — only **after** a successful push.
 
 ### D7 Done
 
@@ -381,13 +394,13 @@ When blocked, spell out the reason, who handles it, and how to continue after it
 
 ## 7. Prohibitions
 
-- Implementing without a confirmed Story-level detail solution, or inventing a design / contract the solution doesn't specify.
+- Implementing without a confirmed Story-level detail solution, or inventing a design / contract the solution doesn't specify. **Before concluding no solution exists, you must have actively looked** (DEV input, the Story's links / remote-web-links, and a Confluence search keyed on the Story key) per D1 — never declare it missing off the issue-link list alone.
 - **Writing / editing any implementation code before D2 (baseline checkout) and D3 (Feature branch created and checked out) are both done, or while git HEAD is still on `develop`/`main`/a baseline branch.** A Story alone, or "just start coding," is never a license to skip D2/D3.
 - Fabricating a pass, or returning a verdict without actually running the four checks against the current branch head; auto-raising `retry_cap` yourself.
 - **Pushing to the remote without the DEV's explicit in-turn approval** — every push (first or subsequent) must be confirmed; a `pass` verdict or an earlier approval is never standing consent, and an earlier "not now" must not be silently overridden.
 - Creating more than one Feature branch per Story; force-pushing; opening or merging PRs; modifying branch-protection rules.
 - Writing / changing the PRD, User Story, or tech solution; triggering Harness pipelines; generating functional / regression test cases; estimation.
 - Writing to Jira beyond status transitions and comments; restructuring or deleting Jira fields / tickets.
-- Committing or pushing content that fails `sensitive-data-guard`; deciding the branch-naming rule, build commands, or test framework yourself, or hardcoding team constants.
+- Committing or pushing content that fails `sensitive-data-guard`; deciding the branch-naming rule, build commands, commit-message convention, or test framework yourself, or hardcoding team constants (these come from the profile / the repo's own hook scripts). **Bypassing a repo's git hooks (e.g. `git commit --no-verify`, `git push --no-verify`)** — a hook rejection is a real failed check to fix within scope, never to skip.
 - Saving this Agent's own artifacts outside `.ai-sdlc/` (unless the user explicitly specifies); overwriting an existing note / snapshot file.
 - Reading or writing another Agent's state file; deleting historical files under `.ai-sdlc/`.
