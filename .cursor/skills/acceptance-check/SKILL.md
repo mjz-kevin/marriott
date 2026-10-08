@@ -1,115 +1,117 @@
 ---
 name: acceptance-check
 description: >-
-  按明细技术方案中每项任务的验收标准逐条验收，判定每条达成／未达成，
-  并附「不含敏感信息」这一固定验收项。当验证环节需要对照任务验收标准逐条核验、确认实现是否满足方案时使用；
-  触发词：任务验收 / 逐条验收 / 验收检查 / 验收标准核验 / acceptance check / task acceptance。
+  Verify the implementation line by line against the acceptance criteria of every task in the detailed
+  tech solution, ruling each one met / not met, plus the fixed "contains no sensitive information"
+  acceptance item. Use when the verification step needs to check item by item against each task's
+  acceptance criteria and confirm the implementation satisfies the solution;
+  triggers: acceptance check / task acceptance / 任务验收 / 逐条验收 / 验收检查 / 验收标准核验.
 metadata:
   agent: Verification Agent
 ---
 
-# acceptance-check — 按每项任务验收标准逐条验收
+# acceptance-check — verifying item by item against each task's acceptance criteria
 
-以明细技术方案任务清单里每项任务的验收标准为基线，逐条核验实现是否达成，并对产物附加固定的「不含敏感信息」验收项。这是四项验证的收口环节。
+Using the acceptance criteria of every task in the detailed tech solution's task list as the baseline, verify item by item whether the implementation meets them, and append the fixed "contains no sensitive information" acceptance item to the deliverable. This is the closing step of the four verification activities.
 
-| 维度 | 说明 |
+| Dimension | Description |
 |------|------|
-| 定位 | 对照方案每项任务的验收标准逐条验收，含「不含敏感信息」验收项 |
-| 输入 | 明细技术方案的任务清单＋每项验收标准＋实现代码与前序验证结论 |
-| 产出 | 逐任务逐条的验收结论（达成／未达成／不适用）＋总验收结论 |
-| 边界 | 只核验判定；不改代码、不改方案 |
+| Purpose | Verify item by item against each task's acceptance criteria in the solution, including the "contains no sensitive information" acceptance item |
+| Input | The detailed tech solution's task list + each task's acceptance criteria + the implementation code and the conclusions of prior verification |
+| Output | A per-task, per-item acceptance conclusion (met / not met / not applicable) + an overall acceptance conclusion |
+| Scope | Only verifies and rules; does not change code or the solution |
 
-## 0. 配置取值
+## 0. Config values
 
-`{profile}` 为当前 profile 文件名（不含扩展名，如 `app-prod` / `cms-test`），由调用方经 profile 选择环节解析并传入（`profile.py resolve` 给出其绝对路径）；未传入或文件不存在 → 停止，不臆测。
+`{profile}` is the current profile file name (without extension, e.g. `app-prod` / `cms-test`), resolved and passed in by the caller via the profile-selection step (`profile.py resolve` gives its absolute path); if it is not passed in or the file does not exist → stop, don't guess.
 
-本环节的验收标准来自明细技术方案（每项任务自带验收标准），不依赖团队差异配置；无需引用 profile 业务配置键。
+This step's acceptance criteria come from the detailed tech solution (each task carries its own acceptance criteria) and don't depend on team-specific config; no reference to profile business-config keys is needed.
 
-## 1. 前置
+## 1. Prerequisites
 
-| # | 条件 |
+| # | Condition |
 |---|------|
-| 1 | 已有明细技术方案的任务清单，且每项任务带验收标准（作为验收基线）；缺失则无法验收，停止并回报 |
-| 2 | 实现代码已在 Feature 分支上，能对照每项任务定位实现 |
-| 3 | 前序验证（构建／契约／单测）结论可参考，作为验收依据之一 |
+| 1 | The detailed tech solution's task list exists, and every task carries acceptance criteria (as the acceptance baseline); if missing, acceptance can't be done—stop and report |
+| 2 | The implementation code is already on the Feature branch, so each task's implementation can be located for comparison |
+| 3 | The conclusions of prior verification (build / contract / unit tests) are available for reference as one basis for acceptance |
 
-## 2. 工作流
+## 2. Workflow
 
 ```
-- S1 从明细方案抽取任务清单及每项验收标准
-- S2 逐任务逐条核验：达成 / 未达成 / 不适用
-- S3 追加「不含敏感信息」验收项：扫描产物是否含密钥/Token/真实个人信息
-- S4 汇总总验收结论
-- S5 回报结论：全部达成放行 / 有未达成打回开发环节
+- S1 Extract the task list and each task's acceptance criteria from the detailed solution
+- S2 Verify item by item per task: met / not met / not applicable
+- S3 Append the "contains no sensitive information" acceptance item: scan the deliverable for secrets/tokens/real personal info
+- S4 Aggregate the overall acceptance conclusion
+- S5 Report the conclusion: all met → pass; any not met → send back to the development step
 ```
 
-### S2 逐条核验
+### S2 Verify item by item
 
-对每项任务的每条验收标准判定：
+For each acceptance criterion of each task, rule:
 
-| 结论 | 含义 |
+| Conclusion | Meaning |
 |------|------|
-| 达成 | 实现满足该条验收标准，附证据（代码位置／前序验证结论／运行观察） |
-| 未达成 | 实现不满足，说明差距 |
-| 不适用 | 该条本轮不涉及，说明原因（不静默跳过） |
+| Met | The implementation satisfies this criterion, with evidence (code location / prior verification conclusion / runtime observation) |
+| Not met | The implementation doesn't satisfy it; describe the gap |
+| Not applicable | This item isn't involved this round; state the reason (don't silently skip) |
 
-每条「达成」都要有可核查的证据，不凭主观判断。
+Every "met" must have verifiable evidence; don't rely on subjective judgment.
 
-### S3 「不含敏感信息」验收项
+### S3 The "contains no sensitive information" acceptance item
 
-对本次产物（代码、配置、注释、测试数据）执行敏感信息扫描：命中密码／Token／API Key／AK/SK／私钥／JWT，或真实个人信息（姓名／手机／地址／证件／银行卡／邮箱）即判该项未达成。此项由 `sensitive-data-guard` skill 执行，本环节调用它并把其结论纳入为一条固定验收项。
+Run a sensitive-information scan over this deliverable (code, config, comments, test data): a hit on a password / token / API key / AK/SK / private key / JWT, or on real personal information (name / phone / address / ID document / bank card / email) marks this item not met. This item is executed by the `sensitive-data-guard` skill; this step invokes it and incorporates its conclusion as a fixed acceptance item.
 
-### S4 总验收结论
+### S4 Overall acceptance conclusion
 
-| 总结论 | 判据 |
+| Overall conclusion | Criteria |
 |------|------|
-| 通过 | 所有任务的所有验收标准达成，且「不含敏感信息」项达成 |
-| 未通过 | 任一验收标准未达成，或命中敏感信息 |
+| Pass | Every acceptance criterion of every task is met, and the "contains no sensitive information" item is met |
+| Fail | Any acceptance criterion is not met, or sensitive information was hit |
 
-## 3. 强制规则
+## 3. Mandatory rules
 
-| 规则 | 说明 |
+| Rule | Description |
 |------|------|
-| 方案为基线 | 验收标准来自明细方案任务清单；方案未定义的不臆造标准 |
-| 逐条留证 | 每条「达成」附可核查证据，不凭主观判断 |
-| 敏感信息为固定项 | 「不含敏感信息」是恒定验收项，命中即整体未通过 |
-| 不适用需说明 | 「不适用」须说明原因，不静默跳过 |
-| 只判不改 | 只核验判定；不改实现、不改方案 |
-| 方案缺失即停 | 无任务验收标准基线时停止并回报，不臆造 |
-| 尊重重试上限 | 自循环含重试上限，超限则提醒人工介入 |
+| Solution is the baseline | Acceptance criteria come from the detailed solution's task list; don't invent criteria the solution doesn't define |
+| Evidence per item | Every "met" carries verifiable evidence; don't rely on subjective judgment |
+| Sensitive info is a fixed item | "Contains no sensitive information" is a constant acceptance item; a hit means the whole run fails |
+| Explain not-applicable | "Not applicable" must state a reason; don't silently skip |
+| Rule only, don't change | Only verify and rule; don't change the implementation or the solution |
+| Stop if the solution is missing | With no task acceptance-criteria baseline, stop and report; don't invent |
+| Respect the retry limit | The self-loop carries a retry limit; past the limit, prompt for human intervention |
 
-## 4. 质量门禁
+## 4. Quality gates
 
-- 验收标准来自方案任务清单，逐任务逐条覆盖，无遗漏
-- 每条「达成」附可核查证据，「不适用」附原因
-- 「不含敏感信息」作为固定验收项已核验并纳入总结论
-- 总结论明确为通过／未通过
-- 给出「放行 / 打回 / 提醒人工」中的明确下一步
+- Acceptance criteria come from the solution's task list, covered per task and per item, with none missed
+- Every "met" carries verifiable evidence; every "not applicable" carries a reason
+- "Contains no sensitive information" has been verified as a fixed acceptance item and incorporated into the overall conclusion
+- The overall conclusion is explicitly pass / fail
+- Give an explicit next step among "pass / send back / prompt for human"
 
-## 5. 输出
+## 5. Output
 
 ```markdown
-任务验收 — {通过 | 未通过}
+Task acceptance — {Pass | Fail}
 
-| 任务 | 验收标准 | 结论 | 证据／差距 |
+| Task | Acceptance criterion | Conclusion | Evidence / Gap |
 |------|------|:--:|------|
-| {任务} | {标准条目} | 达成/未达成/不适用 | {证据或差距} |
+| {task} | {criterion item} | met/not met/not applicable | {evidence or gap} |
 
-- **不含敏感信息**：{达成 / 未达成（命中项）}
-- **结论**：{全部达成放行 / 打回开发环节 / 超重试上限，提醒人工介入}
+- **Contains no sensitive information**: {met / not met (hit items)}
+- **Conclusion**: {all met → pass / send back to development step / retry limit exceeded, prompt for human intervention}
 ```
 
-## 6. 排障
+## 6. Troubleshooting
 
-| 现象 | 处理 |
+| Symptom | Handling |
 |------|------|
-| 方案缺任务验收标准 | 停止并回报；不臆造验收标准 |
-| 某条标准无法客观核验 | 标为待人工确认，说明原因，不主观判达成 |
-| 命中敏感信息 | 「不含敏感信息」项判未达成，整体未通过，交脱敏后复验 |
-| 反复未达成且超重试上限 | 提醒人工介入，不无限打回 |
+| The solution lacks task acceptance criteria | Stop and report; don't invent acceptance criteria |
+| A criterion can't be verified objectively | Mark it as pending human confirmation, state the reason; don't subjectively rule it met |
+| Sensitive information hit | Rule the "contains no sensitive information" item not met, overall fail, send back for redaction and re-verification |
+| Repeatedly not met beyond the retry limit | Prompt for human intervention; don't send back endlessly |
 
-## 7. 相关
+## 7. Related
 
-- Upstream：unit-test-runner（单测通过后做逐条验收）；验收标准来自明细技术方案任务清单
-- Depends：sensitive-data-guard（S3「不含敏感信息」验收项由其执行，本环节纳入其结论）
-- Downstream：全部达成 → 验证放行（进入后续代码审核／CI/CD 环节）；有未达成 → 打回开发环节修复
+- Upstream: unit-test-runner (do item-by-item acceptance after unit tests pass); acceptance criteria come from the detailed tech solution's task list
+- Depends: sensitive-data-guard (the S3 "contains no sensitive information" acceptance item is executed by it; this step incorporates its conclusion)
+- Downstream: all met → verification passes (proceed to the subsequent code-review / CI-CD steps); any not met → send back to the development step to fix

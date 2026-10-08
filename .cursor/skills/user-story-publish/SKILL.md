@@ -6,7 +6,7 @@ description: >-
   write-back items left by the tech-solution publishing step, and leave the Story in the
   team-configured initial status. Use when the user asks to create Jira tickets, push Stories to
   Jira, or sync Stories;
-  triggers: 创建 Jira / 建工单 / 推送 Story 到 Jira / 建单 / create jira ticket.
+  triggers: create jira ticket / 创建 Jira / 建工单 / 推送 Story 到 Jira / 建单.
 metadata:
   agent: UserStory Agent
 ---

@@ -8,7 +8,7 @@ description: >-
   tech-solution-authoring step. This step produces no document.
   Use when the user pastes raw requirements, meeting notes, or a one-line idea, or needs clarification /
   completeness checking before writing a PRD / tech solution (PRD level / Spike / Story detail);
-  triggers: 需求澄清 / 方案澄清 / 技术澄清 / 需求是否完整 / 帮我提问 / 澄清一下 / clarify requirements / clarify tech solution.
+  triggers: clarify requirements / clarify tech solution / 需求澄清 / 方案澄清 / 技术澄清 / 需求是否完整 / 帮我提问 / 澄清一下.
 metadata:
   agent: [Eval Agent, Tech Solution Agent]
 ---

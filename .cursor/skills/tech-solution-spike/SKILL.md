@@ -6,7 +6,7 @@ description: >-
   selection conclusion with its impact on estimation and schedule, open items, and a review
   conclusion. Use when the user has a spike ticket or an undecided technical question and asks for
   a feasibility study, technical research, or a solution comparison;
-  triggers: spike 调研 / 可行性 / 技术选型 / 方案对比 / PoC / research spike.
+  triggers: research spike / PoC / spike 调研 / 可行性 / 技术选型 / 方案对比.
 metadata:
   agent: Tech Solution Agent
 ---

@@ -1,140 +1,141 @@
 ---
 name: unit-test-authoring
 description: >-
-  依据 Story 级明细技术方案，生成方案中列明的全部单元测试代码，覆盖正例／反例／边界与失败回退，
-  采用团队 profile 声明的测试框架，测试数据强制为合成／mock 数据。当开发环节实现代码后需要补齐
-  单测、或方案要求编写单元测试时使用；
-  触发词：写单测 / 生成单元测试 / 补单测 / 单元测试用例 / unit test / write unit tests。
+  Based on the Story-level detailed tech solution, generate all the unit-test code the solution lists,
+  covering happy path / negative / boundary and failure fallback, using the test framework declared in
+  the team profile, with test data mandatorily synthetic / mock. Use when the development step needs to
+  fill in unit tests after implementing code, or when the solution requires writing unit tests;
+  triggers: unit test / write unit tests / 写单测 / 生成单元测试 / 补单测 / 单元测试用例.
 metadata:
   agent: Dev Agent
 ---
 
-# unit-test-authoring — 生成方案列明的全部单元测试
+# unit-test-authoring — generating all the unit tests the solution lists
 
-以明细技术方案为唯一基线，为其中列明的每项任务／接口生成单元测试代码。只写方案要求的测试，不擅自增删测试范围；覆盖正例、反例、边界与失败回退四类。
+Using the detailed tech solution as the sole baseline, generate unit-test code for each task / interface it lists. Write only the tests the solution requires; don't add or cut the test scope on your own; cover the four categories happy path, negative, boundary, and failure fallback.
 
-| 维度 | 说明 |
+| Dimension | Description |
 |------|------|
-| 定位 | 按明细技术方案生成全部单元测试代码（正例／反例／边界／失败回退） |
-| 输入 | 已确认的明细技术方案（接口字段级定义＋任务清单）＋被测实现代码＋团队测试配置 |
-| 产出 | 位于 Feature 分支、语法正确且符合框架约定的单测代码，逐任务／逐接口覆盖，测试数据为合成／mock |
-| 边界 | 只写单测；不改被测业务代码、不执行测试（执行由验证环节负责，可选做一次编译自检但不跑测试） |
+| Purpose | Generate all unit-test code per the detailed tech solution (happy path / negative / boundary / failure fallback) |
+| Input | The confirmed detailed tech solution (field-level interface definitions + task list) + the implementation code under test + the team test config |
+| Output | Syntactically correct, framework-conforming unit-test code on the Feature branch, covering per task / per interface, with synthetic / mock test data |
+| Scope | Only writes unit tests; doesn't change the business code under test, doesn't run tests (running is the verification step's job; an optional one-time compile self-check is allowed but tests aren't run) |
 
-## 0. 配置取值
+## 0. Config values
 
-`{profile}` 为当前 profile 文件名（不含扩展名，如 `app-prod` / `cms-test`），由调用方经 profile 选择环节解析并传入（`profile.py resolve` 给出其绝对路径）；未传入或文件不存在 → 停止，不臆测。
+`{profile}` is the current profile file name (without extension, e.g. `app-prod` / `cms-test`), resolved and passed in by the caller via the profile-selection step (`profile.py resolve` gives its absolute path); if it is not passed in or the file does not exist → stop, don't guess.
 
-| 用途 | 配置键 |
+| Purpose | Config key |
 |------|----|
-| 语言栈 | `profiles/{profile}.yaml` → `code.languages` |
-| 测试框架 | `profiles/{profile}.yaml` → `test.unit.*.framework` — 按被测代码所在端／仓库选取 |
-| 单测放置位置 | iOS（`test_style: spm_module_scheme`）：写入被测模块的 `modules.*.test_target` 对应目录（`{package_dir}/Tests/{test_target}/`），**不写主壳 `DragonAppTests`**；其余端按仓库既有单测目录约定 |
-| 覆盖率口径 | `profiles/{profile}.yaml` → `test.coverage`（`enabled` / `min_line`；作为生成时的覆盖目标提示） |
+| Language stack | `profiles/{profile}.yaml` → `code.languages` |
+| Test framework | `profiles/{profile}.yaml` → `test.unit.*.framework` — selected by the end / repo where the code under test lives |
+| Unit-test placement | iOS (`test_style: spm_module_scheme`): write into the directory for the module under test's `modules.*.test_target` (`{package_dir}/Tests/{test_target}/`), **not the main shell `DragonAppTests`**; other ends follow the repo's existing unit-test directory convention |
+| Coverage spec | `profiles/{profile}.yaml` → `test.coverage` (`enabled` / `min_line`; serves as a coverage-target hint during generation) |
 
-所需配置键缺失（TBD）→ 停止并要求补齐；不臆测测试框架。
+Required config keys missing (TBD) → stop and ask for them; don't guess the test framework.
 
-## 1. 前置
+## 1. Prerequisites
 
-| # | 条件 |
+| # | Condition |
 |---|------|
-| 1 | 明细技术方案已确认，含接口字段级定义与任务清单（作为测试范围基线） |
-| 2 | 被测实现代码已在 Feature 分支上（对无实现的任务只生成待实现桩测试并注明） |
-| 3 | 能按端／仓库解析出唯一测试框架 |
-| 4 | 仓库本地工作目录由调用方运行时提供（单测文件写入此目录） |
+| 1 | The detailed tech solution is confirmed, with field-level interface definitions and a task list (as the test-scope baseline) |
+| 2 | The implementation code under test is already on the Feature branch (for a task with no implementation, generate only a to-be-implemented stub test and note it) |
+| 3 | The unique test framework can be resolved per end / repo |
+| 4 | The repo's local working directory is provided by the caller at runtime (unit-test files are written into it) |
 
-## 2. 工作流
+## 2. Workflow
 
 ```
-- S1 从明细方案提取测试范围清单（逐任务／逐接口）
-- S2 为每项设计四类用例：正例 / 反例 / 边界 / 失败回退
-- S3 按团队框架生成单测代码（合成／mock 数据）
-- S4 自检覆盖：方案每项任务／接口都有对应测试，无遗漏
-- S5 回报覆盖清单与未覆盖项说明
+- S1 Extract the test-scope list from the detailed solution (per task / per interface)
+- S2 Design four categories of cases for each: happy path / negative / boundary / failure fallback
+- S3 Generate unit-test code in the team framework (synthetic / mock data)
+- S4 Self-check coverage: every task / interface in the solution has a corresponding test, none missed
+- S5 Report the coverage list and an explanation of any uncovered items
 ```
 
-### S1 提取测试范围
+### S1 Extract the test scope
 
-测试范围以明细方案为准：方案任务清单中的每一项、接口定义中的每个接口，都必须有对应单测。不以「实现里恰好有什么函数」为准，避免漏测方案要求但实现遗漏的分支。
+The test scope follows the detailed solution: every item in the solution's task list and every interface in the interface definitions must have a corresponding unit test. Don't go by "whatever functions happen to be in the implementation," to avoid missing a branch the solution requires but the implementation omitted.
 
-### S2 四类用例设计
+### S2 Four-category case design
 
-每项被测单元至少覆盖以下四类（无对应场景的类别写注释说明「本项不适用」，不留空）：
+Each unit under test covers at least the following four categories (for a category with no corresponding scenario, write a comment stating "not applicable for this item," don't leave it blank):
 
-| 类别 | 覆盖内容 |
+| Category | Covered content |
 |------|------|
-| 正例 | 合法输入下的预期输出与状态 |
-| 反例 | 非法／越权／类型错误输入下的报错或拒绝 |
-| 边界 | 空值、零、最大／最小、超长、并发临界等边界条件 |
-| 失败回退 | 依赖（接口／存储）失败时方案约定的兜底行为（回退值／降级／不静默失败） |
+| Happy path | The expected output and state under valid input |
+| Negative | The error or rejection under illegal / unauthorized / wrong-type input |
+| Boundary | Boundary conditions such as null, zero, max/min, overlength, concurrency edges |
+| Failure fallback | The fallback behavior the solution specifies when a dependency (interface / storage) fails (fallback value / degradation / no silent failure) |
 
-失败回退用例须与明细方案接口定义中的「空值／失败兜底」逐条对齐。
+Failure-fallback cases must align item by item with the "null / failure fallback" in the detailed solution's interface definitions.
 
-### S3 生成单测代码
+### S3 Generate unit-test code
 
-按 `test.unit.*.framework` 声明的框架生成（如 APP：XCTest／JUnit；CMS：cncms=vitest、monorepo=jest）。风格与被测仓库既有单测一致；断言明确，不写只跑不断言的空测试。生成后做**静态自检**（语法正确、import／符号可解析、符合框架约定）；可选做一次编译自检，但**不执行测试**——跑测试与统计是验证环节的职责。
+Generate per the framework declared in `test.unit.*.framework` (e.g. APP: XCTest / JUnit; CMS: cncms = vitest, monorepo = jest). Keep the style consistent with the repo's existing unit tests under test; assertions are explicit, don't write empty tests that run without asserting. After generating, do a **static self-check** (syntax correct, imports/symbols resolvable, conforming to framework conventions); an optional one-time compile self-check is allowed, but **don't run tests** — running and tallying are the verification step's responsibility.
 
-**Android（gradle／JUnit）测试基类映射**（Dragon App 特有约定，按被测类的父类选测试基类，勿凭空另建基类）：
+**Android (gradle / JUnit) test base-class mapping** (a Dragon App-specific convention; pick the test base class by the class-under-test's parent, don't invent a new base class):
 
-| 被测类型 | 测试基类 |
+| Type under test | Test base class |
 |------|------|
-| 继承 `MarriottBaseLegacyViewModel`（View UI） | `MarriottBaseViewModelTest` |
-| 继承 `MarriottBaseComposeViewModel`（Compose UI） | `MarriottBaseComposeViewModelTest` |
-| 继承 `MarriottNestedViewModel`（View UI） | `MarriottNestedViewModelTest` |
-| 继承 `MarriottComposeNestedViewModel`（Compose UI） | `MarriottComposeNestedViewModelTest` |
-| 继承 `MarriottStateGenericItem` | `MarriottStateGenericItemTest` |
-| Builder 类（构造领域模型，如 `GQLPropertyInfoBuilder`／`BookingModelBuilder`） | `MarriottBaseBuilderTest` |
-| Repository／Util／其他非 VM 非 Builder 类（如 `ValidationUtils`／`DateUtils`／`BookingRepository`） | `MarriottBaseTest` |
+| Extends `MarriottBaseLegacyViewModel` (View UI) | `MarriottBaseViewModelTest` |
+| Extends `MarriottBaseComposeViewModel` (Compose UI) | `MarriottBaseComposeViewModelTest` |
+| Extends `MarriottNestedViewModel` (View UI) | `MarriottNestedViewModelTest` |
+| Extends `MarriottComposeNestedViewModel` (Compose UI) | `MarriottComposeNestedViewModelTest` |
+| Extends `MarriottStateGenericItem` | `MarriottStateGenericItemTest` |
+| A Builder class (constructs a domain model, e.g. `GQLPropertyInfoBuilder` / `BookingModelBuilder`) | `MarriottBaseBuilderTest` |
+| A Repository / Util / other non-VM non-Builder class (e.g. `ValidationUtils` / `DateUtils` / `BookingRepository`) | `MarriottBaseTest` |
 
-Android 写法约定：测试文件名＝源文件名追加 `Test`、目录镜像源码结构；测试方法名用反引号包裹、遵循 given-when-then；mock 依赖用 `relaxed = true`；断言优先用自定义断言（`isTrue()`／`isEqualTo()` 等）；import 排序且无未用 import。
+Android style conventions: the test file name = the source file name with `Test` appended, the directory mirrors the source structure; test method names wrapped in backticks, following given-when-then; mock dependencies with `relaxed = true`; prefer custom assertions (`isTrue()` / `isEqualTo()`, etc.); imports sorted with no unused imports.
 
-### S4 覆盖自检
+### S4 Coverage self-check
 
-对照 S1 范围清单逐项核对：方案的每项任务、每个接口都有至少一个测试文件／用例覆盖。存在未覆盖项时，在输出里列出并说明原因（如对应实现尚未完成）。
+Check item by item against the S1 scope list: every task and every interface in the solution has at least one test file / case covering it. For any uncovered item, list it in the output and explain the reason (e.g. the corresponding implementation isn't finished yet).
 
-## 3. 强制规则
+## 3. Mandatory rules
 
-| 规则 | 说明 |
+| Rule | Description |
 |------|------|
-| 范围以方案为准 | 测试范围来自明细方案的任务清单与接口定义，不以实现现状为准 |
-| 四类必覆盖 | 正例／反例／边界／失败回退；不适用的类别写注释说明，不静默省略 |
-| 数据合成／mock | 测试数据强制合成／mock；禁真实密钥、内网域名、真实会员号、真实手机号 |
-| 不改业务代码 | 只写测试；发现实现与方案不符时记为发现项交下游，不擅自改业务代码 |
-| 不执行测试 | 本环节只生成；执行与通过率／覆盖率统计由验证环节负责 |
-| 断言不可空 | 每个测试都有明确断言，禁只调用不断言 |
-| 不硬编码 | 测试框架取自团队配置，不硬编码 |
+| Scope follows the solution | The test scope comes from the detailed solution's task list and interface definitions, not the current state of the implementation |
+| All four categories covered | Happy path / negative / boundary / failure fallback; for a not-applicable category write an explanatory comment, don't silently omit it |
+| Synthetic / mock data | Test data is mandatorily synthetic / mock; real secrets, internal domains, real member IDs, and real phone numbers are forbidden |
+| Don't change business code | Only write tests; when the implementation doesn't match the solution, record it as a finding and hand downstream, don't change business code on your own |
+| Don't run tests | This step only generates; running and tallying pass rate / coverage are the verification step's job |
+| Assertions can't be empty | Every test has an explicit assertion; calling without asserting is forbidden |
+| Don't hardcode | The test framework comes from the team config; don't hardcode |
 
-## 4. 质量门禁
+## 4. Quality gates
 
-- 方案每项任务／接口都有对应单测（覆盖清单齐全）
-- 每项覆盖正例／反例／边界／失败回退，不适用者有注释说明
-- 失败回退用例与方案接口的「空值／失败兜底」逐条对齐
-- 测试代码语法正确、符合框架约定、断言明确，风格与仓库既有单测一致
-- 无真实密钥／内网域名／真实会员号／真实手机号
-- 使用团队配置声明的测试框架（非臆测）
+- Every task / interface in the solution has a corresponding unit test (the coverage list is complete)
+- Each item covers happy path / negative / boundary / failure fallback, with an explanatory comment for not-applicable ones
+- Failure-fallback cases align item by item with the solution interfaces' "null / failure fallback"
+- The test code is syntactically correct, conforms to framework conventions, has explicit assertions, and matches the style of the repo's existing unit tests
+- No real secrets / internal domains / real member IDs / real phone numbers
+- Uses the test framework declared in the team config (not guessed)
 
-## 5. 输出
+## 5. Output
 
 ```markdown
-单测生成完成：{repo}／{framework}
+Unit tests generated: {repo} / {framework}
 
-| 任务／接口 | 测试文件 | 正例 | 反例 | 边界 | 失败回退 |
+| Task / interface | Test file | Happy path | Negative | Boundary | Failure fallback |
 |------|------|:--:|:--:|:--:|:--:|
-| {项} | {file} | ✓ | ✓ | ✓ | ✓ |
+| {item} | {file} | ✓ | ✓ | ✓ | ✓ |
 
-- **未覆盖项**：{项及原因，如实现未完成 / 无}
-- **下一步**：进入验证环节执行单测并统计通过率与覆盖率
+- **Uncovered items**: {item and reason, e.g. implementation not finished / none}
+- **Next step**: enter the verification step to run the unit tests and tally pass rate and coverage
 ```
 
-## 6. 排障
+## 6. Troubleshooting
 
-| 现象 | 处理 |
+| Symptom | Handling |
 |------|------|
-| 方案某项缺乏可测接口定义 | 记为发现项回报，生成待实现桩测试并注明，不臆造断言 |
-| 无法解析测试框架 | 停止，说明缺失的配置键及对应 owner 补齐 |
-| 实现与方案接口不符 | 记为发现项交下游，不擅自改业务代码 |
-| 测试数据疑似真实敏感值 | 停止，替换为合成／mock 后再交付 |
+| An item in the solution lacks a testable interface definition | Record it as a finding and report, generate a to-be-implemented stub test and note it, don't invent assertions |
+| Can't resolve the test framework | Stop; state the missing config key and the owner to supply it |
+| The implementation doesn't match the solution interface | Record it as a finding and hand downstream, don't change business code on your own |
+| Test data looks like a real sensitive value | Stop, replace it with synthetic / mock before delivering |
 
-## 7. 相关
+## 7. Related
 
-- Upstream：feature-branch（提供 Feature 分支与关联的明细技术方案＋任务清单）
-- Downstream：unit-test-runner（执行单测并统计通过率与覆盖率）
+- Upstream: feature-branch (provides the Feature branch and the associated detailed tech solution + task list)
+- Downstream: unit-test-runner (runs the unit tests and tallies pass rate and coverage)

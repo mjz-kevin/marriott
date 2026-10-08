@@ -1,99 +1,86 @@
 ---
 name: create-pr
 description: >-
-  使用团队的 PR 模板生成高质量的 Pull Request 描述，并根据真实的 git diff
-  自动填充每个章节。当用户要创建 PR、发起 pull request、编写 PR 描述，或在本仓库
-  运行 `gh pr create` 时使用。Use when the user asks to create a PR, open a
-  pull request, write a PR description, or run `gh pr create`.
+  Generate a high-quality Pull Request description using the team's PR template, auto-filling every
+  section from the real git diff. Use when the user asks to create a PR, open a pull request, write a
+  PR description, or run `gh pr create` in this repo;
+  triggers: create a PR / open a pull request / gh pr create / 创建 PR / 发起 pull request / 编写 PR 描述.
 ---
 
-# 创建 Pull Request（团队模板）
+# Create a Pull Request (team template)
 
-选择正确的团队模板，并根据真实改动填充每个章节，生成一份可直接提交的 PR 描述，而非仅输出空模板。
+Select the correct team template and fill every section from the real changes, producing a PR description that's ready to submit, not just an empty template.
 
-## 模板来源
+## Template source
 
-模板位于本仓库的 `template/PR/`：
+The templates live under `template/PR/` in this repo:
 
-- 默认模板：`template/PR/pull_request_template.md`
-- 场景模板：`template/PR/PULL_REQUEST_TEMPLATE/{feature,bugfix,hotfix,refactor,docs,release}.md`
+- Default template: `template/PR/pull_request_template.md`
+- Scenario templates: `template/PR/PULL_REQUEST_TEMPLATE/{feature,bugfix,hotfix,refactor,docs,release}.md`
 
-务必先读取所选模板文件，确保章节标题与 checklist 项与团队当前版本一致。完整的模板
-内容与选择规则见 [reference.md](reference.md)。
+Always read the selected template file first, to ensure the section headings and checklist items match the team's current version. See [reference.md](reference.md) for the full template content and selection rules.
 
-## 工作流
+## Workflow
 
-复制以下清单并跟踪进度：
+Copy the checklist below and track progress:
 
 ```
-- [ ] 步骤 1：收集 diff 与分支上下文
-- [ ] 步骤 2：判断匹配的场景模板（判断不了让用户选）
-- [ ] 步骤 3：逐字读取「场景模板 + 通用模板」两个文件
-- [ ] 步骤 4：根据 diff 填充叠加后的每个章节
-- [ ] 步骤 5：把草稿交给用户审阅
-- [ ] 步骤 6：创建 PR（仅当用户要求时）
+- [ ] Step 1: Gather the diff and branch context
+- [ ] Step 2: Determine the matching scenario template (let the user choose if undeterminable)
+- [ ] Step 3: Read the two files "scenario template + general template" verbatim
+- [ ] Step 4: Fill every section of the layered template from the diff
+- [ ] Step 5: Hand the draft to the user for review
+- [ ] Step 6: Create the PR (only when the user asks)
 ```
 
-**步骤 1 — 收集上下文。** 确定基线分支并检查改动。**分步执行、不用 `$(...)` 命令替换与
-`2>/dev/null`（Windows 原生 shell 不支持）**：
+**Step 1 — Gather context.** Determine the baseline branch and inspect the changes. **Run step by step, don't use `$(...)` command substitution or `2>/dev/null` (Windows native shells don't support them):**
 
 ```bash
-# 1) 当前分支
+# 1) Current branch
 git rev-parse --abbrev-ref HEAD
-# 2) 求与基线的合并基点（拿到 SHA 后再用于后续 diff；失败则回退 HEAD~1）
+# 2) Find the merge base with the baseline (use the SHA for the later diff; fall back to HEAD~1 on failure)
 git merge-base origin/HEAD HEAD
-# 3) 用上一步的 SHA（记为 <base_sha>）看改动
+# 3) Inspect the changes using the previous step's SHA (call it <base_sha>)
 git log --oneline <base_sha>..HEAD
 git diff --stat <base_sha>..HEAD
 git diff <base_sha>..HEAD
 ```
 
-若 `git merge-base` 无输出（无 origin/HEAD 等），回退用 `HEAD~1` 作为 `<base_sha>`。
-这些 git 子命令本身跨平台一致；关键是把"求 SHA"与"用 SHA"分成两步、不内联命令替换。
+If `git merge-base` produces no output (no origin/HEAD, etc.), fall back to `HEAD~1` as `<base_sha>`. These git subcommands are themselves cross-platform consistent; the key is to split "find the SHA" and "use the SHA" into two steps and not inline command substitution.
 
-从分支名中提取 Jira 工单号（命名约定：`[JIRA-TICKET]-[description]`，
-例如 `GTI-1234-config-data-new-arch`）。
+Extract the Jira ticket number from the branch name (naming convention: `[JIRA-TICKET]-[description]`, e.g. `GTI-1234-config-data-new-arch`).
 
-**步骤 2 — 判断场景模板。** 依据 [reference.md](reference.md) 中的对照表，从 diff 特征
-判断本次改动属于 `PULL_REQUEST_TEMPLATE/` 里的哪个场景（feature/bugfix/hotfix/refactor/
-docs/release）。**判断不了或改动为混合类型时，不要擅自默认——列出候选场景让用户选。**
+**Step 2 — Determine the scenario template.** Per the table in [reference.md](reference.md), determine from the diff characteristics which scenario in `PULL_REQUEST_TEMPLATE/` this change belongs to (feature/bugfix/hotfix/refactor/docs/release). **When it can't be determined or the change is a mixed type, don't default on your own — list the candidate scenarios and let the user choose.**
 
-**步骤 3 — 读取「场景模板 + 通用模板」两个文件。** 无论选中哪个场景模板，都要额外叠加
-通用模板 `pull_request_template.md`：
+**Step 3 — Read the two files "scenario template + general template."** Whichever scenario template is selected, additionally layer on the general template `pull_request_template.md`:
 
-- 先读所选场景模板 `PULL_REQUEST_TEMPLATE/{scenario}.md`；
-- 再读通用模板 `template/PR/pull_request_template.md`；
-- 把两者的章节**合并**：通用模板的通用章节（如自测清单、影响范围、敏感信息等团队恒定项）
-  始终保留；场景模板的特有章节叠加进来；两者重复的同名章节以场景模板为准、不重复出现。
+- First read the selected scenario template `PULL_REQUEST_TEMPLATE/{scenario}.md`;
+- Then read the general template `template/PR/pull_request_template.md`;
+- **Merge** the two's sections: the general template's general sections (the team's constant items such as the self-test checklist, impact, sensitive info) are always kept; the scenario template's specific sections are layered in; for duplicate same-named sections the scenario template wins and doesn't appear twice.
 
-切勿凭记忆硬编码模板文本；以文件为准。若某一方缺章节，以并集为准补齐。
+Never hardcode the template text from memory; the files win. If either side lacks a section, fill to the union.
 
-**步骤 4 — 根据 diff 填充叠加后模板的每个章节：**
-- 写具体的「变更说明 (What & Why)」——引用实际改动的文件/模块。
-- 勾选正确的「变更类型 (Type of change)」。
-- 列出真实、可复现的测试步骤。
-- 根据 diff 实际触及的内容填写「影响范围」（是否需要 DB 迁移？配置/环境变量变更？
-  是否向后兼容？）。
-- 仅在 diff 能佐证时才勾选 checklist 项；否则保持未勾选，并明确指出作者需自行核实的项。
-- 「截图」章节：若没有 UI/视觉相关文件变更，勾选「无视觉变更」；否则提示作者附上截图/录屏。
-- 切勿编造测试结果、工单号或审批记录。
+**Step 4 — Fill every section of the layered template from the diff:**
+- Write a specific "What & Why" — citing the files/modules actually changed.
+- Tick the correct "Type of change."
+- List real, reproducible test steps.
+- Fill "Impact" per what the diff actually touches (does it need a DB migration? config/env-var changes? is it backward compatible?).
+- Tick a checklist item only when the diff can substantiate it; otherwise leave it unticked, and clearly point out the items the author needs to verify.
+- "Screenshots" section: if there are no UI/visual-related file changes, tick "no visual changes"; otherwise prompt the author to attach screenshots/recordings.
+- Never fabricate test results, ticket numbers, or approval records.
 
-**步骤 5 — 把草稿交给用户审阅**，用代码块展示，创建任何东西之前先让用户确认。
+**Step 5 — Hand the draft to the user for review**, displayed in a code block, confirming with the user before creating anything.
 
-**步骤 6 — 仅当用户要求时才创建 PR。** 把正文写入临时文件，然后使用：
+**Step 6 — Create the PR only when the user asks.** Write the body into a temp file, then use:
 
 ```bash
 gh pr create --base <base> --title "<title>" --body-file <tmpfile>
 ```
 
-优先用 `--body-file` 而非 `--body`，以保留 markdown 格式与换行。这里不要用
-`?template=` 传场景模板——该 URL 参数只对 GitHub 网页版「New PR」页面有效，对 `gh` 无效。
+Prefer `--body-file` over `--body` to preserve markdown formatting and line breaks. Don't use `?template=` to pass the scenario template here — that URL parameter works only on GitHub's web "New PR" page and has no effect on `gh`.
 
-## 说明
+## Notes
 
-- 本 skill 负责填充正文内容。GitHub 网页版仍会为人工操作自动加载
-  `.github/pull_request_template.md`；两种机制并存，互不冲突。
-- 让作者对内容负责：未勾选的选项是刻意保留，而非疏漏。除非已核实，否则不要自动勾选
-  安全类选项（测试通过、无敏感信息泄漏）。
-- 下游衔接：PR 创建后进入代码审核环节——由 `diff-fetch` 拉取本 PR 差异，`code-review-rules`
-  按规范逐条审核，`review-comment` 组织意见，`merge-gate` 判门禁并提交 review。
+- This skill fills the body content. GitHub web still auto-loads `.github/pull_request_template.md` for manual operations; the two mechanisms coexist without conflict.
+- Make the author accountable for the content: an unticked option is kept deliberately, not an oversight. Unless verified, don't auto-tick safety-related options (tests passed, no sensitive-info leakage).
+- Downstream handoff: after the PR is created, it enters the code-review step — `diff-fetch` fetches this PR's diff, `code-review-rules` reviews item by item against the standards, `review-comment` organizes the feedback, and `merge-gate` rules the gate and submits the review.

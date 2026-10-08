@@ -6,7 +6,7 @@ description: >-
   level back-links the Jira Story. The body often exceeds the MCP single-write limit, so it uses
   scripts/upload_confluence_v2.py uniformly for upload. The landing spot, naming, and paths follow
   the team config. Use when the user asks to publish, sync, or push a tech solution to Confluence;
-  triggers: 技术方案上传 / 发布技术方案 / 同步技术方案 / publish tech solution.
+  triggers: publish tech solution / 技术方案上传 / 发布技术方案 / 同步技术方案.
 metadata:
   agent: Tech Solution Agent
 ---

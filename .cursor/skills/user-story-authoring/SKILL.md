@@ -6,7 +6,7 @@ description: >-
   needed for ticket creation ready. The field set, link set, whether the description must be
   self-contained, and whether auto-estimation is allowed all follow the team config. Use when the
   user asks to split Stories, write User Stories, draft ACs, or prepare Jira tickets from a PRD;
-  triggers: 拆 Story / 写 User Story / 用户故事 / 拆分需求 / 写 AC / user story authoring.
+  triggers: user story authoring / 拆 Story / 写 User Story / 用户故事 / 拆分需求 / 写 AC.
 metadata:
   agent: UserStory Agent
 ---

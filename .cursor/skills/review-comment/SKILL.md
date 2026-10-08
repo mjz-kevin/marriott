@@ -1,104 +1,106 @@
 ---
 name: review-comment
 description: >-
-  把规范审核环节的问题清单组织成结构化审核意见正文：按等级（阻断／建议／提示）分组、逐条带
-  文件行号与修改建议，拼装成 PR review body，并经 sensitive-data-guard 扫描确保不含敏感信息。
-  产出交 merge-gate 一次性提交（本环节不提交 review，避免重复 review）。当代码审核环节需要把问题
-  清单整理成可落 PR 的审核意见时使用；
-  触发词：写审核评论 / 组织审核意见 / 审核意见正文 / review comment / pr 评论正文。
+  Organize the standards-review step's issue list into a structured review-feedback body: grouped by
+  level (blocking / suggestion / hint), each entry with its file line and fix suggestion, assembled
+  into a PR review body, and scanned by sensitive-data-guard to ensure it contains no sensitive
+  information. The output is handed to merge-gate to submit in one shot (this step doesn't submit the
+  review, to avoid duplicate reviews). Use when the code-review step needs to turn the issue list into
+  review feedback that can be landed on the PR;
+  triggers: review comment / pr 评论正文 / 写审核评论 / 组织审核意见 / 审核意见正文.
 metadata:
   agent: Code Review Agent
 ---
 
-# review-comment — 组织结构化审核意见正文（不提交）
+# review-comment — organizing the structured review-feedback body (no submission)
 
-把 code-review-rules 的问题清单组织成一份结构化、可读、带定位的 PR review body，并过敏感信息扫描。本环节**只产出经脱敏的 review body**，不调用提交接口——review 的实际提交（含正确的 event）由 merge-gate 在判定门禁后一次性完成，避免对同一 PR 提交多条 review。
+Organize code-review-rules' issue list into a structured, readable, located PR review body and pass it through a sensitive-information scan. This step **only produces a redacted review body**; it doesn't call the submission API — the actual review submission (with the correct event) is done in one shot by merge-gate after it rules the gate, to avoid submitting multiple reviews to the same PR.
 
-| 维度 | 说明 |
+| Dimension | Description |
 |------|------|
-| 定位 | 把问题清单组织成结构化 review body，并过敏感信息扫描 |
-| 输入 | code-review-rules 的问题清单（等级／file:line／命中规则／建议）＋目标 PR |
-| 产出 | 经 sensitive-data-guard 通过的 review body 文本（交 merge-gate 提交） |
-| 边界 | 只组织正文与扫描；不提交 review、不判定 merge 门禁、不改代码 |
+| Purpose | Organize the issue list into a structured review body and pass a sensitive-information scan |
+| Input | code-review-rules' issue list (level / file:line / matched rule / suggestion) + the target PR |
+| Output | A review-body text that passed sensitive-data-guard (handed to merge-gate to submit) |
+| Scope | Only organizes the body and scans; doesn't submit the review, rule the merge gate, or change code |
 
-## 0. 配置取值
+## 0. Config values
 
-`{profile}` 为当前 profile 文件名（不含扩展名，如 `app-prod` / `cms-test`），由调用方经 profile 选择环节解析并传入（`profile.py resolve` 给出其绝对路径）；未传入或文件不存在 → 停止，不臆测。
+`{profile}` is the current profile file name (without extension, e.g. `app-prod` / `cms-test`), resolved and passed in by the caller via the profile-selection step (`profile.py resolve` gives its absolute path); if it is not passed in or the file does not exist → stop, don't guess.
 
-| 用途 | 配置键 |
+| Purpose | Config key |
 |------|----|
-| 仓库 owner/org | `profiles/{profile}.yaml` → `mcp.github.org`（用于正文抬头标注 PR 归属，本环节不发起 MCP 写） |
+| Repo owner/org | `profiles/{profile}.yaml` → `mcp.github.org` (used to note the PR's ownership in the body header; this step doesn't initiate an MCP write) |
 
-> 本环节不提交 review，故不直接依赖 GitHub 写权限；MCP 提交在 merge-gate 完成。
+> This step doesn't submit the review, so it doesn't directly depend on GitHub write permission; the MCP submission is done in merge-gate.
 
-## 1. 前置
+## 1. Prerequisites
 
-| # | 条件 |
+| # | Condition |
 |---|------|
-| 1 | 已有 code-review-rules 的问题清单（含等级／file:line／建议） |
-| 2 | 目标 PR 已知（owner/repo/pull_number）且处于 open |
+| 1 | code-review-rules' issue list exists (with level / file:line / suggestion) |
+| 2 | The target PR is known (owner/repo/pull_number) and is open |
 
-## 2. 工作流
+## 2. Workflow
 
 ```
-- S1 按等级组织问题清单（阻断 → 建议 → 提示）
-- S2 拼装 PR review body（总体结论 + 逐条问题带 file:line）
-- S3 经 sensitive-data-guard 扫描 body（命中即阻断，脱敏后再交付）
-- S4 回报脱敏后的 review body（交 merge-gate 提交）
+- S1 Organize the issue list by level (blocking → suggestion → hint)
+- S2 Assemble the PR review body (overall conclusion + each issue with file:line)
+- S3 Scan the body via sensitive-data-guard (a hit blocks; redact and then deliver)
+- S4 Report the redacted review body (handed to merge-gate to submit)
 ```
 
-### S1 组织意见
+### S1 Organize the feedback
 
-按等级分组（阻断 → 建议 → 提示），每条保留 code-review-rules 给出的 file:line、命中规则、根因与修改建议。不改变问题定级，忠实落地上游结论。
+Group by level (blocking → suggestion → hint); keep for each entry the file:line, matched rule, root cause, and fix suggestion given by code-review-rules. Don't change the issue levels; land the upstream conclusion faithfully.
 
-### S2 拼装 review body
+### S2 Assemble the review body
 
-> **MCP 能力边界**：本 GitHub MCP 的 `create_pull_request_review` 只支持 PR 级 review 的 `body` + `event`，**不支持逐行内联评论**（无 comments/line/position 参数）。因此把所有问题汇总进一份 body，每条以 `` `文件:行` `` 前缀显式定位，等价于行内评论的可读性。file:line 中的行号取自 code-review-rules（其从 diff patch 的 `@@` hunk 头解析得到的新行号）。若将来 MCP 支持内联评论，可平滑升级为逐行挂载。
+> **MCP capability boundary**: this GitHub MCP's `create_pull_request_review` supports only a PR-level review's `body` + `event`, and **doesn't support per-line inline comments** (no comments/line/position parameters). So gather all issues into one body, each prefixed with `` `file:line` `` for explicit locating, equivalent to the readability of inline comments. The line number in file:line comes from code-review-rules (the new line number it parsed from the diff patch's `@@` hunk headers). If the MCP supports inline comments in the future, this can be smoothly upgraded to per-line attachment.
 
-正文结构：顶部总体结论（阻断/建议/提示计数）＋按等级分组的问题列表（每条 `` `文件:行` `` + 命中规则 + 建议）。
+Body structure: an overall conclusion at the top (blocking/suggestion/hint counts) + a level-grouped issue list (each with `` `file:line` `` + matched rule + suggestion).
 
-### S3 敏感信息扫描（强制前置）
+### S3 Sensitive-information scan (mandatory pre-step)
 
-交付前调用 `sensitive-data-guard` skill 扫描 review body；命中密钥／Token／私钥／真实个人信息即**阻断交付**，只回报命中位置与类型（不外泄真实值），脱敏后再交付。这是"内容将被写出到 PR"前的强制前置——即便实际提交在 merge-gate，本环节产出的 body 必须已脱敏。
+Before delivering, invoke the `sensitive-data-guard` skill to scan the review body; a hit on a secret / token / private key / real personal information **blocks delivery**, reporting only the hit location and type (not leaking the real value), and delivering only after redaction. This is a mandatory pre-step before "the content will be written out to the PR" — even though the actual submission is in merge-gate, the body this step produces must already be redacted.
 
-## 3. 强制规则
+## 3. Mandatory rules
 
-| 规则 | 说明 |
+| Rule | Description |
 |------|------|
-| 交付前必扫描 | 交出 body 前强制过 `sensitive-data-guard`，命中即阻断，只报位置与类型 |
-| 忠实上游定级 | 不擅自升/降级问题等级；忠实落地 code-review-rules 结论 |
-| 逐条带定位 | 每条问题带 `文件:行`，即便受限于 PR 级 review 也要可定位 |
-| 本环节不提交 | 不调用 `create_pull_request_review`；提交由 merge-gate 带正确 event 一次性完成 |
-| 只组织不判门禁 | 不决定 APPROVE/REQUEST_CHANGES；门禁由 merge-gate 判 |
+| Must scan before delivering | Before handing over the body, run it through `sensitive-data-guard`; a hit blocks, reporting only the location and type |
+| Faithful to upstream levels | Don't upgrade/downgrade issue levels on your own; land code-review-rules' conclusion faithfully |
+| Each entry located | Each issue carries `file:line`, so it's locatable even within the limits of a PR-level review |
+| This step doesn't submit | Don't call `create_pull_request_review`; submission is done by merge-gate in one shot with the correct event |
+| Organize only, don't rule the gate | Don't decide APPROVE/REQUEST_CHANGES; the gate is ruled by merge-gate |
 
-## 4. 质量门禁
+## 4. Quality gates
 
-- review body 含总体结论＋按等级分组的逐条问题（带 file:line）
-- 交付前已过 `sensitive-data-guard` 且无命中（或命中已脱敏）
-- 未擅自改变上游问题等级
-- 未提交 review（提交交 merge-gate）；产出为可直接提交的脱敏 body
+- The review body contains an overall conclusion + a level-grouped list of each issue (with file:line)
+- Before delivering, it passed `sensitive-data-guard` with no hits (or hits were redacted)
+- The upstream issue levels weren't changed on your own
+- The review wasn't submitted (submission is handed to merge-gate); the output is a redacted body ready to submit directly
 
-## 5. 输出
+## 5. Output
 
 ```markdown
-审核意见正文就绪：{owner}/{repo} PR #{n}
+Review-feedback body ready: {owner}/{repo} PR #{n}
 
-- **总体结论**：阻断 {b} / 建议 {s} / 提示 {i}
-- **敏感信息扫描**：通过（无命中 / 已脱敏）
-- **review body**：（已拼装、已脱敏，交 merge-gate 提交）
-- **下一步**：交 merge-gate 判门禁并带正确 event 一次性提交该 body
+- **Overall conclusion**: Blocking {b} / Suggestion {s} / Hint {i}
+- **Sensitive-information scan**: passed (no hits / redacted)
+- **review body**: (assembled, redacted, handed to merge-gate to submit)
+- **Next step**: hand to merge-gate to rule the gate and submit this body in one shot with the correct event
 ```
 
-## 6. 排障
+## 6. Troubleshooting
 
-| 现象 | 处理 |
+| Symptom | Handling |
 |------|------|
-| 敏感信息扫描命中 | 阻断交付，只报位置与类型，脱敏后再交付 |
-| 问题清单为空 | 产出「无问题」结论 body，仍交 merge-gate 决定是否 APPROVE |
-| 需要逐行内联评论 | 当前 MCP 不支持内联，汇总进 body 并以 file:line 定位；MCP 支持后再升级 |
+| The sensitive-information scan hits | Block delivery, report only the location and type, redact and then deliver |
+| The issue list is empty | Produce a "no issues" conclusion body, still hand to merge-gate to decide whether to APPROVE |
+| Per-line inline comments are needed | The current MCP doesn't support inline comments; gather into the body and locate with file:line; upgrade once the MCP supports it |
 
-## 7. 相关
+## 7. Related
 
-- Upstream：code-review-rules（提供带等级与定位的问题清单）
-- Depends：sensitive-data-guard（交付前强制扫描 review body，命中即阻断）
-- Downstream：merge-gate（判门禁并带正确 event 一次性提交本环节产出的 review body）
+- Upstream: code-review-rules (provides the issue list with levels and locations)
+- Depends: sensitive-data-guard (mandatorily scan the review body before delivering; a hit blocks)
+- Downstream: merge-gate (rule the gate and submit this step's review body in one shot with the correct event)

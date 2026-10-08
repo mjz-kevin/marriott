@@ -6,7 +6,7 @@ description: >-
   criteria (precondition/action/observable result), non-functional requirements, security, data rules,
   dependencies, and risks. The section set, required UI states, and language rules all follow the
   team config. Use when the user asks to write or draft a PRD or requirements doc;
-  triggers: 写 PRD / 生成 PRD / PRD 内容 / 起草需求文档 / 需求说明 / draft PRD.
+  triggers: draft PRD / 写 PRD / 生成 PRD / PRD 内容 / 起草需求文档 / 需求说明.
 metadata:
   agent: Eval Agent
 ---

@@ -1,123 +1,125 @@
 ---
 name: diff-fetch
 description: >-
-  拉取目标 Pull Request 的代码差异与变更文件清单，构建供逐条审核用的结构化上下文：经 GitHub MCP
-  读 PR 基本信息、变更文件、逐文件 patch 与提交列表，按文件归类改动并标注新增／删除／重命名，
-  过滤无需审核的生成物／锁文件。当代码审核环节启动、需要获取 PR 差异作为审核输入时使用；
-  触发词：拉取 diff / 获取 PR 差异 / 变更文件清单 / 审核上下文 / diff fetch / pr diff。
+  Fetch the target Pull Request's code diff and changed-file list, building a structured context for
+  item-by-item review: read the PR basics, changed files, per-file patch, and commit list via GitHub
+  MCP, classify changes by file and flag added / deleted / renamed, and filter out generated artifacts
+  / lock files that don't need review. Use when the code-review step starts and needs the PR diff as
+  review input;
+  triggers: diff fetch / pr diff / 拉取 diff / 获取 PR 差异 / 变更文件清单 / 审核上下文.
 metadata:
   agent: Code Review Agent
 ---
 
-# diff-fetch — 拉取 PR 差异与变更清单，构建审核上下文
+# diff-fetch — fetching the PR diff and change list, building the review context
 
-为一个待审核的 Pull Request 经 GitHub MCP 拉取差异与变更文件清单，整理成逐文件、带 patch 的结构化上下文，作为后续规则审核的唯一输入。只取不判——是否有问题由 code-review-rules 环节判定。
+For a Pull Request under review, fetch the diff and changed-file list via GitHub MCP and organize them into a per-file, patch-bearing structured context, as the sole input for the subsequent rules review. It only fetches, it doesn't rule — whether there are issues is ruled by the code-review-rules step.
 
-| 维度 | 说明 |
+| Dimension | Description |
 |------|------|
-| 定位 | 经 MCP 拉取 PR 差异＋变更文件清单，构建结构化审核上下文 |
-| 输入 | 目标 PR（owner/repo/pull_number 或 PR URL）＋团队 GitHub 配置 |
-| 产出 | 结构化审核上下文：PR 元信息＋逐文件改动（含 patch／状态／增删行）＋提交列表 |
-| 边界 | 只拉取与整理；不判定问题、不写评论、不改代码 |
+| Purpose | Fetch the PR diff + changed-file list via MCP and build a structured review context |
+| Input | The target PR (owner/repo/pull_number or PR URL) + the team GitHub config |
+| Output | A structured review context: PR metadata + per-file changes (with patch / status / added-deleted lines) + commit list |
+| Scope | Only fetches and organizes; doesn't rule issues, write comments, or change code |
 
-## 0. 配置取值
+## 0. Config values
 
-`{profile}` 为当前 profile 文件名（不含扩展名，如 `app-prod` / `cms-test`），由调用方经 profile 选择环节解析并传入（`profile.py resolve` 给出其绝对路径）；未传入或文件不存在 → 停止，不臆测。
+`{profile}` is the current profile file name (without extension, e.g. `app-prod` / `cms-test`), resolved and passed in by the caller via the profile-selection step (`profile.py resolve` gives its absolute path); if it is not passed in or the file does not exist → stop, don't guess.
 
-| 用途 | 配置键 |
+| Purpose | Config key |
 |------|----|
-| GHES 域名 | `profiles/{profile}.yaml` → `mcp.github.host` |
-| 仓库 owner/org | `profiles/{profile}.yaml` → `mcp.github.org` |
-| 目标仓库（`owner/name`） | `profiles/{profile}.yaml` → `mcp.github.repos.*.repo` — 按 PR 所在仓库选取 |
-| 免审文件模式（可选） | `profiles/{profile}.yaml` → `review.ignore_globs` — 命中的生成物／锁文件不纳入审核上下文；缺省用内置兜底清单 |
+| GHES host | `profiles/{profile}.yaml` → `mcp.github.host` |
+| Repo owner/org | `profiles/{profile}.yaml` → `mcp.github.org` |
+| Target repo (`owner/name`) | `profiles/{profile}.yaml` → `mcp.github.repos.*.repo` — selected by the repo the PR is in |
+| Review-exempt file patterns (optional) | `profiles/{profile}.yaml` → `review.ignore_globs` — matched generated artifacts / lock files aren't included in the review context; if absent, the built-in fallback list is used |
 
-所需配置键缺失（TBD）→ 停止并要求补齐；不臆测仓库。
+Required config keys missing (TBD) → stop and ask for them; don't guess the repo.
 
-## 1. 前置
+## 1. Prerequisites
 
-| # | 条件 |
+| # | Condition |
 |---|------|
-| 1 | 目标 PR 已知（owner/repo/pull_number，或可从 PR URL 解析） |
-| 2 | GitHub MCP 鉴权可用（`mcp_auth` 失败则停止） |
-| 3 | PR 处于可审核状态（open）；已合并／已关闭的 PR 仅在明确要求复盘时才拉取，并注明状态 |
+| 1 | The target PR is known (owner/repo/pull_number, or resolvable from a PR URL) |
+| 2 | GitHub MCP auth is available (if `mcp_auth` fails, stop) |
+| 3 | The PR is in a reviewable state (open); a merged/closed PR is fetched only when a retrospective is explicitly requested, with the status noted |
 
-## 2. 工作流
+## 2. Workflow
 
 ```
-- S1 解析目标 PR（owner/repo/pull_number）
-- S2 经 GitHub MCP 读 PR 元信息（get_pull_request）
-- S3 经 MCP 读变更文件清单与逐文件 patch（list_pull_request_files，翻完分页）
-- S4 经 MCP 读提交列表（list_pull_request_commits）
-- S5 过滤免审文件、按文件归类，构建结构化审核上下文
-- S6 回报上下文（交给 code-review-rules 环节）
+- S1 Resolve the target PR (owner/repo/pull_number)
+- S2 Read the PR metadata via GitHub MCP (get_pull_request)
+- S3 Read the changed-file list and per-file patch via MCP (list_pull_request_files, paging through all)
+- S4 Read the commit list via MCP (list_pull_request_commits)
+- S5 Filter review-exempt files, classify by file, build the structured review context
+- S6 Report the context (handed to the code-review-rules step)
 ```
 
-### S2 读 PR 元信息（GitHub MCP）
+### S2 Read the PR metadata (GitHub MCP)
 
-经 `get_pull_request`（`owner`、`repo`、`pull_number`）读取：标题、描述、base/head 分支与 SHA、作者、状态、变更文件数与增删行总数。base/head SHA 用于后续评论定位与幂等。
+Read via `get_pull_request` (`owner`, `repo`, `pull_number`): title, description, base/head branches and SHAs, author, status, changed-file count, and total added-deleted lines. The base/head SHA is used for later comment locating and idempotency.
 
-### S3 读变更文件与 patch（GitHub MCP）
+### S3 Read the changed files and patch (GitHub MCP)
 
-经 `list_pull_request_files`（`owner`、`repo`、`pull_number`）读取每个变更文件的：文件路径、状态（`added`/`modified`/`removed`/`renamed`）、增删行数、`patch`（unified diff 片段）。
+Read via `list_pull_request_files` (`owner`, `repo`, `pull_number`) for each changed file: file path, status (`added`/`modified`/`removed`/`renamed`), added-deleted line counts, `patch` (unified-diff fragment).
 
-> `list_pull_request_files` 有分页，必须翻完所有分页（`per_page=100` 逐页翻至末页），漏页会导致审核上下文不完整、漏审文件。大 PR 的部分文件可能无 `patch`（超限），对这类文件标注「diff 过大未内联，需按需单独拉取」，不静默丢弃。
+> `list_pull_request_files` is paginated and must be paged through completely (`per_page=100`, page through to the last page); a missed page leaves the review context incomplete and misses files. On a large PR, some files may have no `patch` (over the limit); mark such files "diff too large, not inlined, fetch separately on demand," don't silently drop them.
 
-### S4 读提交列表（GitHub MCP）
+### S4 Read the commit list (GitHub MCP)
 
-经 `list_pull_request_commits` 读提交序列，用于理解改动演进、区分「本次新增」与「历史遗留」，辅助规则审核判断上下文。
+Read the commit sequence via `list_pull_request_commits`, to understand how the changes evolved, distinguish "newly added this time" from "historical leftover," and aid the rules review's context judgment.
 
-### S5 过滤与归类
+### S5 Filter and classify
 
-- 过滤 `review.ignore_globs` 命中的文件（如 `*.lock`、`dist/**`、`*.generated.*`、`pnpm-lock.yaml`、`Package.resolved`）；配置缺省时用内置兜底清单并注明。
-- 按目录／模块归类文件，标注每个文件的改动类型与规模，便于审核按模块推进。
-- 保留每个待审文件的 `patch`（unified diff）原文；行号定位由下游 code-review-rules 从 patch 的 `@@` hunk 头解析，本环节不额外产出行号映射。
+- Filter files matched by `review.ignore_globs` (e.g. `*.lock`, `dist/**`, `*.generated.*`, `pnpm-lock.yaml`, `Package.resolved`); when the config is absent, use the built-in fallback list and note it.
+- Classify files by directory / module, flagging each file's change type and size, so the review can proceed by module.
+- Keep each file-under-review's `patch` (unified diff) verbatim; line-number locating is parsed from the patch's `@@` hunk headers by the downstream code-review-rules, and this step doesn't additionally produce a line-number mapping.
 
-## 3. 强制规则
+## 3. Mandatory rules
 
-| 规则 | 说明 |
+| Rule | Description |
 |------|------|
-| 经 MCP 读取 | PR 信息、文件、提交均经 GitHub MCP 读取，不臆测差异内容 |
-| 翻完分页 | `list_pull_request_files` 必须遍历所有分页，漏页会漏审文件 |
-| 只取不判 | 本环节只拉取整理，不判定问题、不写评论 |
-| 免审可追溯 | 被过滤的文件要可列出（哪些被过滤、依据哪条规则），不静默隐藏 |
-| 大 diff 不丢弃 | 无 patch 的超大文件标注待单独拉取，不当作「无改动」 |
-| 不硬编码 | 仓库与免审模式取自团队配置，不硬编码 |
+| Read via MCP | PR info, files, and commits are all read via GitHub MCP; don't guess the diff content |
+| Page through all | `list_pull_request_files` must traverse all pages; a missed page misses files to review |
+| Fetch only, don't rule | This step only fetches and organizes; it doesn't rule issues or write comments |
+| Exempt files traceable | Filtered files must be listable (which were filtered, by which rule), not silently hidden |
+| Don't drop large diffs | A huge file with no patch is marked for separate fetching, not treated as "no change" |
+| Don't hardcode | The repo and review-exempt patterns come from the team config; don't hardcode |
 
-## 4. 质量门禁
+## 4. Quality gates
 
-- PR 元信息、变更文件清单、提交列表均经 MCP 读取（非臆测）
-- 变更文件清单已翻完分页，无遗漏
-- 每个待审文件带状态、增删行与 patch（或「diff 过大」标注）
-- 免审文件被显式列出且注明过滤依据
-- 输出的审核上下文可直接供 code-review-rules 逐条审核
+- PR metadata, changed-file list, and commit list are all read via MCP (not guessed)
+- The changed-file list is paged through completely, with none missed
+- Each file under review carries status, added-deleted lines, and patch (or a "diff too large" note)
+- Review-exempt files are explicitly listed with the filter basis noted
+- The output review context can be used directly by code-review-rules for item-by-item review
 
-## 5. 输出
+## 5. Output
 
 ```markdown
-审核上下文就绪：{owner}/{repo} PR #{n} — {标题}
+Review context ready: {owner}/{repo} PR #{n} — {title}
 
-- **分支**：{head} → {base}（head SHA {head_sha}）
-- **规模**：{files} 文件，+{add} / -{del} 行，{commits} 提交
-- **待审文件**：{待审数}（已过滤免审 {ignored} 个）
+- **Branch**: {head} → {base} (head SHA {head_sha})
+- **Size**: {files} files, +{add} / -{del} lines, {commits} commits
+- **Files under review**: {review count} (filtered {ignored} exempt)
 
-| 文件 | 状态 | +/- | 备注 |
+| File | Status | +/- | Note |
 |------|------|-----|------|
-| {path} | added/modified/removed/renamed | +{a}/-{d} | {diff 过大待单独拉取 / —} |
+| {path} | added/modified/removed/renamed | +{a}/-{d} | {diff too large, fetch separately / —} |
 
-- **下一步**：进入 code-review-rules 按编码规范与安全基线逐条审核
+- **Next step**: enter code-review-rules to review item by item against the coding standards and security baseline
 ```
 
-## 6. 排障
+## 6. Troubleshooting
 
-| 现象 | 处理 |
+| Symptom | Handling |
 |------|------|
-| MCP 鉴权失败 | `mcp_auth` 后重试一次；仍失败则回报 |
-| PR 号／URL 无法解析 | 停止并请补全 owner/repo/pull_number |
-| PR 已合并／关闭 | 注明状态；仅在明确要求复盘时继续 |
-| 变更文件很多 | 翻完分页后按模块分批交下游，不截断清单 |
-| 某文件无 patch（超大） | 标注「diff 过大未内联」，需要时单独拉取该文件 diff |
+| MCP auth fails | Run `mcp_auth` and retry once; if it still fails, report |
+| The PR number / URL can't be resolved | Stop and ask for the full owner/repo/pull_number |
+| The PR is merged / closed | Note the status; continue only when a retrospective is explicitly requested |
+| Many changed files | After paging through all, hand downstream in batches by module, don't truncate the list |
+| A file has no patch (too large) | Mark "diff too large, not inlined"; fetch that file's diff separately when needed |
 
-## 7. 相关
+## 7. Related
 
-- Upstream：开发／验证放行后创建的 PR（可由 create-pr 生成描述）
-- Downstream：code-review-rules（按编码规范与安全基线逐条审核）
+- Upstream: the PR created after development / verification passes (its description can be generated by create-pr)
+- Downstream: code-review-rules (review item by item against the coding standards and security baseline)

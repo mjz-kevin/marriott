@@ -1,126 +1,127 @@
 ---
 name: baseline-checkout
 description: >-
-  开发启动前检出目标仓库的基线代码：从团队 profile 解析仓库与基线分支，经 GitHub MCP 读取
-  基线分支最新 commit 并锁定其 SHA，再把本地工作区同步到该基线并回报锁定的 base commit SHA。
-  当开发环节启动、创建 Feature 分支或写代码之前使用；
-  触发词：检出基线 / 检出代码 / 拉取基线 / 同步基线 / baseline checkout / checkout code。
+  Before development starts, check out the target repository's baseline code: resolve the repo and
+  baseline branch from the team profile, read the baseline branch's latest commit via GitHub MCP and
+  lock its SHA, then sync the local workspace to that baseline and report the locked base commit SHA.
+  Use when the development step starts, before creating a Feature branch or writing code;
+  triggers: baseline checkout / checkout code / 检出基线 / 检出代码 / 拉取基线 / 同步基线.
 metadata:
   agent: Dev Agent
 ---
 
-# baseline-checkout — 锁定并检出基线代码
+# baseline-checkout — locking and checking out the baseline code
 
-把目标仓库的基线分支检出到干净、最新的状态，作为 Feature 分支的起点。先经 GitHub MCP 读远端基线并锁定 commit SHA，再同步本地工作区；回报的 base SHA 就是 Feature 分支的 base。
+Check out the target repository's baseline branch to a clean, up-to-date state as the starting point for the Feature branch. First read the remote baseline via GitHub MCP and lock the commit SHA, then sync the local workspace; the reported base SHA is the Feature branch's base.
 
-| 维度 | 说明 |
+| Dimension | Description |
 |------|------|
-| 定位 | 解析目标仓库＋基线分支，同步到基线最新 commit，并锁定 base SHA |
-| 输入 | 目标 Story（用于判定端／仓库）＋团队 GitHub 配置 |
-| 产出 | 位于基线分支、干净的本地工作区＋锁定的 base commit SHA（交给建分支环节） |
-| 边界 | 只检出基线；不创建 Feature 分支、不写代码、不推送 |
+| Purpose | Resolve the target repo + baseline branch, sync to the baseline's latest commit, and lock the base SHA |
+| Input | The target Story (to determine end / repo) + the team GitHub config |
+| Output | A clean local workspace on the baseline branch + the locked base commit SHA (handed to the branch-creation step) |
+| Scope | Only checks out the baseline; doesn't create the Feature branch, write code, or push |
 
-## 0. 配置取值
+## 0. Config values
 
-`{profile}` 为当前 profile 文件名（不含扩展名，如 `app-prod` / `cms-test`），由调用方经 profile 选择环节解析并传入（`profile.py resolve` 给出其绝对路径）；未传入或文件不存在 → 停止，不臆测。
+`{profile}` is the current profile file name (without extension, e.g. `app-prod` / `cms-test`), resolved and passed in by the caller via the profile-selection step (`profile.py resolve` gives its absolute path); if it is not passed in or the file does not exist → stop, don't guess.
 
-| 用途 | 配置键 |
+| Purpose | Config key |
 |------|----|
-| GHES 域名 | `profiles/{profile}.yaml` → `mcp.github.host` |
-| 仓库 owner/org | `profiles/{profile}.yaml` → `mcp.github.org` |
-| 目标仓库（`owner/name`） | `profiles/{profile}.yaml` → `mcp.github.repos.*.repo` — 按 Story 的端／仓库选取（APP：`ios` / `android`；CMS：`cncms` / `monorepo`） |
-| 基线分支 | `profiles/{profile}.yaml` → `mcp.github.repos.*.base` — 每仓库各自的基线分支（如 ios=`develop`、android=`dev`、cms 两仓=`main`） |
+| GHES host | `profiles/{profile}.yaml` → `mcp.github.host` |
+| Repo owner/org | `profiles/{profile}.yaml` → `mcp.github.org` |
+| Target repo (`owner/name`) | `profiles/{profile}.yaml` → `mcp.github.repos.*.repo` — selected by the Story's end / repo (APP: `ios` / `android`; CMS: `cncms` / `monorepo`) |
+| Baseline branch | `profiles/{profile}.yaml` → `mcp.github.repos.*.base` — each repo's own baseline branch (e.g. ios=`develop`, android=`dev`, both cms repos=`main`) |
 
-所需配置键缺失（TBD）→ 停止并要求补齐；不臆测仓库或分支。
+Required config keys missing (TBD) → stop and ask for them; don't guess the repo or branch.
 
-## 1. 前置
+## 1. Prerequisites
 
-| # | 条件 |
+| # | Condition |
 |---|------|
-| 1 | 目标 Story 已知，可解析出端／仓库（多仓库团队须解析到唯一一个仓库；双端 Story 按端分两次执行） |
-| 2 | GitHub MCP 鉴权可用（`mcp_auth` 失败则停止） |
-| 3 | 仓库的本地工作目录由调用方运行时提供，且该目录已 clone 对应 GHES 仓库、remote 正确；未提供路径或本地未 clone → 停下回报，请人工先 clone，不自动 clone（本地 git 凭据与 MCP 的 PAT 不同源） |
+| 1 | The target Story is known and the end / repo can be resolved (a multi-repo team must resolve to exactly one repo; a dual-end Story runs twice, once per end) |
+| 2 | GitHub MCP auth is available (if `mcp_auth` fails, stop) |
+| 3 | The repo's local working directory is provided by the caller at runtime, and that directory already has the GHES repo cloned with the correct remote; if no path is provided or the local repo isn't cloned → stop and report, ask a human to clone first, don't clone automatically (local git credentials and the MCP PAT come from different sources) |
 
-## 2. 工作流
+## 2. Workflow
 
 ```
-- S1 解析仓库＋基线分支（依 profile，按 Story 的端）
-- S2 经 GitHub MCP 读远端基线分支最新 commit（锁定 SHA）
-- S3 先判工作区干净，再把本地同步到该基线 commit
-- S4 校验 HEAD 等于锁定的 base SHA
-- S5 回报锁定的 base commit SHA（交给建分支环节）
+- S1 Resolve the repo + baseline branch (per profile, by the Story's end)
+- S2 Read the remote baseline branch's latest commit via GitHub MCP (lock the SHA)
+- S3 Confirm the workspace is clean first, then sync local to that baseline commit
+- S4 Verify HEAD equals the locked base SHA
+- S5 Report the locked base commit SHA (handed to the branch-creation step)
 ```
 
-> 双端 Story：APP 一个功能可能同时改 iOS 与 Android。本 skill 单次只处理单端／单仓库；双端 Story 由开发环节按端分两次独立执行（两个仓库、两条分支、两套验证），不在一次运行里混检两个仓库。
+> Dual-end Story: one APP feature may change both iOS and Android. This skill handles only a single end / single repo per run; a dual-end Story is run twice independently by the development step, once per end (two repos, two branches, two sets of verification), not two repos mixed in one run.
 
-### S2 读远端基线（GitHub MCP）
+### S2 Read the remote baseline (GitHub MCP)
 
-经 GitHub MCP `get_branch`（`owner`、`repo`、`branch = 该仓库的 base`）读取基线分支 head commit；取返回的 `commit.sha` 作为锁定的 **base SHA**。即便他人中途向基线推送，base 仍可复现。
+Read the baseline branch head commit via GitHub MCP `get_branch` (`owner`, `repo`, `branch` = that repo's base); take the returned `commit.sha` as the locked **base SHA**. Even if someone pushes to the baseline in the meantime, the base stays reproducible.
 
-> 经 MCP 读取，不臆测 SHA。`get_branch` 失败时 `mcp_auth` 后重试一次；仍失败则回报并停止。
+> Read via MCP; don't guess the SHA. If `get_branch` fails, run `mcp_auth` and retry once; if it still fails, report and stop.
 
-### S3 同步本地工作区
+### S3 Sync the local workspace
 
-**先判干净、再动工作区**：在调用方提供的仓库本地工作目录内，先确认工作区无未提交改动，再 fetch/checkout/reset，避免覆盖他人成果。
+**Check clean first, then touch the workspace**: inside the repo's local working directory provided by the caller, first confirm there are no uncommitted changes, then fetch/checkout/reset, to avoid overwriting someone else's work.
 
 ```bash
-git status --porcelain     # 必须先跑：非空（有未提交改动）则停止并回报，不继续
+git status --porcelain     # must run first: if non-empty (uncommitted changes), stop and report, don't continue
 git fetch origin {base}
 git checkout {base}
 git reset --hard {base_sha}
 ```
 
-> 干净检查是硬前置闸门：`git status --porcelain` 非空即停，绝不在有未提交改动时执行 checkout/reset，避免丢失他人成果。
+> The clean check is a hard pre-gate: if `git status --porcelain` is non-empty, stop; never run checkout/reset while there are uncommitted changes, to avoid losing someone else's work.
 
-### S4 校验状态
+### S4 Verify state
 
-交接前确认 HEAD 等于锁定的 base SHA：
+Before handing off, confirm HEAD equals the locked base SHA:
 
 ```bash
-git rev-parse HEAD         # 期望等于锁定的 base SHA
+git rev-parse HEAD         # expected to equal the locked base SHA
 ```
 
-HEAD 不匹配 → 停止、回报，不进入建分支环节。
+HEAD doesn't match → stop and report; don't enter the branch-creation step.
 
-## 3. 强制规则
+## 3. Mandatory rules
 
-| 规则 | 说明 |
+| Rule | Description |
 |------|------|
-| 远端只读 | 本环节仅读远端（`get_branch`）；不建分支、不提交、不推送 |
-| 锁定 base SHA | 始终锁定一个明确的 commit SHA，不依赖「分支此刻指向哪里」 |
-| 不毁本地成果 | 绝不 `reset --hard` 覆盖非本环节产生的未提交改动 — 停止并回报 |
-| 单次单仓库 | 单次只解析到一个仓库／端；不在一次运行里检出多个仓库 |
-| 不硬编码 | 仓库与基线分支取自团队配置，不硬编码 |
+| Remote read-only | This step only reads the remote (`get_branch`); it doesn't create branches, commit, or push |
+| Lock the base SHA | Always lock an explicit commit SHA; don't rely on "where the branch points right now" |
+| Don't destroy local work | Never `reset --hard` over uncommitted changes not produced by this step — stop and report |
+| One repo per run | Resolve to only one repo / end per run; don't check out multiple repos in one run |
+| Don't hardcode | The repo and baseline branch come from the team config; don't hardcode |
 
-## 4. 质量门禁
+## 4. Quality gates
 
-- 仓库与基线分支从配置解析（非臆测）
-- 经 MCP 读远端锁定了 base commit SHA
-- 本地工作区干净且 HEAD 等于锁定的 base SHA
-- 未丢弃任何未提交的本地成果
+- The repo and baseline branch are resolved from config (not guessed)
+- The base commit SHA was locked by reading the remote via MCP
+- The local workspace is clean and HEAD equals the locked base SHA
+- No uncommitted local work was discarded
 
-## 5. 输出
+## 5. Output
 
 ```markdown
-基线已检出：{owner}/{repo} @ {base}
+Baseline checked out: {owner}/{repo} @ {base}
 
-- **Base commit**：{base_sha}
-- **本地状态**：干净，HEAD = {base_sha}
-- **下一步**：基于此 base SHA 创建唯一 AI Feature 分支
+- **Base commit**: {base_sha}
+- **Local state**: clean, HEAD = {base_sha}
+- **Next step**: create the unique AI Feature branch from this base SHA
 ```
 
-## 6. 排障
+## 6. Troubleshooting
 
-| 现象 | 处理 |
+| Symptom | Handling |
 |------|------|
-| MCP 鉴权失败 | `mcp_auth` 后重试一次；仍失败则回报 |
-| `get_branch` 找不到 | 核对配置中的仓库与基线分支；停止，不臆测 |
-| 本地工作区有外来未提交改动 | 停止并回报；不 `reset --hard` 覆盖 |
-| 本地 remote 与解析出的仓库不一致 | 回报不一致；不检出错误仓库 |
-| 本地未 clone 或未提供工作目录 | 停下回报，请人工先 clone 并提供路径；不自动 clone |
-| 团队常量缺失 | 停止，说明缺失的配置键及对应 owner 补齐 |
+| MCP auth fails | Run `mcp_auth` and retry once; if it still fails, report |
+| `get_branch` not found | Check the repo and baseline branch in config; stop, don't guess |
+| Foreign uncommitted changes in the local workspace | Stop and report; don't `reset --hard` over them |
+| The local remote doesn't match the resolved repo | Report the mismatch; don't check out the wrong repo |
+| The local repo isn't cloned or no working directory was provided | Stop and report, ask a human to clone first and provide the path; don't clone automatically |
+| Team constants missing | Stop; state the missing config key and the owner to supply it |
 
-## 7. 相关
+## 7. Related
 
-- Upstream：开发环节启动（Story ＋已确认的 Story 级明细技术方案）
-- Downstream：feature-branch（基于锁定的 base SHA 创建唯一 AI Feature 分支）
+- Upstream: the development step starts (Story + the confirmed Story-level detailed tech solution)
+- Downstream: feature-branch (create the unique AI Feature branch from the locked base SHA)
