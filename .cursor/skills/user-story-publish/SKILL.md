@@ -65,7 +65,7 @@ Create tickets in Jira from the confirmed Story list, fill fields, establish bac
 
 ### S2 Idempotent dedup
 
-Dedup one by one before creating, to avoid duplicate tickets. `{project}` comes from the Parent Epic key prefix (or the `mcp.jira.project_key` override):
+Dedup one by one before creating, to avoid duplicate tickets. `{project}` comes from the Parent Epic key prefix (or the `mcp.jira.project_key` override). When the search returns descriptions, pass `responseContentFormat: "markdown"`:
 
 ```text
 project = "{project}" AND summary ~ "{summary}" AND parent = "{Epic key}"
@@ -83,13 +83,27 @@ project = "{project}" AND summary ~ "{summary}" AND parent = "{Epic key}"
 
 **Submission channel (hard constraint)**: create and edit tickets only via the Atlassian MCP (`createJiraIssue` / `editJiraIssue`). REST API, temporary scripts, and shell subagents are forbidden. On an MCP error, only fix the arguments and retry—don't fall back to another channel. **The only exception**: creating a Jira **Web remote link** (external URL in the Links area) — MCP exposes no write tool for it, so it goes through the publish script's `--jira-remote-link` mode over Jira REST (see S5). This exception covers remote links only; ticket create/edit stays MCP-only.
 
-**Field submission format**:
+**Field submission format** (Markdown in / Markdown out; never Wiki):
 
-| Field | Format |
+| Call / field | Format |
 |------|------|
-| `description` | Submit with `contentFormat: "markdown"` (Jira converts to ADF); don't submit `**xxx**` or `[title](url)` as plain text |
+| Write (`createJiraIssue` / `editJiraIssue`) | Always pass `contentFormat: "markdown"` (Jira converts to ADF). Do not omit — the tool default varies |
+| Read (`getJiraIssue` / `searchJiraIssuesUsingJql`) | Always pass `responseContentFormat: "markdown"`. Do not omit — omitting can return Wiki source (`h2.`, `{{code}}`, `[url\|url\|smart-link]`), which looks like unreplaced placeholders |
+| `description` | Markdown body + `contentFormat: "markdown"`; don't submit `**xxx**` or `[title](url)` as plain text |
 | Acceptance Criteria field | Submit Markdown; if the field rejects it (ADF-only), submit an ADF `doc` object instead |
 | Parent | Set at creation; change the parent via `editJiraIssue` |
+
+Wiki markup is a read/export serialization of ADF, not a write format. Author and submit Markdown only; never copy Wiki tokens into a field:
+
+| Meaning | Markdown (required) | Wiki (forbidden) |
+|------|------|------|
+| Heading 2 | `## Background` | `h2. Background` |
+| Bold | `**6.13.0**` | `*6.13.0*` |
+| Inline code | `` `CrashReporter.kt` `` | `{{CrashReporter.kt}}` |
+| Inline code containing `{ }` | `` `swazzler { }` `` (one backtick pair, braces are literal) | `{{swazzler { }}}` (nested Wiki braces → stray `}` / `{}}` on render) |
+| Link | `[text](url)` | `[url\|url\|smart-link]` |
+
+`{{x}}` is Wiki monospace, not a template placeholder (`{guidance}` uses a single pair). A brace-bearing snippet is the top cause of stray `{}}` when a ticket is created by hand without the authoring agent — wrap it in one backtick pair with the braces literal (`` `swazzler { }` ``), never `{{swazzler { }}}`. When judging whether a ticket is "broken", re-read with `responseContentFormat: "markdown"` first: if that returns `##` / backticks, the stored ADF is fine.
 
 Write per the Story template's field table:
 
@@ -170,6 +184,7 @@ Don't auto-transition forward; the schedule is a PO decision.
 | Sensitive-info block | A hit on real secrets / real member IDs stops; don't redact and continue |
 | Don't estimate | Leave any field requiring human estimation empty |
 | Don't hardcode constants | The target project is derived from the Parent Epic key (or the team-config override); link types / initial status come from the team config |
+| Markdown in / Markdown out | Write: always `contentFormat: "markdown"`. Read: always `responseContentFormat: "markdown"`. Never author or re-submit Wiki (`h2.`, `{{code}}`, `[url\|url\|smart-link]`) |
 
 ## 4. Output report
 
@@ -195,6 +210,7 @@ Created {n} Stories (skipped {m} duplicates)
 | Network timeout | Report the created and uncreated lists, don't create duplicates |
 | Link type doesn't exist | Warn and skip that link, don't block ticket creation |
 | Back-link renders as plain text (`[title](url)` or escaped `\[`) | Rewrite the whole description via `editJiraIssue` with `contentFormat: "markdown"` |
+| Rendered body shows stray `}` / `{}}` next to a code term | Caused by nested Wiki braces around a brace-bearing snippet (`{{swazzler { }}}`). Rewrite that term as a single backtick pair with literal braces (`` `swazzler { }` ``), then `editJiraIssue` with `contentFormat: "markdown"` |
 | Web remote link `ok=false` (script) | Fix per the HTTP status in the result JSON (auth / issue key / URL) and rerun; it's idempotent by `globalId`, so a rerun won't duplicate. If it still fails, keep the description-subsection back-link and note the remote-link gap in the report |
 | External URL rejected by "Linked Work Items" | Expected — Issue Links only accept issue↔issue; put the external URL in Web links via `--jira-remote-link` instead |
 | Missing team constant | Stop, state the missing item and the corresponding owner to complete it |
