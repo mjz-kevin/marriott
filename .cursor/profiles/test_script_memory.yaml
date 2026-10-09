@@ -1,0 +1,177 @@
+# ============================================================
+# Skill Memory 记忆库 —— 通用规则沉淀
+# ------------------------------------------------------------
+# 只存放「抽象的、跨用例通用」的经验规则，不存单个 case / 单个元素的定位符。
+# 生成用例或代码前，Agent 先读取本文件并应用所有匹配 scope 的规则。
+#
+# 何时追加：当从某次纠错 / 失败自愈中总结出一条“以后所有类似情况都该这么做”
+# 的通用经验时，才追加一条 rule；只针对某一个元素的临时定位不写进来。
+#
+# 条目字段：
+#   id          : 唯一编号，递增（RULE_001, RULE_002 ...）
+#   scope       : 适用范围 iOS | Android | CrossPlatform | All
+#   category    : 规则类别，如 LOCATOR_STRATEGY / WAIT_STRATEGY /
+#                 GESTURE / ASSERTION / NAMING / STABILITY
+#   rule        : 一句话规则（通用、可复用）
+#   rationale   : 为什么（来龙去脉 / 踩过的坑）
+# ============================================================
+
+# ------------------------------------------------------------
+# 测试目标（test_target）：告诉 ai-test-agent 当前测试流程属于 app 还是 cms。
+#   app —— 移动端 App（iOS 优先）：走 .cursor/skills/ 下 app 主线；本项目 6 个 skill 中只有 jira-to-test-case 需区分 app/cms，其余 5 个为纯 app 流程。
+#   cms —— 仅用例设计上游 jira-to-test-case 承接（CMS 小节与 app 对称，完整可用）；下游 authoring→to-script→debug 主线为 app 专用，cms 不落地脚本。
+# app/cms 主要影响「用例设计」上游环节，其权威默认值以用例设计层记忆库 .cursor/profiles/test_case_memory.yaml 的 test_target 为准；此处为脚本实现层的同名默认，二者应保持一致。
+# 优先级：上游 Agent 传入 > 用户对话显式指明 > 本字段（默认值）。缺失/冲突无法判定时 Agent 先问用户。
+test_target: app  # 默认测试目标：移动端 App（与 test_case_memory.yaml 保持一致）
+# ------------------------------------------------------------
+
+rules:  # 通用技术规则列表（按 id 递增追加）
+  - id: "RULE_001"  # 规则编号 001
+    scope: "All"  # 适用范围：全平台
+    category: "WAIT_STRATEGY"  # 类别：等待策略
+    rule: "No hard sleeps: do not use time.sleep() or fixed delays; use WebDriverWait + expected_conditions for explicit waits only."  # 禁止 time.sleep，只用显式等待
+    rationale: "Fixed sleep wastes time or is still flaky; explicit waits return as soon as the condition is met."  # 固定 sleep 浪费或仍不稳；显式等待条件满足即返回
+
+  - id: "RULE_002"  # 规则编号 002
+    scope: "All"  # 适用范围：全平台
+    category: "LOCATOR_STRATEGY"  # 类别：定位策略
+    rule: "Do not use attributes that embed build hashes (e.g. generated id_a1b2c3, css-1x2y3z); they change every build."  # 禁止带 hash 的动态 id/class
+    rationale: "Hashed attributes are compile/bundle artifacts and break across versions."  # hash 属性随构建变化，定位易失效
+
+  - id: "RULE_003"  # 规则编号 003
+    scope: "All"  # 适用范围：全平台
+    category: "LOCATOR_STRATEGY"  # 类别：定位策略
+    rule: "Prefer stable, semantic selectors (accessibility_id, stable name/label/text); avoid fragile hierarchy or dynamic attributes."  # 优先稳定语义选择器
+    rationale: "Semantic stable selectors read well and survive version churn."  # 语义化定位可读、跨版本稳定
+
+  - id: "RULE_004"  # 规则编号 004
+    scope: "All"  # 适用范围：全平台
+    category: "NAMING"  # 类别：命名与合并
+    rule: "When merging collected elements into the matching Page Object (tests/mobile/ios/pages/<page>_page.py), never wholesale overwrite; keep one locator per stable control identity (AppiumBy type + locator string), ignoring label/value that change with data refresh. Update in place when the same control is re-collected; keep old controls not seen in this pass; append new stable identities as class-attribute tuple locators. Do not dedupe by attribute name alone (names may get numeric suffixes and duplicate the page). Mark # ambiguous when multiple distinct controls share one locator."  # 合并 Page Object：按稳定身份判重，不整页覆盖，共用 locator 标 ambiguous
+    rationale: "Accumulate elements across states (normal vs modal) without snapshotting volatile values; idempotent re-collection by stable identity. Shared locators need human refinement. (Historically YAML; now Page Object tuple locators only.)"  # 跨状态累积元素；同控件重采幂等；勿按属性名 alone 判重
+
+  - id: "RULE_005"  # 规则编号 005
+    scope: "All"  # 适用范围：全平台
+    category: "WAIT_STRATEGY"  # 类别：等待策略
+    rule: "Do not mix implicit and explicit waits: never call driver.implicitly_wait(); use WebDriverWait only. Remove implicit wait when creating the driver if legacy code set it."  # 禁止隐式等待与显式等待混用
+    rationale: "Implicit + explicit waits stack: each explicit poll triggers implicit lookup timeouts, causing long hangs when elements are missing."  # 混用会导致查找叠加超时、长时间空等
+
+  - id: "RULE_006"  # 规则编号 006
+    scope: "All"  # 适用范围：全平台
+    category: "WAIT_STRATEGY"  # 类别：等待策略
+    rule: "Use two timeout tiers: longer (e.g. 15s) for action waits (navigate, then tap/type); short (e.g. 3s) for predicate helpers (is_at_xxx / has_xxx). When checking any-of several candidates, poll with one find_elements pass and return on first hit — do not serial full-timeout waits per candidate."  # 操作类长超时、判断类短超时；多候选并行探测
+    rationale: "Negative page checks with long timeouts waste time; serial any-of multiplies delay. Short timeouts + parallel probe keep negatives fast."  # 否定判断用短超时；串行 any-of 会成倍累加等待
+
+  - id: "RULE_007"  # 规则编号 007
+    scope: "All"  # 适用范围：全平台
+    category: "LOCATOR_STRATEGY"  # 类别：定位策略
+    rule: "Locator names and comments must reflect true control semantics and position, verified against real-device dump (coordinates/hierarchy). Misleading labels (e.g. label=Clear that is top-right dismiss, not field clear) must be named by real role with coordinate notes and do-not-mis-tap warnings."  # 命名与注释须反映真机语义，勿仅凭 label 猜
+    rationale: "Pitfall: login dismissButton (label Clear) closed the whole sheet when used as field clear. Never guess semantics from label alone."  # 踩坑：Clear 实为关闭登录页而非清输入框
+
+  - id: "RULE_008"  # 规则编号 008
+    scope: "All"  # 适用范围：全平台
+    category: "ASSERTION"  # 类别：断言
+    rule: "Normalize text before assert: trim and collapse extra whitespace (e.g.「乔 钰恒」→「乔钰恒」), case/full-half width as needed, so rendering differences do not fail equality."  # 断言前文本归一化（去多余空白等）
+    rationale: "Pitfall: account name rendered with extra space failed strict equality; normalization fixes semantic match."  # 踩坑：姓名中间空格导致等值断言失败
+
+  - id: "RULE_009"  # 规则编号 009
+    scope: "All"  # 适用范围：全平台
+    category: "STABILITY"  # 类别：稳定性
+    rule: "Locators and target elements must come from real-device dump (page source + coordinates), not guessed accessibility_id/name. On failure, save per-step screenshot + page source before changing locators; do not guess blind."  # 定位以真机 dump 为准，失败先留证再改
+    rationale: "Pitfall: expected guestName, actual accountName. Dump proves page and real names fastest."  # 踩坑：臆测 name 长期失效；dump 最快核对
+
+  - id: "RULE_010"  # 规则编号 010
+    scope: "All"  # 适用范围：全平台
+    category: "WAIT_STRATEGY"  # 类别：等待策略
+    rule: "After actions that change state (tap/submit/navigate/expand/scroll), confirm with result-driven waits: stable element on target page appears or previous-page marker disappears, short-timeout poll; retry the action if not. Do not assume success and rely on downstream long waits. Prefer strong success (target stable element) over racing stale failure markers; do not assert on disappearing previous-page frames mid-transition. Pick light, fast proof elements (title/count); raise poll_frequency if needed."  # 状态变化后结果驱动等待与重试，避免抢判残帧
+    rationale: "Pitfalls: login race mis-read stale login chrome as failure; list tap returned without verifying navigation. Result-driven confirm + retry beats blind wait or stale-frame loss."  # 踩坑：转场竞态误判失败；点卡片未验证跳转
+
+  - id: "RULE_011"  # 规则编号 011
+    scope: "All"  # 适用范围：全平台
+    category: "ASSERTION"  # 类别：断言
+    rule: "Prefer dynamic assertions: do not hard-code business data. Values known only at runtime (first list name, order id, price) must be captured from the UI and reused for later taps/asserts; locators describe index/semantic slot (e.g. index=0), not embedded dynamic strings. One captured value is source of truth across pages."  # 动态断言：运行时捕获，locator 不写死业务数据
+    rationale: "Hard-coded hotel/price asserts are brittle and often irrelevant to the case goal. Pairs with test_case_memory CASE_002."  # 写死业务数据脆弱；配合 CASE_002
+
+  - id: "RULE_012"  # 规则编号 012
+    scope: "All"  # 适用范围：全平台
+    category: "STABILITY"  # 类别：稳定性
+    rule: "Share cross-step runtime data in pytest-bdd via target_fixture, not globals/class attrs. @given(..., target_fixture='xxx') on capture steps; downstream steps take xxx as a parameter. Steps that assert on the value must declare it in the signature so missing fixture fails loudly."  # 跨 step 用 target_fixture 传值，不用全局变量
+    rationale: "Globals leak across scenarios; target_fixture is scoped per scenario (e.g. CNAPP-383 captured_property_name chain)."  # 全局变量易串场景；fixture 按场景隔离
+
+  - id: "RULE_013"  # 规则编号 013
+    scope: "iOS"  # 适用范围：iOS
+    category: "LOCATOR_STRATEGY"  # 类别：定位策略
+    rule: "Pick stable unique match criteria: (1) Avoid @visible as primary filter — XCUITest visibility flickers with idle/render. (2) Separate repeated blocks (search vs recent) with layout/structure (fixed width/height, semantic name, hierarchy), not visible. (3) When names nest (e.g.「会员灵活退改房价」vs「灵活退改房价」), prefer BEGINSWITH/exact over CONTAINS."  # iOS：慎用 @visible；用结构区分区块；嵌套名用 BEGINSWITH
+    rationale: "Pitfalls: carousel+@visible count=0 → fixed width=329; CONTAINS hit longer rate name. Extends RULE_002/003 on iOS."  # 踩坑：visible 不稳定；CONTAINS 误命中更长名称
+
+  - id: "RULE_014"  # 规则编号 014
+    scope: "iOS"  # 适用范围：iOS
+    category: "GESTURE"  # 类别：手势
+    rule: "When element .click() does not navigate (events not on text/container) or idle checks slow clicks on refreshing pages, use mobile:tap at coordinates derived from the element rect at runtime (card center, row center), not hard-coded pixels. Anchor identity still comes from stable semantic element; rect only supplies tap point."  # click 无效时用 rect 推算坐标 mobile:tap
+    rationale: "Pitfall: hotel card name/container clicks did not navigate; guest-info StaticText entry needed coordinate tap from rect."  # 踩坑：点卡片名/容器不跳转，需坐标点击
+
+  - id: "RULE_015"  # 规则编号 015
+    scope: "iOS"  # 适用范围：iOS
+    category: "GESTURE"  # 类别：手势
+    rule: "If the target is off-screen, scroll incrementally and stop when visible: small steps (~1/4 screen) when adjacent similar blocks exist (multiple cards/rates with same label); larger (~2/3) when layout is simple. Avoid one-shot full-screen blind scroll."  # 屏外元素增量滚动，有同构块时小幅滚动
+    rationale: "Pitfall: one full scroll skipped to the next room's same-name rate; small increments fixed it. Off-screen often looks like missing/@visible=false."  # 踩坑：一屏滚过头选错同名 rate
+
+  - id: "RULE_016"  # 规则编号 016
+    scope: "iOS"  # 适用范围：iOS
+    category: "STABILITY"  # 类别：稳定性
+    rule: "On continuously refreshing pages (lists/maps/animation), use element references immediately after find (rect/tap/value); no extra queries in between. On stale/404/not present, re-find and retry; never reuse old references."  # 刷新页 find 后立即使用引用，stale 则重找
+    rationale: "Pitfall: list refreshed between find and rect read. Complements RULE_010 for reference lifetime."  # 踩坑：find 与读 rect 之间元素被重建
+
+  - id: "RULE_017"  # 规则编号 017
+    scope: "iOS"  # 适用范围：iOS
+    category: "STABILITY"  # 类别：稳定性
+    rule: "Type iOS text character-by-character (per-char send_keys) to avoid dropped middle chars from fast bulk send_keys. After input, read back value, normalize (strip spaces), allow grouped display (155 0000 0000 vs 15500000000). On retry, avoid repeated el.clear() that leaves placeholder text — detect placeholder and patch diff/backspace instead."  # iOS 逐字符输入；读回归一化；慎用 clear 留 placeholder
+    rationale: "Pitfalls: test→tet, auto→auo; clear left placeholder labels. Aligns with RULE_008 for readback."  # 踩坑：整体 send_keys 丢字；clear 后读到 placeholder
+
+  - id: "RULE_018"  # 规则编号 018
+    scope: "iOS"  # 适用范围：iOS
+    category: "WAIT_STRATEGY"  # 类别：等待策略
+    rule: "Refreshing list/map pages keep App non-idle; default waitForIdleTimeout (~10s) slows every command. Set waitForIdleTimeout small (e.g. 1) for speed. Avoid disabling waitForQuiescence (false) — may run before render completes. Inject caps via new plan/conftest monkeypatch only, not protected conftest."  # 调小 waitForIdleTimeout；慎关 quiescence；仅 monkeypatch 注入 cap
+    rationale: "Pitfall: waitForIdleTimeout=1 sped taps; waitForQuiescence=false broke rate name readback."  # 踩坑：idle=1 提速；quiescence=false 回显取不到
+
+  - id: "RULE_019"  # 规则编号 019
+    scope: "All"  # 适用范围：全平台
+    category: "STABILITY"  # 类别：稳定性
+    rule: "If the same step sentence appears as Given and When/Then in features, register @given/@when/@then on the step function or StepDefinitionNotFoundError occurs. Generic page-state steps (in xxx page) should register all three."  # 同句 step 多关键字须多装饰器注册
+    rationale: "Pitfall: in reservation review page only @given; Then after Guest Info failed until @when/@then added."  # 踩坑：仅 @given 导致 Then 匹配不到
+
+  - id: "RULE_020"  # 规则编号 020
+    scope: "All"  # 适用范围：全平台
+    category: "WAIT_STRATEGY"  # 类别：等待策略
+    rule: "Remove redundant waits: (1) No time.sleep for page/load — wait for stable target elements (RULE_001). (2) If consecutive steps stay on the same page with elements already confirmed, do not repeat long wait_until_displayed each step — find directly with brief retry only when needed. (3) Use light proof + higher poll_frequency for judgment waits (RULE_006)."  # 去掉冗余等待与同页重复长等待
+    rationale: "Pitfalls: two 5s sleeps on property list; redundant wait before expand when room card already visible."  # 踩坑：property list 两处 sleep；展开前多余 wait
+
+  - id: "RULE_021"  # 规则编号 021
+    scope: "iOS"  # 适用范围：iOS
+    category: "WAIT_STRATEGY"  # 类别：等待策略
+    rule: "Logged-in cold start may show ~3s splash/interstitial: after reopening App to home, wait for stable home markers (e.g. primaryButton Find hotels, greetingText) with longer timeout (~15s) before acting; close dismissible overlays first (e.g. close_bottom_pop_up_if_displayed_within_time). No time.sleep(3) for ads (RULE_001/RULE_010)."  # 登录态冷启动先等首页稳定元素，可先关弹窗
+    rationale: "Splash blocks home locators briefly; result-driven home-ready wait beats fixed sleep for logged-in iOS."  # 开屏广告遮挡首页，结果驱动等待优于 sleep(3)
+
+  - id: "RULE_022"  # 规则编号 022
+    scope: "iOS"  # 适用范围：iOS
+    category: "ASSERTION"  # 类别：断言
+    rule: "Primary button labels change with toggles on the same page: always locate by stable name (e.g. primaryButton), never embed a specific label in the locator. Before asserting label, detect mode from related switches (value/selected icons), then assert expected label for that mode (e.g. Find hotels vs points vs flexible dates)."  # 主按钮用稳定 name 定位，按开关模式断言 label
+    rationale: "Same primaryButton has multiple labels; name-stable locate + mode-aware label assert avoids false failures."  # 同一 primaryButton 多态 label，须先判模式再断言
+
+  - id: "RULE_023"  # 规则编号 023
+    scope: "iOS"  # 适用范围：iOS
+    category: "LOCATOR_STRATEGY"  # 类别：定位策略
+    rule: "When a picker/dropdown button's name/label changes with the selected value (no separate stable name), locators must cover default and all selected states — IOS_PREDICATE with OR of allowed names, or structural anchor. Assert current selection by reading the button's name/label."  # 入口按钮 name 随选中值变化时谓词枚举各态
+    rationale: "Pitfall: sort button name stayed「排序」only; after sort it became「最低价」etc. Predicate enumerating all states fixed NoSuchElement. Complements RULE_022 (stable name vs mutable label)."  # 踩坑：排序后按钮 name 变选项文案，须 OR 枚举
+
+  - id: "RULE_024"  # 规则编号 024
+    scope: "iOS"  # 适用范围：iOS
+    category: "GESTURE"  # 类别：手势
+    rule: "Submit buttons at the bottom of forms are often covered by the keyboard after input: regular click (wait hittable) and rect-center mobile:tap may hit keys, not the button. Hide keyboard first (hide_keyboard / mobile:hideKeyboard + tap blank area fallback), then click signIn/submit; coordinate tap only as fallback. Taps do not pierce the keyboard."  # 提交前先收键盘，坐标点不穿键盘
+    rationale: "Pitfall full_login_flow: tap on keyboard under signInButton. hide_keyboard then click succeeded. Bounds RULE_014: coordinates do not solve overlay occlusion."  # 踩坑：键盘盖住登录按钮，收键盘后 click 成功
+
+  - id: "RULE_025"  # 规则编号 025
+    scope: "iOS"  # 适用范围：iOS
+    category: "STABILITY"  # 类别：稳定性
+    rule: "Login is a fixed precondition template for all logged-in cases: (1) Credentials only from env by user tag (PLATINUM/AMBASSADOR *_ACC_NO/PWD, default LOGIN_USERNAME/PASSWORD in .env.ios.lle via conftest markers and ios_test_config.get_login_account()); prompt to fix env if missing. (2) UI chain: account tab Sign in/Activate → form visible → input account → input password (verify=False) → hide_keyboard (RULE_024) → click signInButton, coordinate fallback. (3) Success (RULE_010): account tab, logged-in marker (accountName) present and logged-out Sign in/Activate gone. Output logged-in state for downstream steps."  # 登录固定模板：env 账号 + UI 链 + 成功判据
+    rationale: "full_login_flow template: tag→env account, fixed steps, keyboard, success criteria. Pairs with test_case_memory CASE_004; no hard-coded credentials (RULE_011)."  # 与 CASE_004 理解层配套；账号不写死（RULE_011）

@@ -199,15 +199,15 @@ cicd:   { pipelines: 1, selector: "stage（Test／UAT／Prod）", prod_gate: [OR
 ### 4.5 构建与测试类 Skill
 
 
-| Skill                   | 做什么                                                                | 归属 Agent | **APP 团队 ／ CMS 团队差异**                                           |
-| ----------------------- | ------------------------------------------------------------------ | -------- | --------------------------------------------------------------- |
-| `harness-invoke`        | 按分支与环境选择并触发 Harness 已有的流水线，并查询执行状态                                 | CI/CD    | APP：按 APP 团队要求选择并触发流水线。 CMS：按 CMS 团队要求选择并触发流水线。                 |
-| `test-case-authoring`   | AI 辅助生成／补全功能测试用例：以 User Story ＋ AC ＋ 技术方案为输入，产出可执行脚本与前置数据，示例数据强制合成 | Test     | APP：按 APP 团队要求的自动化框架产出可执行脚本。 CMS：按 CMS 团队要求生成功能测试用例（供 QA 人工执行）。 |
-| `test-case-to-script`   | 将测试用例转换成自动化脚本                                                      | Test     | APP：按 APP 团队要求导入新功能测试用例或回归测试用例并转换成脚本。 CMS：无                     |
-| `auto-test-run`         | 在指定环境调度执行（功能测试／低环境全量回归／高环境 smoke），汇总通过率、失败用例与失败归因                  | Test     | APP：按 APP 团队要求的环境与执行策略调度执行。 CMS：无                               |
-| `test-report-publish`   | 按模板产出标准化测试报告并写入 Confluence 指定路径                                    | Test     | APP：按 APP 团队 路径要求、命名要求 推送。 CMS：按 CMS 团队 路径要求、命名要求 推送（仅功能测试报告）。  |
-| `story-bug-create`      | 为功能测试失败用例创建 story bug 的 Jira 工单，回链 User Story 与用例并自动流转             | Test     | APP：按 APP 团队要求建 story bug 工单并回链流转。 CMS：无                        |
-| `regression-bug-create` | 创建回归 Bug 的 Jira 工单，判定 Regression bug 或 Product known issue 并自动流转   | Test     | APP：按 APP 团队要求建回归 Bug 工单并分类流转。 CMS：无                            |
+| Skill                 | 做什么                                              | 归属 Agent | **APP 团队 ／ CMS 团队差异**                                                     |
+| --------------------- | ------------------------------------------------ | -------- | -------------------------------------------------------------------------- |
+| `harness-invoke`      | 按分支与环境选择并触发 Harness 已有的流水线，并查询执行状态              | CI/CD    | APP：按 APP 团队要求选择并触发流水线。 CMS：按 CMS 团队要求选择并触发流水线。                         |
+| `jira-to-test-case`   | 以需求／Jira 为输入产出功能测试用例并发布 Confluence，不生成自动化脚本   | Test     | APP：用例发布至 `test_case`（iOS）。 CMS：用例发布至 `cms_case`，可选按行创建 Jira Test 工单。 |
+| `test-case-authoring` | 经 Jira MCP 拉取用例，生成伪代码与 Gherkin feature           | Test     | APP：按 APP 团队移动端自动化框架产出。 CMS：无。                                           |
+| `test-case-to-script` | 将伪代码／feature 转换为 pytest-bdd＋Appium 可执行脚本        | Test     | APP：按 APP 团队自动化仓库与编码规范落地。 CMS：无。                                         |
+| `test-debug-script`   | 真机调试与运行用例，修复脚本并沉淀通用规则至 memory                  | Test     | APP：按 APP 团队真机调试规范执行。 CMS：无。                                             |
+| `test-page-elements`  | 采集真机当前页元素写入 Page Object 与 Confluence 页面元素文档    | Test     | APP：按 APP 团队 Page Object 规范采集。 CMS：无。                                    |
+| `test-run-report-bug` | 按平台批量执行用例，发布测试报告至 Confluence 并为失败用例创建 Jira Bug | Test     | APP：按 APP 团队环境与 `test_report` 路径要求执行。 CMS：无。                              |
 
 
 ---
@@ -227,7 +227,7 @@ cicd:   { pipelines: 1, selector: "stage（Test／UAT／Prod）", prod_gate: [OR
 | **4. 开发 Agent**            | `baseline-checkout` `feature-branch` `unit-test-authoring` `build-verify` `contract-diff` `unit-test-runner` `acceptance-check`                                                                                                                                | GitHub Jira Confluence         |
 | **5. Code Review Agent**   | `diff-fetch` `code-review-rules` `review-comment` `merge-gate`                                                                                                                                                                                                 | GitHub Confluence Jira         |
 | **6. CI/CD Agent**         | `harness-invoke`                                                                                                                                                                                                                                               | Harness GitHub Jira            |
-| **7. Test Agent**          | 功能测试：`test-case-authoring` `test-case-to-script` `auto-test-run` `test-report-publish` `story-bug-create` 回归：`test-case-to-script` `auto-test-run` `test-report-publish` `regression-bug-create` **CMS 团队本期只装配** `test-case-authoring` ＋ `test-report-publish` | Jira Confluence Harness GitHub |
+| **7. Test Agent**          | APP：`jira-to-test-case` `test-case-authoring` `test-case-to-script` `test-debug-script` `test-page-elements` `test-run-report-bug` CMS：`jira-to-test-case`                                                                                                      | Confluence Jira                |
 
 
 ---
