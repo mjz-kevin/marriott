@@ -7,8 +7,9 @@ mcp:
     host: https://marriottcloud.atlassian.net
     project_key: GCD
     issue_type: "故事"
-    initial_status: Backlog
-    agile_team: ""       # 空 = 无默认，人工填写
+    initial_status: BACKLOG
+    workflow: ["BACKLOG", "待办", "TDD", "正在进行", "审查", "DEPLOY", "已完成"]   # GCD 故事(Story)真实工作流状态序列（名称逐字对齐 Jira；待办/正在进行/审查/已完成为本地化显示名）；dev-agent push 成功后向前流转
+    agile_team: "CN CMS Squad"   # 建单默认 Agile Team
     labels:                # CMS 无 business_domain 等枚举门禁，其余标签人工填写
       case_sensitive: true
       auto_fill: [ai_provenance]
@@ -17,6 +18,10 @@ mcp:
         select: unique
         values: [AIGenerated]   # 固定值（无空格：Jira label 不允许空格，否则会被拆成两个标签）
     links: [prd, figma, tech_solution]
+    figma_embed:                     # Figma UI 设计在工单里的落地方式：link=仅可点击链接（历史默认）；embed=链接 + 把设计节点导出为 PNG 作附件内嵌进描述
+      mode: embed                    # embed=建单时导出 Figma 节点为 PNG、上传为 Jira 附件、以 ADF media 内嵌进描述（经 Jira REST，MCP-only 的受控例外）；link=退回仅链接
+      png_scale: 2                   # 导出 PNG 的缩放倍数（download_figma_images 的 pngScale）；越大越清晰、文件越大
+      heading: "UI Design"           # 内嵌图片前插入的描述标题段文字
 
   confluence:
     base_url: https://marriottcloud.atlassian.net/wiki
