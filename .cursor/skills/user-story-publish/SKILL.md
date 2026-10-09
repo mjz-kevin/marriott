@@ -4,9 +4,12 @@ description: >-
   Create tickets in Jira from a prepared Story list: idempotent dedup, fill required fields,
   establish links (the parent Epic plus the link set declared by the team config), execute the
   write-back items left by the tech-solution publishing step, and leave the Story in the
-  team-configured initial status. Use when the user asks to create Jira tickets, push Stories to
-  Jira, or sync Stories;
-  triggers: create jira ticket / 创建 Jira / 建工单 / 推送 Story 到 Jira / 建单.
+  team-configured initial status. Also supplements the Figma UI design image onto an
+  already-created Story on demand (resolve the node from the link, confirm, attach + inline),
+  reusing the same embed path as ticket creation. Use when the user asks to create Jira tickets,
+  push Stories to Jira, sync Stories, or add / supplement a design image onto an existing Story;
+  triggers: create jira ticket / 创建 Jira / 建工单 / 推送 Story 到 Jira / 建单 /
+  补充设计图 / 给 Story 补图 / supplement design image / add figma image to story.
 metadata:
   agent: UserStory Agent
 ---
@@ -17,7 +20,7 @@ Create tickets in Jira from the confirmed Story list, fill fields, establish bac
 
 | Dimension | Description |
 |------|------|
-| Purpose | Idempotent ticket creation + fill fields + establish links (Parent Epic + the team-declared link set) + status transition |
+| Purpose | Idempotent ticket creation + fill fields + establish links (Parent Epic + the team-declared link set) + status transition. Side entry: supplement the Figma UI design image onto an already-created Story on demand, via the same `figma_embed` embed path |
 | Input | The Story list produced by the upstream User Story authoring step (PO-confirmed) + the team's Jira config |
 | Output | Jira tickets (created / skipped) + a report (with pending write-back content) |
 | Permission | This step has Jira write access; it is read-only on Confluence, so the requirements-doc appendix write-back only produces content, handed to a step with permission |
@@ -36,8 +39,10 @@ Create tickets in Jira from the confirmed Story list, fill fields, establish bac
 | Agile Team default | `profiles/{profile}.yaml` → `mcp.jira.agile_team` (empty means no default, needs manual entry) |
 | Label enum and auto-fill policy | `profiles/{profile}.yaml` → `mcp.jira.labels` (valid enum, case sensitivity, the `auto_fill` categories allowed to be auto-filled) |
 | The link set to establish | `profiles/{profile}.yaml` → `mcp.jira.links` |
+| Figma embed policy | `profiles/{profile}.yaml` → `mcp.jira.figma_embed` (`mode`: `embed` = inline a UI design image into the description via ADF media — **preferring the design PNG already produced upstream in the Story's source (PRD / Story-list design field)**, falling back to exporting the Figma node to PNG; `link` = clickable link only. `png_scale` export scale; `heading` the heading text before the inlined images). Absent or `mode: link` ⇒ link-only, no image |
 | Jira REST credentials (for Web remote links) | `.cursor/mcp.json` → `confluenceRest` (`base_url` / `email` / `api_token`); the same Atlassian account and token cover Jira REST — the site root is `base_url` minus the trailing `/wiki`, Jira REST lives at `<site>/rest/api/3`. Read by the script, never printed |
 | Web remote-link script | `.cursor/skills/user-story-publish/scripts/upload_confluence_v2.py --jira-remote-link` (pure stdlib, cross-platform, idempotent by `globalId`) |
+| Figma image attach/embed script | `.cursor/skills/user-story-publish/scripts/upload_confluence_v2.py --jira-attach-image` (uploads local PNGs as Jira attachments and inlines them into the description via ADF media over Jira REST; idempotent by filename + media id). Images are produced by the Figma image-download capability (`download_figma_images`) into a local path first |
 
 ## 1. Pre-checks
 
@@ -78,10 +83,12 @@ project = "{project}" AND summary ~ "{summary}" AND parent = "{Epic key}"
 | >=2 | Stop and hand to the user to decide |
 
 > When one already exists, **don't update** by default. Only enter the edit flow when the user explicitly asks to update.
+>
+> **Design-image supplement is a sanctioned edit entry**: when the user asks to add / supplement a Figma design image onto an existing Story (whether or not it came through this creation flow), proceed on that Story directly — resolve and inline the image per S5 "Figma node resolution" + "Supplement images on an already-created Story". This touches only the attachment and the `figma_embed.heading` image block; it never rewrites other fields.
 
 ### S3/S4 Fields
 
-**Submission channel (hard constraint)**: create and edit tickets only via the Atlassian MCP (`createJiraIssue` / `editJiraIssue`). REST API, temporary scripts, and shell subagents are forbidden. On an MCP error, only fix the arguments and retry—don't fall back to another channel. **The only exception**: creating a Jira **Web remote link** (external URL in the Links area) — MCP exposes no write tool for it, so it goes through the publish script's `--jira-remote-link` mode over Jira REST (see S5). This exception covers remote links only; ticket create/edit stays MCP-only.
+**Submission channel (hard constraint)**: create and edit tickets only via the Atlassian MCP (`createJiraIssue` / `editJiraIssue`). REST API, temporary scripts, and shell subagents are forbidden. On an MCP error, only fix the arguments and retry—don't fall back to another channel. **The exceptions** (both go through the publish script over Jira REST because MCP exposes no write tool for them): (1) a Jira **Web remote link** (external URL in the Links area) via `--jira-remote-link` (see S5); (2) **attaching + inlining a Figma UI design image** (binary attachment upload + ADF `media` node in the description) via `--jira-attach-image` (see S5, only when `figma_embed.mode: embed`). These exceptions cover remote links and image attach/inline only; ticket create/edit stays MCP-only.
 
 **Field submission format** (Markdown in / Markdown out; never Wiki):
 
@@ -150,6 +157,26 @@ First establish the Parent (Epic, hierarchy), then go through the team-configure
 
 - **Parent (Epic)**: use the hierarchy parent-child relation (the `parent` field, issue<->issue), established normally.
 - **`prd` / `figma` — description subsection**: write into the back-link subsection of the target ticket description (heading language per `doc.body_language`; template above) via MCP `editJiraIssue`. **Must be a clickable hyperlink**: for markdown submission write `[display text](URL)`, or construct ADF with a `link` mark; bare URLs are forbidden (relying only on frontend autolink, they degrade to non-clickable text on export / API read).
+- **`figma` — inline UI design image (when `figma_embed.mode: embed`)**: in addition to the clickable Figma link above, inline the UI design image into the description so it renders in the ticket body. Resolve the image source by this priority, then upload + inline via `--jira-attach-image` (uploads the PNG as a Jira attachment, then appends an ADF `media` block under the `figma_embed.heading` heading to the description over Jira REST):
+  1. **Reuse the design image already in the Story's source (preferred)**: when the Story carries a design image produced upstream (the PRD / Story-list design field already holds a local design PNG with its screen↔Story mapping resolved), take that same local PNG directly — don't re-export from Figma. This keeps the ticket image identical to the one reviewed in the requirements doc and avoids re-identifying the node.
+  2. **Export from the Figma node (fallback)**: when the Story has no upstream design image but does carry a Figma link, export the mapped node(s) to local PNG via the Figma image-download capability (`download_figma_images`, scale per `figma_embed.png_scale`). The node is identified in this order: (a) a precise `node-id` in the link (URL `1-3` ⇒ node `1:3`) is used directly; (b) a file-level link with no resolved screen↔Story mapping is **not** guessed — read the file's board structure, propose the most likely board(s) for this Story (from its summary / description / AC) with the reasoning, and have the user confirm the node before export; don't auto-pick and inline.
+
+  Idempotent: same filename reuses the attachment, same media id is not re-inlined. When `figma_embed` is absent or `mode: link`, skip this and keep link-only. If no image source resolves, or export / upload fails, keep the clickable Figma link and note the image gap in the report — do not block ticket creation.
+
+```bash
+python .cursor/skills/user-story-publish/scripts/upload_confluence_v2.py --jira-attach-image --issue "<ticket key>" --image "<local PNG path>" --embed-heading "UI Design"
+```
+
+**Supplement images on an already-created Story (side entry, same embed path)**: when the user asks to add / supplement a design image onto a Story that already exists — including one that never went through this creation flow and therefore has no recorded screen↔Story mapping — don't create a new ticket and don't rewrite other fields. Steps, reusing everything above:
+
+1. Gate on `figma_embed.mode: embed` (same as the creation path). On `link` or absent, there's no inline capability — write / keep the clickable Figma link only and say so.
+2. Read the target Story's summary / description / AC via `getJiraIssue` (`responseContentFormat: "markdown"`) to ground the match.
+3. Resolve the node(s) by the priority above (reuse upstream image → precise `node-id` → file-level link ⇒ read board structure, **recommend the most likely board(s) with a one-line reason each, and have the user confirm** before export). When the user names a node-id / board, use it as given and skip the recommendation.
+4. Export per `figma_embed.png_scale`, then attach + inline via `--jira-attach-image` under the `figma_embed.heading` heading. Idempotent, so a rerun is safe.
+5. Ensure the clickable Figma link also exists in the back-link subsection (add it if missing per the `figma` landing spec above).
+
+This side entry is team-agnostic — it is driven entirely by `figma_embed`, so it works for any team whose profile sets `mode: embed`.
+
 - **`tech_solution` — already landed by the tech-solution publishing step (don't re-write by default)**: the tech-solution back-link is written as a Jira **Web remote link** by the tech-solution publishing step itself (right after it publishes detail/spike to Confluence), so this step does **not** write it by default. Only as a **fallback** — when that step reported the remote-link write as failed/pending — create it here via the publish script's `--jira-remote-link` mode over Jira REST (idempotent by `globalId`, so even if it was already written a re-run is a safe `action=update`, no duplicate; credentials reused from `confluenceRest`):
 
 ```bash
@@ -176,10 +203,11 @@ Don't auto-transition forward; the schedule is a PO decision.
 
 | Rule | Description |
 |------|------|
-| MCP-only channel | Create/edit tickets only via MCP `createJiraIssue` / `editJiraIssue`; REST API, temporary scripts, and shell subagents are forbidden. Sole exception: Jira Web remote links (external URL in the Links area), which MCP can't write, go through the publish script's `--jira-remote-link` REST mode |
+| MCP-only channel | Create/edit tickets only via MCP `createJiraIssue` / `editJiraIssue`; REST API, temporary scripts, and shell subagents are forbidden. Exceptions (MCP can't write them): Jira Web remote links (external URL in the Links area) via `--jira-remote-link`, and Figma UI-design image attach + ADF-media inline via `--jira-attach-image` (only when `figma_embed.mode: embed`) |
 | Batch creation needs PO confirmation | Don't execute without confirmation |
 | Don't delete or restructure fields | Only fill values, establish links, add comments; don't change field structure |
 | Skip if it exists | Don't overwrite manual edits |
+| Image supplement is a bounded edit | Supplementing a Figma design image onto an existing Story is the one sanctioned edit on an already-created ticket: it touches only the attachment + the `figma_embed.heading` image block (and adds a missing Figma back-link), never rewrites other fields. Requires `figma_embed.mode: embed`; file-level links with no mapping need user confirmation of the node first (per S5) |
 | Stop on failure | On partial failure report the created list, don't retry the succeeded ones |
 | Sensitive-info block | A hit on real secrets / real member IDs stops; don't redact and continue |
 | Don't estimate | Leave any field requiring human estimation empty |
@@ -212,6 +240,7 @@ Created {n} Stories (skipped {m} duplicates)
 | Back-link renders as plain text (`[title](url)` or escaped `\[`) | Rewrite the whole description via `editJiraIssue` with `contentFormat: "markdown"` |
 | Rendered body shows stray `}` / `{}}` next to a code term | Caused by nested Wiki braces around a brace-bearing snippet (`{{swazzler { }}}`). Rewrite that term as a single backtick pair with literal braces (`` `swazzler { }` ``), then `editJiraIssue` with `contentFormat: "markdown"` |
 | Web remote link `ok=false` (script) | Fix per the HTTP status in the result JSON (auth / issue key / URL) and rerun; it's idempotent by `globalId`, so a rerun won't duplicate. If it still fails, keep the description-subsection back-link and note the remote-link gap in the report |
+| Figma image attach/inline `ok=false` (`--jira-attach-image`) | Check the result JSON `uploads[].error` / `embed.error`: file-not-found ⇒ re-resolve the image source first — reuse the upstream design PNG from the Story's source if present, otherwise re-export the Figma node to PNG (for a file-level link with no resolved mapping, have the user confirm the node, don't guess); attachment 4xx ⇒ fix issue key / auth; description PUT fail ⇒ retry. Idempotent (same filename reuses attachment, same media id not re-inlined), so a rerun is safe. If it still fails, keep the clickable Figma link and note the image gap in the report — don't block creation |
 | External URL rejected by "Linked Work Items" | Expected — Issue Links only accept issue↔issue; put the external URL in Web links via `--jira-remote-link` instead |
 | Missing team constant | Stop, state the missing item and the corresponding owner to complete it |
 

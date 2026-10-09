@@ -1036,6 +1036,220 @@ def create_jira_remote_link(base_url, auth, issue_key, link_url, link_title,
     return result
 
 
+# ============================= Jira 附件图片内嵌（ADF media） =============================
+def _jira_site(base_url):
+    """由 Confluence base_url 推出 Jira 站点根（去掉末尾 /wiki）。"""
+    return re.sub(r"/wiki/?$", "", base_url)
+
+
+def _guess_image_content_type(path):
+    ext = os.path.splitext(path)[1].lower()
+    return {
+        ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+        ".gif": "image/gif", ".svg": "image/svg+xml", ".webp": "image/webp",
+    }.get(ext, "application/octet-stream")
+
+
+def _jira_find_attachment(site, auth, issue_key, filename):
+    """在工单现有附件中按文件名查已存在的同名附件，返回 (attachment_id, None) 或 (None, None)。
+
+    幂等用：同名附件已存在则复用其 attachment id（media UUID 由 _resolve_media_uuid 另解析）。
+    """
+    key = urllib.parse.quote(issue_key)
+    st, data = api("GET", f"{site}/rest/api/3/issue/{key}?fields=attachment", auth)
+    if st == 200 and isinstance(data, dict):
+        for att in (data.get("fields") or {}).get("attachment") or []:
+            if att.get("filename") == filename:
+                return att.get("id"), None
+    return None, None
+
+
+def jira_upload_attachment(site, auth, issue_key, file_path, filename, content_type):
+    """把本地图片作为附件上传到 Jira 工单（REST，幂等：同名已存在则复用，不重复上传）。
+
+    返回 dict：{"ok", "attachment_id", "media_id", "action", "error"}。
+    media_id 是 ADF media 节点所需的 Media Services UUID（≠ attachment id），
+    由 _resolve_media_uuid 从 attachment content 的 302 重定向解析。
+    """
+    existing_id, _ = _jira_find_attachment(site, auth, issue_key, filename)
+    if existing_id:
+        media_uuid = _resolve_media_uuid(site, auth, existing_id)
+        if media_uuid:
+            return {"ok": True, "attachment_id": existing_id, "media_id": media_uuid,
+                    "action": "reuse"}
+        return {"ok": False, "attachment_id": existing_id, "media_id": None,
+                "action": "reuse", "error": "无法解析已存在附件的 media UUID"}
+    key = urllib.parse.quote(issue_key)
+    boundary, body = _multipart_body(file_path, filename, content_type)
+    st, data = api("POST", f"{site}/rest/api/3/issue/{key}/attachments", auth,
+                   body=body,
+                   headers={"X-Atlassian-Token": "no-check",
+                            "Content-Type": f"multipart/form-data; boundary={boundary}"})
+    if st in (200, 201) and isinstance(data, list) and data:
+        att = data[0]
+        att_id = att.get("id")
+        media_uuid = _resolve_media_uuid(site, auth, att_id)
+        if not media_uuid:
+            return {"ok": False, "attachment_id": att_id, "media_id": None,
+                    "action": "create", "error": "附件已上传但无法解析 media UUID"}
+        return {"ok": True, "attachment_id": att_id, "media_id": media_uuid,
+                "action": "create"}
+    return {"ok": False, "attachment_id": None, "media_id": None, "action": "failed",
+            "error": f"attachment upload failed: {st} {data}"}
+
+
+def _resolve_media_uuid(site, auth, attachment_id):
+    """把 Jira attachment id 解析为 ADF media 节点所需的 Media Services UUID。
+
+    背景：ADF `media` 节点的 `id` 不是 Jira attachment 的数字 id，而是底层 Media
+    Services 的 UUID。直接用 attachment id 会报 400 ATTACHMENT_VALIDATION_ERROR。
+    做法：请求 `GET /rest/api/3/attachment/content/{id}`，它会 302 重定向到带 UUID 的
+    media URL（形如 .../file/<UUID>/...），从 Location 里抽出 UUID。解析失败返回 None。
+    """
+    if not attachment_id:
+        return None
+    url = f"{site}/rest/api/3/attachment/content/{urllib.parse.quote(str(attachment_id))}"
+    req = urllib.request.Request(url, method="GET",
+                                 headers={"Authorization": auth, "Accept": "application/json"})
+    ctx = ssl.create_default_context()
+
+    class _NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, headers, newurl):
+            return None  # 不跟随，手动取 Location
+
+    opener = urllib.request.build_opener(_NoRedirect, urllib.request.HTTPSHandler(context=ctx))
+    location = None
+    try:
+        try:
+            resp = opener.open(req, timeout=60)
+            # 没有重定向（少见）：尝试从最终 URL 里抽 UUID
+            location = resp.geturl()
+        except urllib.error.HTTPError as e:
+            if e.code in (301, 302, 303, 307, 308):
+                location = e.headers.get("Location")
+            else:
+                return None
+    except Exception:
+        return None
+    if not location:
+        return None
+    m = re.search(r"/file/([0-9a-fA-F-]{36})", location)
+    if m:
+        return m.group(1)
+    # 兜底：某些站点把 UUID 放在其他路径段，取第一个像 UUID 的子串
+    m2 = re.search(r"([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})", location)
+    return m2.group(1) if m2 else None
+
+
+def _adf_media_block(media_items):
+    """构造一个 ADF mediaSingle/mediaGroup 块，内嵌已上传的附件图片。
+
+    media_items: [{"media_id","alt"}...]。每张图单独一个 mediaSingle（纵向排列、整行展示）。
+    返回 ADF content 节点列表。
+    """
+    blocks = []
+    for it in media_items:
+        blocks.append({
+            "type": "mediaSingle",
+            "attrs": {"layout": "center"},
+            "content": [{
+                "type": "media",
+                "attrs": {"id": str(it["media_id"]), "type": "file",
+                          "collection": "", **({"alt": it["alt"]} if it.get("alt") else {})},
+            }],
+        })
+    return blocks
+
+
+def jira_embed_images_in_description(site, auth, issue_key, media_items,
+                                     heading="UI Design"):
+    """把已上传附件的图片以 ADF media 节点追加内嵌到工单描述末尾（REST 读 ADF→追加→PUT）。
+
+    读取工单当前 description（ADF），在末尾追加一个标题段 + 每张图的 mediaSingle 块，
+    再整体 PUT 回去。幂等：若描述里已存在相同 media_id 的 media 节点则跳过该张。
+    返回 dict：{"ok","action","embedded","skipped","error"}。
+    """
+    key = urllib.parse.quote(issue_key)
+    st, data = api("GET", f"{site}/rest/api/3/issue/{key}?fields=description", auth)
+    if st != 200 or not isinstance(data, dict):
+        return {"ok": False, "action": "read_failed", "error": f"read description: {st} {data}"}
+    desc = (data.get("fields") or {}).get("description")
+    if not isinstance(desc, dict):
+        desc = {"type": "doc", "version": 1, "content": []}
+    content = desc.get("content") or []
+    desc["content"] = content
+    desc.setdefault("type", "doc")
+    desc.setdefault("version", 1)
+    # 收集描述里已存在的 media id，做幂等去重
+    existing_ids = set()
+    def _walk(nodes):
+        for nd in nodes:
+            if isinstance(nd, dict):
+                if nd.get("type") == "media":
+                    mid = (nd.get("attrs") or {}).get("id")
+                    if mid:
+                        existing_ids.add(str(mid))
+                _walk(nd.get("content") or [])
+    _walk(content)
+    to_embed = [it for it in media_items if str(it["media_id"]) not in existing_ids]
+    skipped = [it["media_id"] for it in media_items if str(it["media_id"]) in existing_ids]
+    if not to_embed:
+        return {"ok": True, "action": "noop", "embedded": [], "skipped": skipped}
+    # 若还没有同名标题段则追加一个 heading
+    has_heading = any(
+        nd.get("type") == "heading" and
+        any((c.get("text") == heading) for c in (nd.get("content") or []))
+        for nd in content if isinstance(nd, dict))
+    if heading and not has_heading:
+        content.append({"type": "heading", "attrs": {"level": 3},
+                        "content": [{"type": "text", "text": heading}]})
+    content.extend(_adf_media_block(to_embed))
+    payload = {"fields": {"description": desc}}
+    st2, data2 = api("PUT", f"{site}/rest/api/3/issue/{key}", auth, body=payload)
+    if st2 not in (200, 204):
+        return {"ok": False, "action": "update_failed",
+                "error": f"description PUT failed: {st2} {data2}"}
+    return {"ok": True, "action": "update",
+            "embedded": [it["media_id"] for it in to_embed], "skipped": skipped}
+
+
+def jira_attach_and_embed_images(base_url, auth, issue_key, images, heading="UI Design"):
+    """一站式：把一组本地图片上传为工单附件并内嵌进描述。
+
+    images: [{"path","filename"(可选),"alt"(可选)}...]。filename 省略时取 path 的 basename。
+    返回聚合结果 dict。任一张上传失败即标记 ok=False，但已成功的仍会内嵌。
+    """
+    site = _jira_site(base_url)
+    result = {"mode": "jira_attach_image", "issue": issue_key, "uploads": [], "heading": heading}
+    media_items = []
+    all_ok = True
+    for img in images:
+        path = img["path"]
+        if not os.path.isfile(path):
+            result["uploads"].append({"path": path, "ok": False, "error": "file not found"})
+            all_ok = False
+            continue
+        filename = img.get("filename") or os.path.basename(path)
+        ctype = _guess_image_content_type(path)
+        up = jira_upload_attachment(site, auth, issue_key, path, filename, ctype)
+        up_entry = {"path": path, "filename": filename, **up}
+        result["uploads"].append(up_entry)
+        if up.get("ok") and up.get("media_id"):
+            media_items.append({"media_id": up["media_id"], "alt": img.get("alt") or filename})
+        else:
+            all_ok = False
+    if media_items:
+        emb = jira_embed_images_in_description(site, auth, issue_key, media_items, heading)
+        result["embed"] = emb
+        if not emb.get("ok"):
+            all_ok = False
+    else:
+        result["embed"] = {"ok": False, "action": "noop", "error": "no image uploaded"}
+        all_ok = False
+    result["ok"] = all_ok
+    return result
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--md", default=None)
@@ -1096,6 +1310,19 @@ def main():
                     help="Jira 远程链接模式：幂等键（默认由 link-url 的 pageId 推导为 confluence-page-{id}）。")
     ap.add_argument("--icon-url", dest="icon_url", default=None,
                     help="Jira 远程链接模式：链接小图标 URL（可选，如 Confluence favicon）。")
+    # ---- Jira 附件图片内嵌模式：把本地图片上传为工单附件并以 ADF media 内嵌进描述 ----
+    # 用于 UI 设计图直接出现在工单正文（非仅链接）。Atlassian MCP 无附件写接口，故走 Jira REST
+    # （凭证复用 confluenceRest）。描述为 ADF，用 REST 读回→追加 media 节点→PUT，幂等按 media_id 去重。
+    ap.add_argument("--jira-attach-image", action="store_true",
+                    help="Jira 附件图片内嵌模式：把本地图片作为工单附件上传并内嵌进描述。"
+                         "需配套 --issue 与 --images（JSON 数组）或 --image（可重复）；此模式不使用 --md/--space。")
+    ap.add_argument("--image", dest="images", action="append", default=[],
+                    help="Jira 附件图片内嵌模式：本地图片路径（可重复多次传多张）。")
+    ap.add_argument("--images-json", dest="images_json", default=None,
+                    help="Jira 附件图片内嵌模式：图片清单 JSON 数组，元素形如 "
+                         "{\"path\":...,\"filename\":...,\"alt\":...}；与 --image 二选一（同时给则合并）。")
+    ap.add_argument("--embed-heading", dest="embed_heading", default="UI Design",
+                    help="Jira 附件图片内嵌模式：内嵌图片前插入的标题段文字（默认 UI Design；传空字符串则不加标题）。")
     args = ap.parse_args()
 
     # ---- 回链模式：独立分支，尽早返回，不走发布主流程 ----
@@ -1127,6 +1354,39 @@ def main():
         auth = auth_header(email, token)
         res = create_jira_remote_link(base_url, auth, args.issue, args.link_url, args.link_title,
                                       args.relationship, args.global_id, args.icon_url)
+        print(json.dumps(res, ensure_ascii=False, indent=2))
+        return 0 if res.get("ok") else 1
+
+    # ---- Jira 附件图片内嵌模式：独立分支，尽早返回，不走发布主流程 ----
+    if args.jira_attach_image:
+        if not args.issue:
+            raise SystemExit("Jira 附件图片内嵌模式需提供 --issue")
+        images = []
+        if args.images_json:
+            try:
+                parsed = json.loads(args.images_json)
+            except Exception as e:
+                raise SystemExit(f"--images-json 解析失败：{e}")
+            if not isinstance(parsed, list):
+                raise SystemExit("--images-json 必须是 JSON 数组")
+            for it in parsed:
+                if isinstance(it, str):
+                    images.append({"path": it})
+                elif isinstance(it, dict) and it.get("path"):
+                    images.append({"path": it["path"], "filename": it.get("filename"),
+                                   "alt": it.get("alt")})
+                else:
+                    raise SystemExit(f"--images-json 元素无效：{it}")
+        for p in args.images:
+            images.append({"path": p})
+        if not images:
+            raise SystemExit("Jira 附件图片内嵌模式需提供 --image 或 --images-json 指定至少一张图片")
+        here = os.path.dirname(os.path.abspath(__file__))
+        mcp_path = args.mcp or os.path.abspath(os.path.join(here, "..", "..", "..", "mcp.json"))
+        base_url, email, token = load_creds(mcp_path)
+        auth = auth_header(email, token)
+        heading = args.embed_heading if args.embed_heading != "" else ""
+        res = jira_attach_and_embed_images(base_url, auth, args.issue, images, heading)
         print(json.dumps(res, ensure_ascii=False, indent=2))
         return 0 if res.get("ok") else 1
 

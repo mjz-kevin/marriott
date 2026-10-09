@@ -7,7 +7,8 @@ mcp:
     host: https://marriottcloud.atlassian.net
     project_key: CNAPP
     issue_type: "故事"
-    initial_status: backlog
+    initial_status: BACKLOG
+    workflow: ["BACKLOG", "ANALYSIS", "REFINEMENT", "PLAN", "正在进行", "GO LIVE", "已完成"]   # CNAPP 故事(Story)真实工作流状态序列（名称逐字对齐 Jira；正在进行/已完成为本地化显示名）；dev-agent push 成功后向前流转
     agile_team: "Team Lóng"          # 建单默认 Agile Team：所有 CNAPP scrum 团队接的票必选 Team Lóng
     labels:                          # 标签枚举，来源见 source；大小写敏感
       source: "https://marriottcloud.atlassian.net/wiki/spaces/DBU4/pages/3386999508"
@@ -46,6 +47,10 @@ mcp:
       ios: "[iOS]"                   # iOS 票 summary 以 [iOS] 开头
       note: "按票的平台在 summary 前加 [Android]/[iOS]；平台不明时先判定平台再建单，不臆测。用户已自带前缀则不重复添加。跨端/无关平台按需省略。"
     links: [prd, figma, tech_solution]
+    figma_embed:                     # Figma UI 设计在工单里的落地方式：link=仅可点击链接（历史默认）；embed=链接 + 把设计节点导出为 PNG 作附件内嵌进描述
+      mode: embed                    # embed=建单时导出 Figma 节点为 PNG、上传为 Jira 附件、以 ADF media 内嵌进描述（经 Jira REST，MCP-only 的受控例外）；link=退回仅链接
+      png_scale: 2                   # 导出 PNG 的缩放倍数（download_figma_images 的 pngScale）；越大越清晰、文件越大
+      heading: "UI Design"           # 内嵌图片前插入的描述标题段文字
 
   confluence:
     base_url: https://marriottcloud.atlassian.net/wiki
