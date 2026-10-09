@@ -6,7 +6,7 @@ description: >-
   from the team config, idempotently create or update the page by title, keep the body complete,
   and return the page URL.
   Use when the user asks to publish, sync, or push a PRD to Confluence;
-  triggers: PRD 上传 / 发布 PRD / 同步到 Confluence / publish PRD.
+  triggers: publish PRD / PRD 上传 / 发布 PRD / 同步到 Confluence.
 metadata:
   agent: Eval Agent
 ---

@@ -1,194 +1,196 @@
 ---
 name: feature-branch
 description: >-
-  基于锁定的基线 commit 创建并检出唯一的 AI Feature 分支：按团队 Branching Strategy 拼短名
-  （prefix/Story-key-Xxx-Xxx），同一 Story 只维护一条（幂等）。本地从锁定 SHA 建分支后，
-  询问用户是否 git push -u；未同意不推。远端已存在则复用。当基线已检出、开始写代码之前使用；
-  触发词：创建分支 / 建 Feature 分支 / 新建分支 / AI 分支 / 多人分支 / feature branch / create branch。
+  Create and check out the unique AI Feature branch from the locked baseline commit: build the short
+  name per the team Branching Strategy (prefix/Story-key-Xxx-Xxx), maintaining only one per Story
+  (idempotent). After creating the branch locally from the locked SHA, ask the user whether to
+  git push -u; don't push without consent. If it already exists remotely, reuse it. Use when the
+  baseline is checked out, before writing code;
+  triggers: feature branch / create branch / 创建分支 / 建 Feature 分支 / 新建分支 / AI 分支 / 多人分支.
 metadata:
   agent: Dev Agent
 ---
 
-# feature-branch — 唯一的 AI Feature 分支
+# feature-branch — the unique AI Feature branch
 
-为一个 Story 从锁定的 base commit 创建其唯一的 AI 专属 Feature 分支、本地检出，并记录与明细技术方案及任务清单的关联。「唯一」指一个 Story 只有一个 AI 分支 — 复入时复用而非新建第二个。
+For a Story, create its unique AI-only Feature branch from the locked base commit, check it out locally, and record its association with the detailed tech solution and task list. "Unique" means a Story has only one AI branch — on re-entry, reuse it rather than create a second one.
 
-| 维度 | 说明 |
+| Dimension | Description |
 |------|------|
-| 定位 | 创建＋检出唯一 AI Feature 分支（幂等），并关联技术方案＋任务清单 |
-| 输入 | 锁定的 base commit SHA（来自检出基线环节）＋Story＋已确认的明细技术方案 |
-| 产出 | 已检出的 AI Feature 分支（新建／复用）＋所关联的技术方案与任务清单记录 |
-| 边界 | 只建分支／检出并记录关联；不写功能代码、不开 PR、不 force-push、未经用户同意不 push |
+| Purpose | Create + check out the unique AI Feature branch (idempotent), and associate it with the tech solution + task list |
+| Input | The locked base commit SHA (from the baseline-checkout step) + the Story + the confirmed detailed tech solution |
+| Output | The checked-out AI Feature branch (newly created / reused) + the associated tech-solution and task-list record |
+| Scope | Only creates/checks out the branch and records associations; doesn't write feature code, open a PR, force-push, or push without the user's consent |
 
-## 0. 配置取值
+## 0. Config values
 
-`{profile}` 为当前 profile 文件名（不含扩展名，如 `app-prod` / `cms-test`），由调用方经 profile 选择环节解析并传入（`profile.py resolve` 给出其绝对路径）；未传入或文件不存在 → 停止，不臆测。
+`{profile}` is the current profile file name (without extension, e.g. `app-prod` / `cms-test`), resolved and passed in by the caller via the profile-selection step (`profile.py resolve` gives its absolute path); if it is not passed in or the file does not exist → stop, don't guess.
 
-| 用途 | 配置键 |
+| Purpose | Config key |
 |------|----|
-| GHES 域名 | `profiles/{profile}.yaml` → `mcp.github.host` |
-| 目标仓库（`owner/name`） | `profiles/{profile}.yaml` → `mcp.github.repos.*.repo` — 按 Story 的端／仓库选取 |
-| 基线分支（base 兜底） | `profiles/{profile}.yaml` → `mcp.github.repos.*.base` — 该仓库的基线分支 |
-| 分支前缀 | `profiles/{profile}.yaml` → `code.branch.prefix` |
-| 分支名模板 | `profiles/{profile}.yaml` → `code.branch.template`（占位符 `{story_key}` / `{slug}`） |
+| GHES host | `profiles/{profile}.yaml` → `mcp.github.host` |
+| Target repo (`owner/name`) | `profiles/{profile}.yaml` → `mcp.github.repos.*.repo` — selected by the Story's end / repo |
+| Baseline branch (base fallback) | `profiles/{profile}.yaml` → `mcp.github.repos.*.base` — that repo's baseline branch |
+| Branch prefix | `profiles/{profile}.yaml` → `code.branch.prefix` |
+| Branch-name template | `profiles/{profile}.yaml` → `code.branch.template` (placeholders `{story_key}` / `{slug}`) |
 
-所需配置键缺失（TBD）→ 停止并要求补齐。
+Required config keys missing (TBD) → stop and ask for them.
 
-## 1. 前置
+## 1. Prerequisites
 
-| # | 条件 |
+| # | Condition |
 |---|------|
-| 1 | 已有锁定的 base commit SHA（来自检出基线环节）；缺失则先做基线检出 |
-| 2 | Story key 已知，且明细技术方案＋任务清单已确认 |
-| 3 | GitHub MCP 鉴权可用（唯一性扫描依赖它；`mcp_auth` 失败则停止） |
-| 4 | 仓库本地工作目录由调用方运行时提供，且本机 git 能访问 `origin` |
+| 1 | The locked base commit SHA exists (from the baseline-checkout step); if missing, do baseline checkout first |
+| 2 | The Story key is known, and the detailed tech solution + task list are confirmed |
+| 3 | GitHub MCP auth is available (the uniqueness scan depends on it; if `mcp_auth` fails, stop) |
+| 4 | The repo's local working directory is provided by the caller at runtime, and local git can reach `origin` |
 
-## 2. 工作流
+## 2. Workflow
 
 ```
-- S1 按模板拼分支名（前缀＋Story key＋slug）
-- S2 唯一性检查：远端＋本地是否已有该 Story 的 AI 分支（幂等）
-- S3 本地从锁定 SHA 建分支，或检出已有分支
-- S4 新建后询问用户是否推远端；同意才校验并 git push -u
-- S5 记录关联：明细技术方案＋其任务清单
-- S6 回报
+- S1 Build the branch name per the template (prefix + Story key + slug)
+- S2 Uniqueness check: whether an AI branch for this Story already exists remotely + locally (idempotent)
+- S3 Create the branch locally from the locked SHA, or check out the existing branch
+- S4 After creating, ask the user whether to push to the remote; verify and git push -u only on consent
+- S5 Record associations: the detailed tech solution + its task list
+- S6 Report
 ```
 
-> 双端 Story：APP 一个功能可能同时改 iOS 与 Android。本 skill 单次只为单端／单仓库建一条分支；双端 Story 按端分两次执行，各自独立的 base SHA、分支与验证。
+> Dual-end Story: one APP feature may change both iOS and Android. This skill creates only one branch for a single end / single repo per run; a dual-end Story is run twice, once per end, each with its own base SHA, branch, and verification.
 
-### S1 拼分支名
+### S1 Build the branch name
 
-用以下值渲染 `code.branch.template`（详见 [branch-naming.md](references/branch-naming.md)）：
+Render `code.branch.template` with the following values (see [branch-naming.md](references/branch-naming.md) for detail):
 
-- `{prefix}`：`code.branch.prefix`（AI 命名空间，与人工 Feature 隔离）。
-- `{story_key}`：Jira Story key（如 `GCD-404`），保持原大小写；仅当模板要求小写时转小写。
-- `{slug}`：**2–3 个 Title-Case 词**（`Xxx-Xxx`），取摘要里的产品／功能主题，**不是**整句摘要的 kebab-case。例：摘要 “Deliver CMS content model … for MBY Audio page” → `Mby-Audio`，完整名 `feat-ai/GCD-404-Mby-Audio`。
+- `{prefix}`: `code.branch.prefix` (the AI namespace, isolated from human Features).
+- `{story_key}`: the Jira Story key (e.g. `GCD-404`), keeping the original case; lowercase it only if the template requires lowercase.
+- `{slug}`: **2–3 Title-Case words** (`Xxx-Xxx`), taken from the product/feature theme in the summary, **not** the kebab-case of the whole summary sentence. Example: summary "Deliver CMS content model … for MBY Audio page" → `Mby-Audio`, full name `feat-ai/GCD-404-Mby-Audio`.
 
-禁止把整句摘要拼进分支名。唯一性靠 `{story_key}`，slug 只为可读。
+Don't splice the whole summary sentence into the branch name. Uniqueness relies on `{story_key}`; the slug is only for readability.
 
-### S1b 多人（不另建第二条 Story 级 AI 分支）
+### S1b Multiple people (don't create a second Story-level AI branch)
 
-不同 Story 并行 → 各开各的 AI 分支。同一 Story 多人 → **共用**本 skill 维护的那一条（pull / rebase）。子任务短分支不由本 skill 创建。规则表见 [branch-naming.md](references/branch-naming.md)。
+Different Stories in parallel → each opens its own AI branch. Multiple people on the same Story → **share** the one this skill maintains (pull / rebase). Short sub-task branches are not created by this skill. See the rule table in [branch-naming.md](references/branch-naming.md).
 
-### S2 唯一性检查（幂等）
+### S2 Uniqueness check (idempotent)
 
-先扫远端，再扫本地（用户上次选「暂不推送」时，远端没有、本地已有）：
+Scan the remote first, then the local (when the user last chose "don't push for now," the remote has none but the local already has one):
 
-1. **远端精确名**：GitHub MCP `get_branch`（`owner`、`repo`、`branch = 分支名`）。命中记入远端匹配；404 不算。
-2. **远端兜底**：`list_branches` 遍历分页（`per_page=100`，逐页翻至末页，**不可只看第 1 页**），匹配所有以 `code.branch.prefix` 开头且包含该 `{story_key}` 的分支。
-3. **本地**：`git for-each-ref --format='%(refname:short)' refs/heads/`，同样按前缀＋`{story_key}` 匹配。
+1. **Remote exact name**: GitHub MCP `get_branch` (`owner`, `repo`, `branch` = the branch name). A hit counts as a remote match; a 404 doesn't count.
+2. **Remote fallback**: `list_branches` traversing all pages (`per_page=100`, page through to the last page, **don't look at only page 1**), matching all branches that start with `code.branch.prefix` and contain this `{story_key}`.
+3. **Local**: `git for-each-ref --format='%(refname:short)' refs/heads/`, matching by prefix + `{story_key}` likewise.
 
-以远端匹配数 `R`、本地匹配数 `L` 决定动作（同名远端+本地算一条）：
+Decide the action by the remote match count `R` and local match count `L` (a remote+local pair with the same name counts as one):
 
-| R | L | 动作 |
+| R | L | Action |
 |---|---|------|
-| 0 | 0 | 新建（S3 新建 → S4 询问是否推） |
-| 0 | 1 | 复用该本地分支（S3 检出；S4 询问是否推） |
-| 1 | 0 或 1（同名） | 复用远端 — S3 复用路径，**跳过 S4**（远端已在，不必再问） |
-| ≥2（任一侧）或两侧名字不一致 | 停止并交用户 — 一个 Story 存在多个 AI 分支违反唯一性 |
+| 0 | 0 | Create (S3 create → S4 ask whether to push) |
+| 0 | 1 | Reuse that local branch (S3 check out; S4 ask whether to push) |
+| 1 | 0 or 1 (same name) | Reuse the remote — S3 reuse path, **skip S4** (the remote already exists, no need to ask again) |
+| ≥2 (either side) or names differ on the two sides | Stop and hand to the user — a Story having multiple AI branches violates uniqueness |
 
-> 唯一性键是 Story key（非 slug）。`list_branches` 必须翻完所有分页；漏页会误判 0 匹配而重复建分支。
+> The uniqueness key is the Story key (not the slug). `list_branches` must page through all pages; a missed page would misjudge 0 matches and create a duplicate branch.
 
-### S3 本地建或检出
+### S3 Create or check out locally
 
-**新建（R=0 且 L=0）：** 从锁定的 base SHA 建本地分支。本地已有同名分支且指向他处 → 停止并交用户，不 `reset`。
+**Create (R=0 and L=0):** create the local branch from the locked base SHA. If a local branch with the same name already exists and points elsewhere → stop and hand to the user, don't `reset`.
 
 ```bash
 git checkout -b {branch_name} {base_sha}
 ```
 
-仅当未传入锁定 SHA 时，才回退到该仓库的 `base` 分支并注明。
+Only when no locked SHA was passed in, fall back to the repo's `base` branch and note it.
 
-**复用远端（R=1）：** 检出已有远端分支，不新建第二条。
+**Reuse the remote (R=1):** check out the existing remote branch, don't create a second one.
 
 ```bash
 git fetch origin {existing_branch}
 git checkout {existing_branch}
 ```
 
-**复用本地（R=0 且 L=1）：** `git checkout {existing_local}`。不从锁定 SHA 重建；已有本地提交须保留。
+**Reuse the local (R=0 and L=1):** `git checkout {existing_local}`. Don't rebuild from the locked SHA; existing local commits must be preserved.
 
-交接给编码前确认 HEAD 位于该 Feature 分支。
+Before handing off to coding, confirm HEAD is on this Feature branch.
 
-### S4 询问后发布远端
+### S4 Publish to the remote after asking
 
-仅「远端尚无官方 ref」时执行（新建，或复用未推送的本地分支）。远端已存在则跳过，不再询问。
+Run only when "the remote has no official ref yet" (newly created, or reusing an unpushed local branch). If the remote already exists, skip and don't ask again.
 
-1. **先问再推。** 本地就绪后询问用户是否推送到远端。未在本回合明确同意 → **不 push**，进入 S5，产出标「仅本地」。上一轮的「创建分支」不等于同意推送。
-2. **用户同意后才校验并推**：`git rev-parse HEAD` 必须等于锁定的 base SHA（复用已有本地提交时，向用户确认即将推送的 SHA）。不相等且用户未确认 → 停止，不 push。
+1. **Ask before pushing.** After the local is ready, ask the user whether to push to the remote. Without explicit consent in this turn → **don't push**, go to S5, and mark the output "local-only." The previous turn's "create branch" doesn't equal consent to push.
+2. **Verify and push only after the user consents**: `git rev-parse HEAD` must equal the locked base SHA (when reusing existing local commits, confirm the SHA about to be pushed with the user). Not equal and the user hasn't confirmed → stop, don't push.
 
 ```bash
 git push -u origin {branch_name}
 ```
 
-3. **禁止** force-push，**禁止**把未校验、未同意的本地分支顶成官方远端。
-4. **本机 `git push` 失败**（凭据 / 网络与 MCP 不同源）：改用 GitHub MCP `create_branch`（`from` = 当前已确认 SHA）兜底，再 `git fetch` 并设置 upstream。仍失败则回报并停止。
-5. **远端提示 ref 已存在**（竞态）：按「复用」处理 — fetch + checkout，不报错、不覆盖。
+3. **Never** force-push, and **never** promote an unverified, unconsented local branch to the official remote.
+4. **Local `git push` fails** (credentials / network differ from the MCP source): fall back to GitHub MCP `create_branch` (`from` = the currently confirmed SHA), then `git fetch` and set the upstream. If it still fails, report and stop.
+5. **The remote reports the ref already exists** (race): handle as "reuse" — fetch + checkout, don't error, don't overwrite.
 
-通道细则见 [branch-naming.md](references/branch-naming.md)。
+See [branch-naming.md](references/branch-naming.md) for channel details.
 
-### S5 记录关联
+### S5 Record associations
 
-记录（供开发／验证环节消费）该分支与以下两者的关联：
-- **明细技术方案**（Story 级详细设计，实现基线）。
-- 其**任务清单**（明细方案中的任务拆解 — 任务验收的比对基线）。
+Record (for the development / verification steps to consume) this branch's association with the following two:
+- The **detailed tech solution** (the Story-level detailed design, the implementation baseline).
+- Its **task list** (the task breakdown in the detailed solution — the comparison baseline for task acceptance).
 
-这是交给下游的关联记录，不是写入 Jira/Confluence（本环节无此写权限）。
+This is an association record handed downstream, not a write to Jira/Confluence (this step has no such write permission).
 
-## 3. 强制规则
+## 3. Mandatory rules
 
-| 规则 | 说明 |
+| Rule | Description |
 |------|------|
-| 一 Story 一 AI 分支 | 绝不为同一 Story 新建第二个 Story 级 AI 分支 — 复入时复用；同一 Story 多人共用这一条 |
-| 短名 Xxx-Xxx | `{slug}` 为 2–3 个 Title-Case 词，禁止整句摘要 kebab-case |
-| 唯一性键＝Story key | 按前缀＋Story key 匹配，非按 slug；摘要变动不得派生重复 |
-| 唯一性检查须翻完分页 | 远端 `list_branches` 必须遍历所有分页；同时扫本地 refs，避免「未推送」被当成 0 匹配 |
-| 官方 ref 钉死锁定 SHA | 用户同意推送后，远端 ref 必须等于已确认的 SHA（新建默认为锁定 base SHA） |
-| 先问再 push | 本地新建后必须询问；未在本回合明确同意则不 push。禁止 force-push |
-| 发布走 git，MCP 是兜底 | 查远端走 GitHub MCP；用户同意后优先 `git push -u`；仅本机推不了时用 MCP `create_branch` |
-| AI 专属命名空间 | 分支保持在 `code.branch.prefix` 下，与人工 `{story_key}-Xxx-Xxx` 隔离 |
-| 不硬编码 | 仓库、前缀、模板取自团队配置 |
+| One Story, one AI branch | Never create a second Story-level AI branch for the same Story — reuse on re-entry; multiple people on the same Story share this one |
+| Short name Xxx-Xxx | `{slug}` is 2–3 Title-Case words; the whole-summary kebab-case is forbidden |
+| Uniqueness key = Story key | Match by prefix + Story key, not by slug; a summary change must not derive a duplicate |
+| The uniqueness check must page through all pages | Remote `list_branches` must traverse all pages; also scan local refs so an "unpushed" branch isn't treated as 0 matches |
+| The official ref pins the locked SHA | After the user consents to push, the remote ref must equal the confirmed SHA (default to the locked base SHA when creating) |
+| Ask before push | After creating locally, you must ask; don't push without explicit consent in this turn. Force-push is forbidden |
+| Publish via git, MCP is the fallback | Query the remote via GitHub MCP; after the user consents, prefer `git push -u`; use MCP `create_branch` only when local can't push |
+| AI-only namespace | Keep the branch under `code.branch.prefix`, isolated from human `{story_key}-Xxx-Xxx` |
+| Don't hardcode | The repo, prefix, and template come from the team config |
 
-## 4. 质量门禁
+## 4. Quality gates
 
-- 分支名由配置模板渲染，且 `{slug}` 为 2–3 个 Title-Case 词（非整句摘要）
-- 该 Story 恰好存在一个 AI 分支（远端和／或本地合计一条；绝无重复）
-- 新建时本地 HEAD 等于锁定的 base SHA（或已注明的基线分支兜底）
-- 本地 HEAD 位于该 Feature 分支；仅当用户同意并推送成功后才跟踪 `origin/{branch_name}`
-- 未同意推送时远端可以没有该分支，产出须标明「仅本地」
-- 已记录明细技术方案＋任务清单关联
+- The branch name is rendered from the config template, and `{slug}` is 2–3 Title-Case words (not the whole summary)
+- Exactly one AI branch exists for this Story (one total across remote and/or local; absolutely no duplicate)
+- On creation the local HEAD equals the locked base SHA (or the noted baseline-branch fallback)
+- The local HEAD is on this Feature branch; it tracks `origin/{branch_name}` only after the user consents and the push succeeds
+- When push isn't consented, the remote may lack this branch, and the output must mark it "local-only"
+- The detailed tech solution + task list association has been recorded
 
-## 5. 输出
+## 5. Output
 
 ```markdown
-Feature 分支就绪：{branch_name}  （{新建 | 复用本地 | 复用远端}）
+Feature branch ready: {branch_name}  ({newly created | reused local | reused remote})
 
-- **仓库**：{owner}/{repo}
-- **Base**：{base_sha 或 base 分支}
-- **远端**：{仅本地待用户确认 | 已发布 git push -u | 已存在复用 | MCP 兜底发布}
-- **关联技术方案**：{明细方案标题 / URL}
-- **关联任务清单**：{任务数} 项（验收基线）
-- **本地 HEAD**：位于 {branch_name}
-- **下一步**：未推送则等用户确认后再 push；已推送则可在此分支上实现代码＋单元测试
+- **Repo**: {owner}/{repo}
+- **Base**: {base_sha or base branch}
+- **Remote**: {local-only awaiting user confirmation | published via git push -u | existing, reused | published via MCP fallback}
+- **Associated tech solution**: {detailed solution title / URL}
+- **Associated task list**: {task count} items (acceptance baseline)
+- **Local HEAD**: on {branch_name}
+- **Next step**: if not pushed, wait for the user's confirmation before pushing; if pushed, implement code + unit tests on this branch
 ```
 
-## 6. 排障
+## 6. Troubleshooting
 
-| 现象 | 处理 |
+| Symptom | Handling |
 |------|------|
-| MCP 鉴权失败 | `mcp_auth` 后重试一次；仍失败则回报（唯一性扫描无法执行） |
-| 一个 Story 出现多个 AI 分支 | 停止并交用户挑选／清理；不臆测用哪个；不建第三条 |
-| 用户要求整句摘要进分支名 | 拒绝，改用 2–3 词 Title-Case slug，并说明对齐团队 Feature 命名 |
-| 本地已有同名分支且 SHA 不符 | 停止并交用户；不 `reset`、不 force-push |
-| `HEAD` ≠ 锁定 SHA | 停止，不 push（除非用户确认要推当前 SHA） |
-| 用户暂不推送 | 保持仅本地；回报中写明远端未发布。他人或其他机器扫不到这条 |
-| `git push` 凭据或网络失败 | MCP `create_branch`（`from` = 已确认 SHA）兜底；再 fetch 并设 upstream |
-| 远端提示 ref 已存在 | 按「复用」处理 — fetch + checkout，不 force-push |
-| 未传入锁定 base SHA | 先做基线检出，或回退到基线分支并注明 |
-| 团队常量缺失 | 停止，说明缺失的配置键及对应 owner 补齐 |
+| MCP auth fails | Run `mcp_auth` and retry once; if it still fails, report (the uniqueness scan can't run) |
+| Multiple AI branches appear for one Story | Stop and hand to the user to pick/clean up; don't guess which to use; don't create a third |
+| The user asks for the whole summary in the branch name | Decline, use a 2–3-word Title-Case slug instead, and explain the alignment with the team Feature naming |
+| A local branch with the same name exists and the SHA differs | Stop and hand to the user; don't `reset` or force-push |
+| `HEAD` ≠ locked SHA | Stop, don't push (unless the user confirms pushing the current SHA) |
+| The user doesn't push for now | Keep it local-only; note in the report that the remote isn't published. Others or other machines can't scan this one |
+| `git push` credentials or network fail | Fall back to MCP `create_branch` (`from` = the confirmed SHA); then fetch and set the upstream |
+| The remote reports the ref already exists | Handle as "reuse" — fetch + checkout, don't force-push |
+| No locked base SHA was passed in | Do baseline checkout first, or fall back to the baseline branch and note it |
+| Team constants missing | Stop; state the missing config key and the owner to supply it |
 
-## 7. 相关
+## 7. Related
 
 - references/branch-naming.md
-- Upstream：baseline-checkout（提供锁定的 base commit SHA）
-- Downstream：在此分支上实现代码＋单元测试，随后进入验证环节（构建 / 契约 / 单测 / 验收）
+- Upstream: baseline-checkout (provides the locked base commit SHA)
+- Downstream: implement code + unit tests on this branch, then enter the verification steps (build / contract / unit tests / acceptance)

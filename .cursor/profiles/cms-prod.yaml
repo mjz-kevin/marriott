@@ -91,6 +91,19 @@ code:
       nx:                              # nx 语义：skill 组装为 `pnpm exec nx run-many -t lint build typecheck`
         command: run-many
         targets: [lint, build, typecheck]
+  git_hooks:                          # 各仓本地 git 钩子行为（dev-agent 提交前须知：提交会触发这些检查，提前预跑避免"撞上才知道"；非硬编码命令，仅声明语义与真实脚本来源）
+    cncms:
+      mechanism: husky                 # core.hooksPath=.husky/_；pre-commit 脚本调 `pnpm exec lint-staged`
+      pre_commit: lint-staged          # lint-staged 对暂存文件触发链：generate:all → lint:tsc → build:compile（见 package.json 的 lint-staged 配置；提交前先跑等价检查即可通过）
+      commit_msg: null                 # 无 commit-msg 钩子，提交信息格式不被本地强制
+    monorepo:
+      mechanism: husky                 # core.hooksPath=.husky/_；pre-commit 脚本调 `pnpm exec lint-staged`
+      pre_commit: lint-staged
+      commit_msg: null
+  commit:                             # 提交信息约定（dev-agent D6 生成 commit message 用）；CMS 两仓无 commit-msg 钩子，遵循仓库历史的 Conventional Commits 惯例
+    convention: conventional_commits   # type(scope): subject，如 feat(cms): ... / fix: ... / docs: ...
+    subject_issue_tag: optional        # 历史提交多不带 issue 标注（靠 PR 关联）；带 [KEY] 溯源亦可，二者皆合规
+    language: any                      # 无字符集限制（可中英）
   contract:                           # contract-diff 口径：接口契约以技术方案 detail 的接口定义为基线
     source: tech_solution_detail       # 契约基线来源：Story 级明细方案的接口定义章节
     match: field_level                 # 比对粒度：逐字段（TS 看 interface/type/zod schema；payload 看 collection field）
@@ -99,11 +112,14 @@ code:
 # ---------------------------------------------------------------- 代码审核（代码审核类 skill 用）
 review:
   rules_source:                       # code-review-rules 用：CMS 团队编码规范来源。扫描本地仓库得到：cncms 与 monorepo 各有 ESLint + Prettier 配置。
-    kind: repo_file                   # 来源类型：confluence（团队规范页）/ repo_file（仓库内规范文件）/ url（官方规范页）；本节按来源就近标注
+    kind: repo_file                   # 来源类型：confluence（团队规范页）/ repo_file（仓库内规范文件）/ github（GitHub MCP get_file_contents）；本节按来源就近标注
     common:                           # 跨语言通用规范：对所有语言子键（typescript）一并适用
       - name: Marriott Naming Conventions
-        url: https://git.marriott.com/pages/Productcore/marriott-naming-conventions/   # 官方权威页（字段/类型/枚举/日期命名 + Code Review Checklist）
-        repo_url: https://git.marriott.com/cnexperience/cncms/blob/main/docs/marriott_docs/marriott-naming-conventions.md   # 仓库内同步的规范文件（远端地址，人人可访问）
+        kind: confluence                # 经 Atlassian(Confluence) MCP getConfluencePage 读取
+        confluence:
+          space: TIP
+          page_id: "262439119"
+          url: https://marriottcloud.atlassian.net/wiki/spaces/TIP/pages/262439119/Marriott+Naming+Conventions
         dimensions: [命名, 分层/职责]
       - name: UXL Schema Design Standards
         url: https://ui-dev-portal.fnd-uxl-test.test.cld.marriott.com/guides/schema-design-standards   # 官方 GraphQL/UXL schema 设计规范（查询/变更命名、类型前缀、可空性、错误建模、分页）
@@ -130,7 +146,6 @@ review:
         path: .prettierrc
         url: https://git.marriott.com/cnexperience/cn-frontend-monorepo/blob/main/.prettierrc
         dimensions: [命名]
-  security_baseline: []               # 安全基线来源：当前为空 → 用 skill 内置通用安全基线；后续可由团队在 Confluence 维护后填入（name + url 列表）
   ignore_globs:                       # diff-fetch 免审文件：生成物/锁文件不纳入审核上下文
     - "pnpm-lock.yaml"
     - "**/dist/**"

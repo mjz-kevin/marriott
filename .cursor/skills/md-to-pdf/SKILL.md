@@ -8,7 +8,7 @@ description: >-
   wide tables default to landscape layout with a Chinese font injected, and missing images
   block the export by default.
   Use when the user asks to convert a PRD / tech-solution md to PDF, export a PDF, or generate a
-  PDF for archiving; triggers: md 转 pdf / PRD 转 PDF / 技术方案转 PDF / 导出 PDF / export pdf.
+  PDF for archiving; triggers: export pdf / md 转 pdf / PRD 转 PDF / 技术方案转 PDF / 导出 PDF.
 metadata:
   agent: Eval Agent
 ---

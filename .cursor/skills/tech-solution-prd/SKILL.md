@@ -7,7 +7,7 @@ description: >-
   breakdown. The tech stack, code repos, and review-trigger conditions
   all follow the team config. Use when the user asks for a PRD-level tech solution, a high-level
   design, or an architecture solution for a feature;
-  triggers: PRD 技术方案 / 高层设计 / 架构方案 / HLD / prd tech solution.
+  triggers: prd tech solution / HLD / PRD 技术方案 / 高层设计 / 架构方案.
 metadata:
   agent: Tech Solution Agent
 ---

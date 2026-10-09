@@ -6,7 +6,7 @@ description: >-
   a task breakdown with per-item acceptance, reusable components, platform-specific sections,
   QA test paths, and monitoring. Use when the user asks for a detailed design, a Story-level
   tech solution, or an implementation breakdown;
-  triggers: 详细技术方案 / 详细设计 / 任务拆解 / Story 技术方案 / detail design.
+  triggers: detail design / 详细技术方案 / 详细设计 / 任务拆解 / Story 技术方案.
 metadata:
   agent: Tech Solution Agent
 ---

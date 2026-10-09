@@ -1,137 +1,139 @@
 ---
 name: contract-diff
 description: >-
-  把实现代码的接口实现与 Story 级明细技术方案的接口定义逐字段比对
-  （字段名／类型／可空／默认值／错误码／失败回退），标出缺失、多余、类型不符、可空不符等偏离项。
-  当验证环节需要确认实现是否符合方案接口契约时使用；
-  触发词：接口契约检查 / 契约比对 / 接口比对 / 接口方案检查 / contract diff / contract check。
+  Compare the interface implementation in the code against the interface definition in the Story-level
+  detailed tech solution field by field (field name / type / nullability / default value / error code /
+  failure fallback), flagging deviations such as missing, extra, type mismatch, and nullability
+  mismatch. Use when the verification step needs to confirm whether the implementation conforms to the
+  solution's interface contract;
+  triggers: contract diff / contract check / 接口契约检查 / 契约比对 / 接口比对 / 接口方案检查.
 metadata:
   agent: Verification Agent
 ---
 
-# contract-diff — 实现 vs 方案接口逐字段比对
+# contract-diff — field-by-field comparison of implementation vs solution interfaces
 
-以明细技术方案的接口定义为契约基线，把实现代码里的接口实现逐字段比对，标出所有偏离。方案是基线，实现偏离方案即为问题（除非方案本身已被确认变更）。
+Using the detailed tech solution's interface definitions as the contract baseline, compare the interface implementation in the code field by field and flag every deviation. The solution is the baseline; an implementation deviating from the solution is an issue (unless the solution itself has been confirmed to change).
 
-| 维度 | 说明 |
+| Dimension | Description |
 |------|------|
-| 定位 | 实现接口 vs 方案接口定义逐字段比对，标出偏离 |
-| 输入 | 实现代码的接口实现＋明细技术方案的接口定义章节＋团队契约口径 |
-| 产出 | 逐接口逐字段的偏离清单（缺失／多余／类型不符／可空不符／默认值不符／错误码不符／回退缺失） |
-| 边界 | 只做契约比对与判定；不改代码、不改方案 |
+| Purpose | Compare the implementation interfaces vs the solution interface definitions field by field and flag deviations |
+| Input | The code's interface implementation + the detailed tech solution's interface-definition sections + the team contract spec |
+| Output | A per-interface, per-field deviation list (missing / extra / type mismatch / nullability mismatch / default-value mismatch / error-code mismatch / missing fallback) |
+| Scope | Only does contract comparison and ruling; doesn't change code or the solution |
 
-## 0. 配置取值
+## 0. Config values
 
-`{profile}` 为当前 profile 文件名（不含扩展名，如 `app-prod` / `cms-test`），由调用方经 profile 选择环节解析并传入（`profile.py resolve` 给出其绝对路径）；未传入或文件不存在 → 停止，不臆测。
+`{profile}` is the current profile file name (without extension, e.g. `app-prod` / `cms-test`), resolved and passed in by the caller via the profile-selection step (`profile.py resolve` gives its absolute path); if it is not passed in or the file does not exist → stop, don't guess.
 
-| 用途 | 配置键 |
+| Purpose | Config key |
 |------|----|
-| 契约基线来源 | `profiles/{profile}.yaml` → `code.contract.source`（默认 `tech_solution_detail`，即 Story 级明细方案的接口定义章节） |
-| 比对粒度 | `profiles/{profile}.yaml` → `code.contract.match`（`field_level` = 逐字段） |
+| Contract-baseline source | `profiles/{profile}.yaml` → `code.contract.source` (default `tech_solution_detail`, i.e. the interface-definition sections of the Story-level detailed solution) |
+| Comparison granularity | `profiles/{profile}.yaml` → `code.contract.match` (`field_level` = field by field) |
 
-所需配置键缺失（TBD）→ 停止并要求补齐。
+Required config keys missing (TBD) → stop and ask for them.
 
-## 1. 前置
+## 1. Prerequisites
 
-| # | 条件 |
+| # | Condition |
 |---|------|
-| 1 | 已有明细技术方案的接口定义章节（契约基线）；缺失则无法比对，停止并回报 |
-| 2 | 实现代码已在 Feature 分支上，能定位到对应接口实现 |
-| 3 | 构建已通过（编译不过时字段级比对不可靠，优先修构建） |
+| 1 | The detailed tech solution's interface-definition sections exist (the contract baseline); if missing, comparison can't be done — stop and report |
+| 2 | The implementation code is already on the Feature branch, so the corresponding interface implementation can be located |
+| 3 | The build has passed (field-level comparison is unreliable when compilation fails; fix the build first) |
 
-## 2. 工作流
+## 2. Workflow
 
 ```
-- S1 从明细方案抽取接口契约清单（逐接口逐字段）
-- S2 从实现代码抽取对应接口的实际字段（按语言差异；无法可靠提取则标待人工确认）
-- S3 逐字段比对，标出偏离类型
-- S4 汇总偏离清单并判定通过与否
-- S5 回报结论：通过放行 / 未通过打回开发环节
+- S1 Extract the interface-contract list from the detailed solution (per interface, per field)
+- S2 Extract the actual fields of the corresponding interface from the code (per language difference; if it can't be reliably extracted, mark it pending human confirmation)
+- S3 Compare field by field, flagging the deviation type
+- S4 Aggregate the deviation list and rule pass or fail
+- S5 Report the conclusion: pass → proceed / fail → send back to the development step
 ```
 
-### S1 抽取契约基线
+### S1 Extract the contract baseline
 
-从明细方案接口定义抽取每个接口的：请求／触发时机、字段名、类型、可空性、默认值、错误码、空值／失败回退策略。方案的 mock 示例仅作参照，契约以字段定义表为准。
+Extract from the detailed solution's interface definitions, for each interface: the request / trigger timing, field name, type, nullability, default value, error code, and null / failure-fallback strategy. The solution's mock examples are reference only; the contract follows the field-definition table.
 
-### S2 从实现抽取对应字段（按语言差异）
+### S2 Extract the corresponding fields from the implementation (per language difference)
 
-契约比对对象是「方案接口定义 vs 实现中对应的 DTO／model 定义」，不同语言的提取方式不同：
+The comparison targets are "the solution's interface definition vs the corresponding DTO / model definition in the implementation"; the extraction method differs by language:
 
-| 语言 | 契约载体 | 提取方式 |
+| Language | Contract carrier | Extraction method |
 |------|------|------|
-| TypeScript | `interface` / `type` / zod schema 等 | 静态读类型定义，字段级可靠 |
-| payload collection（CMS） | payload `CollectionConfig` 的 `fields` 定义 | 读 collection 的字段名／type／required／defaultValue，与方案接口定义逐字段比对 |
-| Swift | `Codable` struct / 网络层 model | 读 struct 属性与 `CodingKeys`，可能散落多文件 |
-| Kotlin | `data class` / 序列化注解 | 读属性与 `@SerializedName`/`@Json` 注解 |
+| TypeScript | `interface` / `type` / zod schema, etc. | Read the type definition statically, reliable at field level |
+| payload collection (CMS) | the `fields` definition of a payload `CollectionConfig` | Read the collection's field name / type / required / defaultValue, compare field by field against the solution's interface definition |
+| Swift | `Codable` struct / networking-layer model | Read the struct properties and `CodingKeys`, which may be scattered across files |
+| Kotlin | `data class` / serialization annotations | Read the properties and `@SerializedName`/`@Json` annotations |
 
-字段可能散落在多个文件，须先定位到该接口对应的 model 再逐字段比对。**当某接口无法可靠静态提取实现字段（如动态解析、手写 JSON、跨多层封装）时，不猜测、不误判为偏离，标为「待人工确认」项交人工核对。**
+Fields may be scattered across multiple files, so locate the model for that interface first, then compare field by field. **When an interface's implementation fields can't be reliably extracted statically (e.g. dynamic parsing, hand-written JSON, multi-layer wrapping), don't guess, don't misjudge it as a deviation; mark it a "pending human confirmation" item for a human to check.**
 
-### S3 逐字段比对
+### S3 Compare field by field
 
-对每个接口的每个字段判定偏离类型：
+For each field of each interface, rule the deviation type:
 
-| 偏离类型 | 含义 |
+| Deviation type | Meaning |
 |------|------|
-| 缺失 | 方案有、实现无 |
-| 多余 | 实现有、方案未定义（需确认是否越界实现） |
-| 类型不符 | 字段类型与方案不一致 |
-| 可空不符 | 可空性与方案不一致（方案非空实现可空，或反之） |
-| 默认值不符 | 默认值与方案不一致 |
-| 错误码不符 | 错误码集合与方案不一致 |
-| 回退缺失 | 方案约定了空值／失败回退，实现未实现或静默失败 |
+| Missing | The solution has it, the implementation doesn't |
+| Extra | The implementation has it, the solution doesn't define it (needs confirmation whether it's over-implementation) |
+| Type mismatch | The field type doesn't match the solution |
+| Nullability mismatch | Nullability doesn't match the solution (solution non-null but implementation nullable, or vice versa) |
+| Default-value mismatch | The default value doesn't match the solution |
+| Error-code mismatch | The error-code set doesn't match the solution |
+| Missing fallback | The solution specifies a null / failure fallback, the implementation doesn't implement it or fails silently |
 
-### S4 判定
+### S4 Ruling
 
-| 结论 | 判据 |
+| Conclusion | Criteria |
 |------|------|
-| 通过 | 无偏离，或仅有已被确认接受的偏离 |
-| 未通过 | 存在任一未接受的偏离（缺失／类型／可空／错误码／回退缺失等） |
+| Pass | No deviation, or only deviations that have been confirmed and accepted |
+| Fail | Any unaccepted deviation exists (missing / type / nullability / error code / missing fallback, etc.) |
 
-「多余」字段若属方案未覆盖的合理扩展，标为待确认项交人工判定，不直接判失败。
+An "extra" field, if it's a reasonable extension the solution doesn't cover, is marked a pending-confirmation item for a human to rule, not ruled a fail directly.
 
-## 3. 强制规则
+## 3. Mandatory rules
 
-| 规则 | 说明 |
+| Rule | Description |
 |------|------|
-| 方案为基线 | 契约以方案接口定义为准；实现偏离即问题，除非方案已确认变更 |
-| 逐字段 | 按 `code.contract.match` 口径逐字段比对，不停留在接口名层面 |
-| 回退必查 | 空值／失败回退是契约的一部分，实现缺失或静默失败判为偏离 |
-| 只判不改 | 只比对判定；不改实现、不改方案 |
-| 方案缺失即停 | 无接口定义基线时不臆造契约，停止并回报 |
-| 无法提取降级 | 实现字段无法可靠静态提取时标「待人工确认」，不猜测、不误判为偏离 |
-| 尊重重试上限 | 自循环含重试上限，超限则提醒人工介入 |
+| Solution is the baseline | The contract follows the solution's interface definitions; an implementation deviation is an issue, unless the solution has been confirmed to change |
+| Field by field | Compare field by field per the `code.contract.match` spec, don't stop at the interface-name level |
+| Always check the fallback | The null / failure fallback is part of the contract; a missing or silently-failing implementation is ruled a deviation |
+| Rule only, don't change | Only compare and rule; don't change the implementation or the solution |
+| Stop if the solution is missing | With no interface-definition baseline, don't invent a contract; stop and report |
+| Fall back when extraction fails | When implementation fields can't be reliably extracted statically, mark "pending human confirmation", don't guess or misjudge as a deviation |
+| Respect the retry limit | The self-loop carries a retry limit; past the limit, prompt for human intervention |
 
-## 4. 质量门禁
+## 4. Quality gates
 
-- 契约基线来自配置声明的来源（明细方案接口定义），非臆造
-- 每个接口的每个字段都完成比对（名／类型／可空／默认／错误码／回退）
-- 偏离清单标明偏离类型与所在接口／字段
-- 「多余」字段作为待确认项交人工，未直接判失败
-- 给出「放行 / 打回 / 提醒人工」中的明确下一步
+- The contract baseline comes from the config-declared source (the detailed solution's interface definitions), not invented
+- Every field of every interface was compared (name / type / nullability / default / error code / fallback)
+- The deviation list flags the deviation type and the interface / field it's in
+- "Extra" fields are handed to a human as pending-confirmation items, not ruled a fail directly
+- Give an explicit next step among "proceed / send back / prompt for human"
 
-## 5. 输出
+## 5. Output
 
 ```markdown
-接口契约检查 — {通过 | 未通过}
+Interface-contract check — {Pass | Fail}
 
-| 接口 | 字段 | 偏离类型 | 方案定义 | 实现现状 |
+| Interface | Field | Deviation type | Solution definition | Implementation state |
 |------|------|------|------|------|
-| {接口} | {字段} | {类型} | {方案} | {实现} |
+| {interface} | {field} | {type} | {solution} | {implementation} |
 
-- **待确认（多余字段）**：{列表 / 无}
-- **结论**：{通过放行 / 打回开发环节 / 超重试上限，提醒人工介入}
+- **Pending confirmation (extra fields)**: {list / none}
+- **Conclusion**: {pass → proceed / send back to the development step / retry limit exceeded, prompt for human intervention}
 ```
 
-## 6. 排障
+## 6. Troubleshooting
 
-| 现象 | 处理 |
+| Symptom | Handling |
 |------|------|
-| 无接口定义基线 | 停止并回报；不臆造契约 |
-| 编译未通过 | 优先修构建，字段级比对暂缓 |
-| 方案与实现均含真实敏感值 | 停止并回报，交脱敏后再比对 |
-| 反复偏离且超重试上限 | 提醒人工介入，不无限打回 |
+| No interface-definition baseline | Stop and report; don't invent a contract |
+| Compilation hasn't passed | Fix the build first, defer field-level comparison |
+| Both the solution and the implementation contain real sensitive values | Stop and report, redact and then compare |
+| Repeated deviations beyond the retry limit | Prompt for human intervention, don't send back endlessly |
 
-## 7. 相关
+## 7. Related
 
-- Upstream：build-verify（构建通过后再做契约比对更可靠）
-- Downstream：通过 → unit-test-runner（执行单测）；未通过 → 打回开发环节修复
+- Upstream: build-verify (contract comparison is more reliable after the build passes)
+- Downstream: pass → unit-test-runner (run the unit tests); fail → send back to the development step to fix

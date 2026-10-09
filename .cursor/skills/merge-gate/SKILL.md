@@ -1,135 +1,137 @@
 ---
 name: merge-gate
 description: >-
-  依代码审核结论判定 PR 合并门禁（有阻断级问题则「不建议合并」，否则「建议合并」），并作为代码审核链
-  的唯一写点：带 review-comment 产出的 body 与门禁对应的 event，经 GitHub MCP 一次性提交唯一一条
-  PR review；默认不自动合并、不自动拒绝，交人工拍板。当审核意见已组织好、需据此给门禁并落 PR 时使用；
-  触发词：合并门禁 / merge 门禁 / 合并判定 / 提交审核 review / merge gate / merge decision。
+  Rule the PR merge gate from the code-review conclusion (a blocking-level issue means "merge not
+  recommended," otherwise "merge recommended"), and serve as the code-review chain's sole write point:
+  with the body produced by review-comment and the event matching the gate, submit a single unique PR
+  review in one shot via GitHub MCP; by default it doesn't auto-merge or auto-reject, leaving the call
+  to a human. Use when the review feedback is organized and a gate must be given and landed on the PR;
+  triggers: merge gate / merge decision / 合并门禁 / merge 门禁 / 合并判定 / 提交审核 review.
 metadata:
   agent: Code Review Agent
 ---
 
-# merge-gate — 判门禁并一次性提交审核 review
+# merge-gate — ruling the gate and submitting the review in one shot
 
-以 code-review-rules 的问题等级为依据给出「建议合并 / 不建议合并」门禁结论，并作为整个代码审核链的**唯一 PR 写点**：把 review-comment 的 body 与门禁对应的 event 合成一条 review，经 GitHub MCP 一次性提交。默认**不自动执行合并或拒绝**——最终合并由人工拍板。
+Give a "merge recommended / merge not recommended" gate conclusion based on code-review-rules' issue levels, and serve as the **sole PR write point** for the entire code-review chain: combine review-comment's body with the event matching the gate into one review and submit it in one shot via GitHub MCP. By default it **doesn't auto-merge or auto-reject** — the final merge is a human call.
 
-| 维度 | 说明 |
+| Dimension | Description |
 |------|------|
-| 定位 | 判合并门禁，并带正确 event 一次性提交唯一一条 PR review（不自动合并） |
-| 输入 | code-review-rules 的问题清单（等级）＋review-comment 的脱敏 review body＋团队 merge 策略 |
-| 产出 | 已提交的唯一 PR review（body + event）＋门禁结论＋给人工的提示 |
-| 边界 | 判门禁 + 提交 review event + 提示；默认不执行 merge、不自动 close PR |
+| Purpose | Rule the merge gate and submit a single unique PR review with the correct event in one shot (no auto-merge) |
+| Input | code-review-rules' issue list (levels) + review-comment's redacted review body + the team merge policy |
+| Output | The submitted unique PR review (body + event) + the gate conclusion + a prompt for the human |
+| Scope | Rule the gate + submit the review event + prompt; by default doesn't execute the merge or auto-close the PR |
 
-## 0. 配置取值
+## 0. Config values
 
-`{profile}` 为当前 profile 文件名（不含扩展名，如 `app-prod` / `cms-test`），由调用方经 profile 选择环节解析并传入（`profile.py resolve` 给出其绝对路径）；未传入或文件不存在 → 停止，不臆测。
+`{profile}` is the current profile file name (without extension, e.g. `app-prod` / `cms-test`), resolved and passed in by the caller via the profile-selection step (`profile.py resolve` gives its absolute path); if it is not passed in or the file does not exist → stop, don't guess.
 
-| 用途 | 配置键 |
+| Purpose | Config key |
 |------|----|
-| GHES 域名 | `profiles/{profile}.yaml` → `mcp.github.host` |
-| 仓库 owner/org | `profiles/{profile}.yaml` → `mcp.github.org` |
-| 目标仓库（`owner/name`） | `profiles/{profile}.yaml` → `mcp.github.repos.*.repo` |
-| 门禁策略 | `profiles/{profile}.yaml` → `review.merge_gate`（`on_block` / `auto_merge`；本期约定 `auto_merge=false`，仅给结论交人工） |
+| GHES host | `profiles/{profile}.yaml` → `mcp.github.host` |
+| Repo owner/org | `profiles/{profile}.yaml` → `mcp.github.org` |
+| Target repo (`owner/name`) | `profiles/{profile}.yaml` → `mcp.github.repos.*.repo` |
+| Gate policy | `profiles/{profile}.yaml` → `review.merge_gate` (`on_block` / `auto_merge`; this cycle's convention is `auto_merge=false`, give only the conclusion and leave it to a human) |
 
-所需配置键缺失（TBD）→ 停止并要求补齐。
+Required config keys missing (TBD) → stop and ask for them.
 
-## 1. 前置
+## 1. Prerequisites
 
-| # | 条件 |
+| # | Condition |
 |---|------|
-| 1 | 已有 code-review-rules 的问题清单（含等级）与 review-comment 的脱敏 review body |
-| 2 | 目标 PR 已知（owner/repo/pull_number）且处于 open |
-| 3 | GitHub MCP 鉴权可用（`mcp_auth` 失败则停止） |
+| 1 | code-review-rules' issue list (with levels) and review-comment's redacted review body exist |
+| 2 | The target PR is known (owner/repo/pull_number) and is open |
+| 3 | GitHub MCP auth is available (if `mcp_auth` fails, stop) |
 
-## 2. 工作流
+## 2. Workflow
 
 ```
-- S1 汇总审核结论：是否存在阻断级问题
-- S2 依门禁策略判定：建议合并 / 不建议合并
-- S3 依判定 + 策略确定 review event
-- S4 幂等检查：本 agent 是否已对当前 head SHA 提交过 review
-- S5 兜底扫描 review body（sensitive-data-guard），带 body + event 经 MCP 一次性提交唯一 review
-- S6 落门禁结论并给人工提示（合并需人工执行）
+- S1 Aggregate the review conclusion: whether a blocking-level issue exists
+- S2 Rule per the gate policy: merge recommended / merge not recommended
+- S3 Determine the review event by the ruling + policy
+- S4 Idempotency check: whether this agent has already submitted a review for the current head SHA
+- S5 Fallback-scan the review body (sensitive-data-guard), then submit the unique review with body + event in one shot via MCP
+- S6 Land the gate conclusion and prompt the human (merge requires human execution)
 ```
 
-### S2 门禁判定
+### S2 Gate ruling
 
-| 审核结论 | 门禁判定 |
+| Review conclusion | Gate ruling |
 |------|------|
-| 存在阻断级问题 | 不建议合并 — 需作者修复阻断项后重审 |
-| 无阻断、有建议/提示 | 可合并（建议项由作者酌情处理）— 交人工确认 |
-| 无任何问题 | 建议合并 — 交人工确认 |
+| A blocking-level issue exists | Merge not recommended — the author must fix the blocking items, then re-review |
+| No blocking, has suggestions/hints | Mergeable (the author handles suggestions at discretion) — leave to a human to confirm |
+| No issues at all | Merge recommended — leave to a human to confirm |
 
-### S3 确定 review event（本期策略）
+### S3 Determine the review event (this cycle's policy)
 
-本期约定 `review.merge_gate.auto_merge=false`：**不自动 merge、不自动拒绝**，只用 review event 表达结论、由人工拍板合并。
+This cycle's convention is `review.merge_gate.auto_merge=false`: **no auto-merge, no auto-reject**, use only the review event to express the conclusion and leave the merge call to a human.
 
-| 门禁判定 | review event | 合并动作 |
+| Gate ruling | review event | Merge action |
 |------|------|------|
-| 不建议合并 | `REQUEST_CHANGES`（`on_block=request_changes` 时）或 `COMMENT`（`on_block=comment` 时） | 不合并；提示作者修复阻断项 |
-| 建议合并 | `COMMENT`（不自动 `APPROVE`，除非策略显式开启） | 不自动合并；提示人工确认后合并 |
+| Merge not recommended | `REQUEST_CHANGES` (when `on_block=request_changes`) or `COMMENT` (when `on_block=comment`) | Don't merge; prompt the author to fix the blocking items |
+| Merge recommended | `COMMENT` (don't auto-`APPROVE` unless the policy explicitly enables it) | Don't auto-merge; prompt the human to confirm and then merge |
 
-### S4 幂等
+### S4 Idempotency
 
-经 `list_pull_request_reviews` 检查本 agent 是否已对当前 head SHA 提交过 review：已存在则不重复提交（除非结论变化需更新），避免刷屏。head SHA 变化（作者推了新提交）视为新一轮，需重新审核并重新提交。
+Via `list_pull_request_reviews`, check whether this agent has already submitted a review for the current head SHA: if one exists, don't re-submit (unless the conclusion changed and needs updating), to avoid flooding. A head SHA change (the author pushed a new commit) counts as a new round, needing a fresh review and a fresh submission.
 
-### S5 一次性提交唯一 review（GitHub MCP）
+### S5 Submit the unique review in one shot (GitHub MCP)
 
-这是代码审核链的**唯一 PR 写点**。提交前对 review body 再做一次 `sensitive-data-guard` 兜底扫描（即便 review-comment 已扫过），命中即阻断、只报位置与类型。随后经 `create_pull_request_review`（`owner`、`repo`、`pull_number`、`body`=review-comment 产出的脱敏 body、`event`=S3 确定的 event，可选 `commit_id`=head SHA）**一次性提交唯一一条 review**——body 与 event 合在同一次提交，不拆成两条 review。
+This is the code-review chain's **sole PR write point**. Before submitting, run one more `sensitive-data-guard` fallback scan over the review body (even if review-comment already scanned it); a hit blocks and reports only the location and type. Then via `create_pull_request_review` (`owner`, `repo`, `pull_number`, `body` = the redacted body produced by review-comment, `event` = the event determined in S3, optional `commit_id` = head SHA) **submit a single unique review in one shot** — body and event in the same submission, not split into two reviews.
 
-> 默认不调用 `merge_pull_request`。仅当团队策略显式开启 `auto_merge=true` 且无阻断项时才可执行自动合并——本期不启用，遇到该配置需二次确认。提交失败时 `mcp_auth` 后重试一次；仍失败则回报并停止。
+> By default don't call `merge_pull_request`. Only when the team policy explicitly enables `auto_merge=true` and there are no blocking items may auto-merge be executed — not enabled this cycle, so encountering that config requires a second confirmation. If submission fails, run `mcp_auth` and retry once; if it still fails, report and stop.
 
-### S6 人工提示
+### S6 Human prompt
 
-明确告诉人工：当前阻断项数量、是否满足合并前提、以及"合并动作需人工执行"。不制造"已自动处理"的错觉。
+Clearly tell the human: the current blocking-item count, whether the merge prerequisites are met, and that "the merge action requires human execution." Don't create the illusion that it's "already handled automatically."
 
-## 3. 强制规则
+## 3. Mandatory rules
 
-| 规则 | 说明 |
+| Rule | Description |
 |------|------|
-| 唯一写点 | 代码审核链只在本环节提交一次 review（body + event 合一），不产生多条 review |
-| 提交前兜底扫描 | 提交前对 body 再过一次 `sensitive-data-guard`，命中即阻断 |
-| 不自动合并 | 本期 `auto_merge=false`，默认不执行 merge、不自动 close PR |
-| 阻断即拦 | 存在阻断级问题时判「不建议合并」，不放行 |
-| 依上游定级 | 门禁判定只依 code-review-rules 的等级，不自行改判 |
-| 幂等不刷屏 | 同一 head SHA 不重复提交 review；结论变化才更新 |
-| 结论透明 | 明确告知「合并需人工执行」，不制造已自动合并的错觉 |
-| 策略显式才自动 | 仅当 `auto_merge=true` 且无阻断时才可自动合并，且需二次确认 |
+| Sole write point | The code-review chain submits a review only once in this step (body + event combined), producing no multiple reviews |
+| Fallback-scan before submitting | Before submitting, run the body through `sensitive-data-guard` once more; a hit blocks |
+| No auto-merge | This cycle `auto_merge=false`, by default don't execute the merge or auto-close the PR |
+| Block means stop | When a blocking-level issue exists, rule "merge not recommended", don't pass |
+| Rule by upstream levels | The gate ruling relies only on code-review-rules' levels, don't re-rule on your own |
+| Idempotent, no flooding | Don't re-submit a review for the same head SHA; update only when the conclusion changes |
+| Transparent conclusion | Clearly state that "merge requires human execution", don't create the illusion of an already-done auto-merge |
+| Auto only when policy explicit | Only when `auto_merge=true` and there's no blocking may it auto-merge, and a second confirmation is required |
 
-## 4. 质量门禁
+## 4. Quality gates
 
-- 门禁结论明确为「建议合并 / 不建议合并」，有阻断项计数佐证
-- 提交前 body 已过 `sensitive-data-guard` 兜底扫描且无命中（或已脱敏）
-- 经 MCP 一次性提交唯一一条 review（body + event 合一），未产生多条
-- review event 与策略一致（本期不自动 APPROVE/merge）
-- 已做幂等检查；未在 `auto_merge=false` 下执行任何自动合并
-- 给出清晰的人工提示（合并需人工执行），结论可追溯到问题等级
+- The gate conclusion is explicitly "merge recommended / merge not recommended", backed by the blocking-item count
+- Before submitting, the body passed the `sensitive-data-guard` fallback scan with no hits (or was redacted)
+- A single unique review (body + event combined) was submitted in one shot via MCP, with no multiple reviews produced
+- The review event is consistent with the policy (no auto-APPROVE/merge this cycle)
+- The idempotency check was done; no auto-merge was executed under `auto_merge=false`
+- A clear human prompt is given (merge requires human execution), and the conclusion is traceable to the issue levels
 
-## 5. 输出
+## 5. Output
 
 ```markdown
-合并门禁：{owner}/{repo} PR #{n} — {建议合并 | 不建议合并}
+Merge gate: {owner}/{repo} PR #{n} — {Merge recommended | Merge not recommended}
 
-- **阻断项**：{b} 个{；需修复后重审 / 无}
-- **建议/提示**：建议 {s} / 提示 {i}
-- **已提交 review**：event={COMMENT / REQUEST_CHANGES}（唯一一条，body+event 合一）
-- **敏感信息兜底扫描**：通过（无命中 / 已脱敏）
-- **合并动作**：不自动执行，需人工确认后合并（本期 auto_merge=false）
+- **Blocking items**: {b}{; must be fixed and re-reviewed / none}
+- **Suggestions/hints**: Suggestion {s} / Hint {i}
+- **Review submitted**: event={COMMENT / REQUEST_CHANGES} (a single one, body+event combined)
+- **Sensitive-info fallback scan**: passed (no hits / redacted)
+- **Merge action**: not executed automatically, requires human confirmation before merging (this cycle auto_merge=false)
 ```
 
-## 6. 排障
+## 6. Troubleshooting
 
-| 现象 | 处理 |
+| Symptom | Handling |
 |------|------|
-| 配置 `auto_merge=true` | 本期不启用自动合并，遇到需向用户二次确认再决定 |
-| 无 code-review-rules 结论或 review body | 先完成规范审核与意见组织；缺输入不臆断门禁、不提交 |
-| 敏感信息兜底扫描命中 | 阻断提交，只报位置与类型，脱敏后再提交 |
-| 已有同轮 review | 按幂等处理，不重复提交；head SHA 变了才算新一轮 |
-| MCP 鉴权/提交失败 | `mcp_auth` 后重试一次；仍失败则回报 |
-| 阻断项已修复 | 需作者推新提交（head SHA 变化）后重审重判，不在旧结论上放行 |
+| Config `auto_merge=true` | Auto-merge isn't enabled this cycle; when encountered, get a second confirmation from the user before deciding |
+| No code-review-rules conclusion or review body | Finish the standards review and feedback organization first; without input, don't guess the gate or submit |
+| Sensitive-info fallback scan hits | Block the submission, report only the location and type, redact and then submit |
+| A review for the same round already exists | Handle idempotently, don't re-submit; it's a new round only if the head SHA changed |
+| MCP auth/submission fails | Run `mcp_auth` and retry once; if it still fails, report |
+| Blocking items are fixed | The author must push a new commit (head SHA changes), then re-review and re-rule; don't pass on the old conclusion |
 
-## 7. 相关
+## 7. Related
 
-- Upstream：code-review-rules（问题等级）＋review-comment（提供脱敏 review body）
-- Depends：sensitive-data-guard（提交前对 body 兜底扫描，命中即阻断）
-- Downstream：人工确认后合并 → CI/CD 环节（触发流水线构建部署）
+- Upstream: code-review-rules (issue levels) + review-comment (provides the redacted review body)
+- Depends: sensitive-data-guard (fallback-scan the body before submitting; a hit blocks)
+- Downstream: merge after human confirmation → the CI/CD step (trigger the pipeline to build and deploy)

@@ -6,7 +6,7 @@ description: >-
   needed for ticket creation ready. The field set, link set, whether the description must be
   self-contained, and whether auto-estimation is allowed all follow the team config. Use when the
   user asks to split Stories, write User Stories, draft ACs, or prepare Jira tickets from a PRD;
-  triggers: 拆 Story / 写 User Story / 用户故事 / 拆分需求 / 写 AC / user story authoring.
+  triggers: user story authoring / 拆 Story / 写 User Story / 用户故事 / 拆分需求 / 写 AC.
 metadata:
   agent: UserStory Agent
 ---
@@ -97,6 +97,8 @@ Write the summary (Jira Summary) separately, <= 80 characters, starting with a v
 Whether the description must be self-contained is decided by the team config:
 when self-containment is required, the description must be readable independently of the PRD, including background + user story + detailed requirement description + domain impact + design + tech solution.
 
+Description and AC are Markdown only (headings `##`, inline code in backticks, links `[text](url)`); never Wiki (`h2.`, `{{code}}`, `*bold*`, `[url|url|smart-link]`). A snippet with braces goes in one backtick pair with the braces literal (`` `swazzler { }` ``), never nested as `{{swazzler { }}}` (which renders a stray `}` / `{}}`). `{{x}}` is Wiki monospace, not a `{guidance}` placeholder.
+
 ### S4 AC spec
 
 An AC must express three elements: **precondition** (identity / data state / environment), **action** (what the user did), and **observable result** (an assertable expectation). The three elements being complete is enough; there's no forced use of specific keywords like `GIVEN/WHEN/THEN`—keyword style or natural sentences both work, as long as the three elements are clear and testable.
@@ -168,7 +170,7 @@ Any failure -> re-split.
 - All back-links listed in the team-configured link set are complete
 - All six INVEST items pass
 - No field requiring human estimation is filled
-- No **`Example`** tag residue, unreplaced `{…}` guidance placeholders, HTML comments, or high-confidence template example paste (per prd-authoring quality-gates G2a); **do not** flag business-domain terms alone (Bonvoy, Marriott, etc.)
+- No **`Example`** tag residue, unreplaced `{…}` guidance placeholders, HTML comments, Wiki markup (`h2.`, `{{…}}`, `[url|url|smart-link]`), or high-confidence template example paste (per prd-authoring quality-gates G2a); **do not** flag business-domain terms alone (Bonvoy, Marriott, etc.)
 - Label is complete per `mcp.jira.labels`: `ai_provenance` applied; every `mandatory` category has a value (`business_domain` decided against the official domain definitions on `labels.source`, not literal title wording); when a ticket's Component is `iOS`, the `iOS` platform label is present (Component ↔ platform label consistent); no label outside the enum
 - When the team requires self-contained descriptions: each description is self-contained
 

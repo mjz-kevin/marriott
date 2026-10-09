@@ -1,129 +1,147 @@
 ---
 name: code-review-rules
 description: >-
-  按团队编码规范与安全基线，对 PR 审核上下文逐条审核（命名／分层／异常处理／日志／性能／安全），
-  为每个问题标注等级（阻断／建议／提示）、所在文件与行号、依据的规则条目与修改建议；架构与业务
-  合理性交人工把关，不越权。当代码审核环节需要按规范逐条审代码时使用；
-  触发词：代码规范审核 / 规范检查 / 安全基线审核 / code review rules / 编码规范核验。
+  Review the PR review context item by item against the team's coding standards and security baseline
+  (naming / layering / exception handling / logging / performance / security), tagging each issue with
+  a level (blocking / suggestion / hint), its file and line, the rule item it relies on, and a fix
+  suggestion; architecture and business-reasonableness are left to human judgment, no overreach. Use
+  when the code-review step needs to review code item by item against the standards;
+  triggers: code review rules / 代码规范审核 / 规范检查 / 安全基线审核 / 编码规范核验.
 metadata:
   agent: Code Review Agent
 ---
 
-# code-review-rules — 按编码规范与安全基线逐条审核
+# code-review-rules — reviewing item by item against coding standards and the security baseline
 
-以团队编码规范与安全基线为基准，对 diff-fetch 产出的审核上下文逐文件、逐改动块审核，输出带等级与定位的问题清单。规范是基准，实现偏离规范即为问题；架构与业务合理性不在本环节判定，交人工 review。
+Using the team's coding standards and security baseline as the benchmark, review the review context produced by diff-fetch file by file and change-hunk by change-hunk, and output an issue list with levels and locations. The standards are the benchmark; an implementation deviating from the standards is an issue. Architecture and business-reasonableness are not ruled here; they are left to human review.
 
-| 维度 | 说明 |
+| Dimension | Description |
 |------|------|
-| 定位 | 按编码规范＋安全基线逐条审核 PR 改动，输出带等级与定位的问题清单 |
-| 输入 | diff-fetch 的审核上下文（逐文件 patch）＋团队编码规范来源（可空，走降级）＋（可选）Story 明细技术方案 |
-| 产出 | 问题清单：每条含等级／文件＋行号／命中规则／根因／修改建议 |
-| 边界 | 只按规范与安全基线判定；不改代码、不写 PR 评论（评论由 review-comment 落地）、不判架构/业务合理性 |
+| Purpose | Review the PR changes item by item against the coding standards + security baseline, and output an issue list with levels and locations |
+| Input | The diff-fetch review context (per-file patch) + the team coding-standards source (may be empty, falls back) + (optional) the Story's detailed tech solution |
+| Output | An issue list: each entry has level / file + line / matched rule / root cause / fix suggestion |
+| Scope | Only rules against the standards and security baseline; doesn't change code, doesn't write PR comments (comments are landed by review-comment), doesn't rule architecture/business-reasonableness |
 
-## 0. 配置取值
+## 0. Config values
 
-`{profile}` 为当前 profile 文件名（不含扩展名，如 `app-prod` / `cms-test`），由调用方经 profile 选择环节解析并传入（`profile.py resolve` 给出其绝对路径）；未传入或文件不存在 → 停止，不臆测。
+`{profile}` is the current profile file name (without extension, e.g. `app-prod` / `cms-test`), resolved and passed in by the caller via the profile-selection step (`profile.py resolve` gives its absolute path); if it is not passed in or the file does not exist → stop, don't guess.
 
-| 用途 | 配置键 |
+| Purpose | Config key |
 |------|----|
-| 编码规范来源 | `profiles/{profile}.yaml` → `review.rules_source`（APP／CMS 各自的编码规范；`kind` 标明来源类型：`confluence`（团队规范页）/ `repo_file`（仓库内规范文件）/ `url`（官方规范页）；`common` 子键为跨语言通用规范（对所有语言适用），其余按语言栈子键给出规范名／来源／覆盖维度。允许为空——团队规范未就绪时留空） |
-| 语言栈 | `profiles/{profile}.yaml` → `code.languages`（决定读 `rules_source` 下哪个语言子键，如 swift/kotlin/typescript；`common` 子键恒适用，与语言栈无关） |
-| 安全基线 | `profiles/{profile}.yaml` → `review.security_baseline`（标准名＋URL 列表；允许为空——为空时用内置通用安全基线） |
+| Coding-standards source | `profiles/{profile}.yaml` → `review.rules_source` (APP / CMS each have their own coding standards; each entry states its source by `kind` or the nearest field: `confluence` (team/official standards page, read via Atlassian MCP) / `repo_file` (an in-repo standards file, read via GitHub MCP). The `common` sub-key is cross-language standards (applies to all languages); the rest give the standard name / source / covered dimensions per language-stack sub-key. May be empty — leave it empty when the team's standards aren't ready) |
+| Language stack | `profiles/{profile}.yaml` → `code.languages` (determines which language sub-key under `rules_source` to read, e.g. swift/kotlin/typescript; the `common` sub-key always applies, independent of the stack) |
+| Confluence site | `profiles/{profile}.yaml` → `mcp.confluence.base_url` (`confluence` entries are read via Atlassian MCP; the cloudId is resolved for that site by `getAccessibleAtlassianResources`) |
+| Security baseline | A built-in general security baseline (hardcoded secrets/passwords, injection, unvalidated external input, insecure dependencies, etc.), always used when reviewing the "security" dimension |
 
-`rules_source` 已配置时，按语言栈取对应规范的来源与覆盖维度作为审核基准；规范来源不可读或对某维度无覆盖，按该维度「规范未覆盖」处理，不臆造标准。`rules_source` 整体为空/未配置/为 TBD → 降级：只按内置通用六维（命名／分层／异常／日志／性能／安全）审核，不引用具体规范条目，产出仍带等级／file:line／根因／建议，并在输出注明「团队规范未配置，按通用维度审核」。`security_baseline` 同理，为空时用内置通用安全基线。
+When `rules_source` is configured, take the source and covered dimensions of the corresponding standard per language stack as the review benchmark; if the standards source is unreadable or doesn't cover a dimension, treat that dimension as "not covered by the standards" and don't invent criteria. When `rules_source` as a whole is empty / unconfigured / TBD → fall back: review only against the built-in general six dimensions (naming / layering / exception / logging / performance / security), don't cite specific rule items, still output level / file:line / root cause / suggestion, and note in the output "team standards not configured, reviewed against general dimensions." The "security" dimension is always reviewed against the built-in general security baseline.
 
-## 1. 前置
+## 1. Prerequisites
 
-| # | 条件 |
+| # | Condition |
 |---|------|
-| 1 | 已有 diff-fetch 产出的审核上下文（逐文件 patch），否则先做 diff-fetch |
-| 2 | 能按语言栈解析出适用的规范维度（`rules_source` 为空时用内置通用六维降级审核） |
+| 1 | The diff-fetch review context (per-file patch) exists; otherwise do diff-fetch first |
+| 2 | The applicable standards dimensions can be resolved per language stack (when `rules_source` is empty, fall back to the built-in general six dimensions) |
+| 3 | `confluence` entries need Atlassian MCP auth, `repo_file` entries need GitHub MCP auth; if `mcp_auth` fails, treat **that entry** as not covered by the standards, don't stop the whole review |
 
-## 2. 工作流
+## 2. Workflow
 
 ```
-- S1 读取团队编码规范与安全基线（按语言栈定维度）
-- S2 逐文件、逐改动块对照规范审核
-- S3 对每个问题定级、定位、附命中规则与修改建议
-- S4 汇总问题清单，区分「规范问题」与「安全问题」
-- S5 回报清单（交给 review-comment 落 PR 评论）
+- S1 Read the team coding standards and security baseline (set dimensions per language stack)
+- S2 Review file by file, change-hunk by change-hunk against the standards
+- S3 Assign a level, locate, and attach the matched rule and fix suggestion to each issue
+- S4 Aggregate the issue list, distinguishing "standards issues" from "security issues"
+- S5 Report the list (handed to review-comment to land PR comments)
 ```
 
-### S1 读取规范基准
+### S1 Read the standards benchmark
 
-从 `review.rules_source` 读团队编码规范。先取 `common` 子键（跨语言通用规范，对所有语言恒适用），再按 `code.languages` 定位对应语言子键（swift/kotlin/typescript）取该语言适用规范；规范来源（`kind: confluence` 的规范页 / `kind: repo_file` 的仓库文件 / `kind: url` 的官方页）声明的规则为基准，各条目覆盖的维度以其 `dimensions` 为准；安全基线取 `review.security_baseline`（如 OWASP MASVS/ASVS）。`rules_source` 整体为空/未配置时，降级为按内置通用六维审核、不引用具体规范条目；`security_baseline` 为空时用内置通用安全基线。规范/标准未覆盖的维度不臆造标准，只按已声明规范或内置通用维度判定。
+Read the team coding standards from `review.rules_source`. First take the `common` sub-key (cross-language standards, always applicable to all languages), then locate the corresponding language sub-key (swift/kotlin/typescript) per `code.languages` to take that language's applicable standards. The dimensions each entry covers follow its `dimensions`; the "security" dimension is reviewed against the built-in general security baseline. When `rules_source` as a whole is empty / unconfigured, fall back to reviewing against the built-in general six dimensions without citing specific rule items. Don't invent criteria for dimensions the standards don't cover; rule only against declared standards or the built-in general dimensions.
 
-### S2 逐条审核维度
+**Standards body must be read per entry field; WebFetch of `git.marriott.com/pages/...` is forbidden (GHES Pages requires SSO, the Agent only gets the login page):**
 
-对每个改动块按以下维度核对（只审本次 diff 触及的代码，不发散审历史代码）：
-
-| 维度 | 审核点 |
+| Entry field | Read method |
 |------|------|
-| 命名 | 命名符合规范、语义清晰、无拼写/误导 |
-| 分层/职责 | 层次边界清晰、无越层调用、无职责混淆 |
-| 异常处理 | 异常被恰当捕获/传播，不吞异常、不裸 catch |
-| 日志 | 关键路径有日志、级别恰当、不打印敏感信息 |
-| 性能 | 无明显低效（循环内 IO、N+1、无必要的重复计算） |
-| 安全基线 | 无硬编码密钥/口令、无注入风险、无未校验的外部输入、无不安全依赖 |
+| `kind: confluence` (`confluence.page_id` / `confluence.url`) | Read the body via Atlassian MCP `getConfluencePage` (`cloudId` = resolved for the site, `pageId` = `confluence.page_id`, `contentFormat: markdown`) |
+| `repo` (profile key) + `path` | Resolve `owner/name` via `mcp.github.repos.{repo}`, then read via GitHub MCP `get_file_contents` (optional `ref`) |
+| Only a `url` and it's GHES Pages (`/pages/`) | Treat as unreadable: that entry is "not covered by the standards"; don't WebFetch, don't invent |
 
-### S3 定级与定位
+If `getConfluencePage` / `get_file_contents` fails, run `mcp_auth` and retry once; if it still fails, treat that entry as "not covered by the standards" and note it, without stopping the whole review.
 
-每个问题标注：
+### S2 Review the dimensions item by item
 
-| 字段 | 内容 |
+Check each change hunk against the following dimensions (review only the code this diff touches; don't wander into reviewing historical code):
+
+| Dimension | Review point |
 |------|------|
-| 等级 | 阻断（必须改，否则不应合并）／建议（应改）／提示（可选优化） |
-| 定位 | 文件路径＋行号（对应 diff 的新行号） |
-| 命中规则 | 依据规范的哪一条（引用规则条目/编号或规范名＋章节，来自 rules_source；规范未配置时注明「通用维度」） |
-| 根因 | 一句话说明为何违反 |
-| 修改建议 | 面向作者的可执行建议 |
+| Naming | Naming conforms to the standards, is semantically clear, no typos/misleading names |
+| Layering/responsibility | Clear layer boundaries, no cross-layer calls, no responsibility confusion |
+| Exception handling | Exceptions are caught/propagated appropriately, no swallowed exceptions, no bare catch |
+| Logging | Logs on key paths, appropriate levels, no printing of sensitive information |
+| Performance | No obvious inefficiency (IO inside loops, N+1, unnecessary repeated computation) |
+| Security baseline | No hardcoded secrets/passwords, no injection risk, no unvalidated external input, no insecure dependencies |
 
-安全类问题默认按「阻断」处理（除非规范另有约定）。
+### S3 Assign level and locate
 
-## 3. 强制规则
+Tag each issue:
 
-| 规则 | 说明 |
+| Field | Content |
 |------|------|
-| 规范为基准 | 审核依据来自 `review.rules_source`；规范未配置时按内置通用六维审核，不臆造具体规范条目 |
-| 规范为空即降级 | `rules_source`／`security_baseline` 为空/未配置时降级为通用维度/内置安全基线审核，并在输出注明，不停止 |
-| 只审本次 diff | 只审本 PR 触及的改动，不发散审历史代码 |
-| 每条可追溯 | 每个问题都引用命中的规则条目（或注明「通用维度」）与 file:line，不凭主观 |
-| 安全默认阻断 | 硬编码密钥/注入/未校验输入等安全问题默认定「阻断」 |
-| 不越权判架构 | 架构与业务合理性交人工，不在本环节判定 |
-| 只判不改不评论 | 只输出问题清单；不改代码、不直接写 PR 评论 |
+| Level | Blocking (must fix, otherwise shouldn't be merged) / Suggestion (should fix) / Hint (optional improvement) |
+| Location | File path + line number (the new line number in the diff) |
+| Matched rule | Which rule item it relies on (cite the rule item/number or standard name + section, from rules_source; when standards aren't configured, note "general dimension") |
+| Root cause | A one-line explanation of why it's violated |
+| Fix suggestion | An actionable suggestion for the author |
 
-## 4. 质量门禁
+Security issues default to "blocking" (unless the standards specify otherwise).
 
-- 规范来源已按配置读取（`rules_source` 已配置则读取成功且非臆造；为空则已降级为通用维度审核并注明）
-- 每个待审文件的改动块都过了命名/分层/异常/日志/性能/安全六维
-- 每个问题含等级／file:line／命中规则（或「通用维度」）／根因／修改建议
-- 安全问题已按阻断级标注（除非规范另有约定）
-- 「规范问题」与「安全问题」被区分，交下游按等级驱动门禁
+## 3. Mandatory rules
 
-## 5. 输出
+| Rule | Description |
+|------|------|
+| Standards are the benchmark | The review basis comes from `review.rules_source`; when standards aren't configured, review against the built-in general six dimensions, don't invent specific rule items |
+| Read standards body per source | `confluence` goes through Atlassian MCP `getConfluencePage`; `repo_file` goes through GitHub MCP `get_file_contents`; WebFetch of GHES Pages is forbidden |
+| Empty standards fall back | When `rules_source` is empty / unconfigured, fall back to general-dimension review and note it in the output, don't stop; the "security" dimension is always reviewed against the built-in general security baseline |
+| Review only this diff | Review only the changes this PR touches; don't wander into reviewing historical code |
+| Every entry traceable | Every issue cites the matched rule item (or notes "general dimension") and file:line, not subjective judgment |
+| Security defaults to blocking | Security issues such as hardcoded secrets/injection/unvalidated input default to "blocking" |
+| No overreach on architecture | Architecture and business-reasonableness are left to humans, not ruled here |
+| Rule only, don't change, don't comment | Only output the issue list; don't change code, don't write PR comments directly |
+
+## 4. Quality gates
+
+- The standards source was read per config (`confluence` went through Atlassian MCP; `repo_file` went through GitHub MCP; if empty, already fell back to general-dimension review and noted it; no WebFetch of GHES Pages)
+- Every change hunk of every file under review passed the six dimensions naming/layering/exception/logging/performance/security
+- Every issue has level / file:line / matched rule (or "general dimension") / root cause / fix suggestion
+- Security issues are tagged at blocking level (unless the standards specify otherwise)
+- "Standards issues" and "security issues" are distinguished, handed downstream to drive the gate by level
+
+## 5. Output
 
 ```markdown
-规范审核：{owner}/{repo} PR #{n} — {阻断 {b} / 建议 {s} / 提示 {i}}
+Standards review: {owner}/{repo} PR #{n} — {Blocking {b} / Suggestion {s} / Hint {i}}
 
-| 等级 | 文件:行 | 命中规则 | 根因 | 修改建议 |
+| Level | File:line | Matched rule | Root cause | Fix suggestion |
 |------|------|------|------|------|
-| 阻断/建议/提示 | {file:line} | {规则条目} | {根因} | {建议} |
+| Blocking/Suggestion/Hint | {file:line} | {rule item} | {root cause} | {suggestion} |
 
-- **安全问题**：{数量及概述 / 无}
-- **下一步**：交 review-comment 落 PR 评论，并由 merge-gate 依等级给门禁结论
+- **Security issues**: {count and summary / none}
+- **Next step**: hand to review-comment to land PR comments, and let merge-gate give the gate conclusion by level
 ```
 
-## 6. 排障
+## 6. Troubleshooting
 
-| 现象 | 处理 |
+| Symptom | Handling |
 |------|------|
-| `review.rules_source` 整体为空/未配置/TBD | 降级为按内置通用六维审核，输出注明「团队规范未配置，按通用维度审核」，不停止 |
-| 规范页某维度无覆盖 | 该维度不判定，注明「规范未覆盖」，不臆造标准 |
-| 规范未覆盖某维度 | 该维度不判定，注明「规范未覆盖」，不臆造标准 |
-| diff 过大无 patch 的文件 | 请 diff-fetch 单独拉取该文件后再审，不跳过 |
-| 疑似安全问题但不确定 | 标为「建议」并注明需人工确认，不误报为阻断也不漏报 |
+| `review.rules_source` as a whole is empty / unconfigured / TBD | Fall back to reviewing against the built-in general six dimensions, note "team standards not configured, reviewed against general dimensions" in the output, don't stop |
+| An entry is a GHES Pages URL (`/pages/`) | Don't WebFetch; read the standards body via the same entry's `confluence.page_id` from Confluence instead; if there's no Confluence source, that entry is "not covered by the standards" |
+| `getConfluencePage` fails | Check `confluence.page_id` and the site cloudId; run `mcp_auth` and retry once; if it still fails, that entry is "not covered by the standards", don't invent |
+| `get_file_contents` 404 / fails | Check `owner`/`repo`/`path`/`ref`; run `mcp_auth` and retry once; if it still fails, that entry is "not covered by the standards", don't invent |
+| The standards page doesn't cover a dimension | Don't rule that dimension, note "not covered by the standards", don't invent criteria |
+| The standards don't cover a dimension | Don't rule that dimension, note "not covered by the standards", don't invent criteria |
+| A file too large to have a patch in the diff | Ask diff-fetch to fetch that file separately, then review it; don't skip |
+| A suspected but uncertain security issue | Mark it as "suggestion" and note it needs human confirmation; don't false-positive as blocking nor miss it |
 
-## 7. 相关
+## 7. Related
 
-- Upstream：diff-fetch（提供逐文件 patch 的审核上下文）
-- Downstream：review-comment（把问题清单落为 PR 评论）→ merge-gate（依等级给门禁结论）
+- Upstream: diff-fetch (provides the per-file patch review context)
+- Downstream: review-comment (lands the issue list as PR comments) → merge-gate (gives the gate conclusion by level)

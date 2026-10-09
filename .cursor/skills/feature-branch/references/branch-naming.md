@@ -1,50 +1,50 @@
 # Branch naming and multi-person rules
 
-对齐团队 Branching Strategy（Confluence DBU4 / Branching Strategy）：Feature 形如 `{JIRA-KEY}-Xxx-Xxx`；AI 产出再套 `code.branch.prefix`，与人工分支隔离。
+Aligned with the team Branching Strategy (Confluence DBU4 / Branching Strategy): a Feature looks like `{JIRA-KEY}-Xxx-Xxx`; AI output is further wrapped in `code.branch.prefix`, isolated from human branches.
 
-## 命名
+## Naming
 
-渲染 `code.branch.template`（默认 `{prefix}/{story_key}-{slug}`）：
+Render `code.branch.template` (default `{prefix}/{story_key}-{slug}`):
 
-| 段 | 规则 | 例 |
+| Segment | Rule | Example |
 |----|------|----|
-| `{prefix}` | 取自 `code.branch.prefix`，即 AI 命名空间 | `feat-ai` |
-| `{story_key}` | Jira Story key，保持原大小写；仅当模板要求小写时才转小写 | `GCD-404` |
-| `{slug}` | 产品／功能主题，**2–3 个 Title-Case 词**，`-` 连接。取自摘要的核心对象，不是整句摘要 | `Mby-Audio` |
+| `{prefix}` | From `code.branch.prefix`, i.e. the AI namespace | `feat-ai` |
+| `{story_key}` | The Jira Story key, keeping the original case; lowercase it only if the template requires lowercase | `GCD-404` |
+| `{slug}` | The product/feature theme, **2–3 Title-Case words**, joined by `-`. Taken from the summary's core object, not the whole summary sentence | `Mby-Audio` |
 
-完整名例：`feat-ai/GCD-404-Mby-Audio`。
+Full-name example: `feat-ai/GCD-404-Mby-Audio`.
 
-禁止：
+Forbidden:
 
-- 把整句 Story 摘要 slug 化（过长、不合 `{KEY}-Xxx-Xxx`）
-- 全小写长 kebab（`deliver-cms-content-model-and-publishing-workflow`）
-- 省略 `{prefix}`（与人工 Feature `GCD-404-Mby-Audio` 撞名）
-- 省略 `{story_key}`（唯一性扫描靠它）
+- Slugifying the whole Story summary (too long, doesn't fit `{KEY}-Xxx-Xxx`)
+- An all-lowercase long kebab (`deliver-cms-content-model-and-publishing-workflow`)
+- Omitting `{prefix}` (collides with the human Feature `GCD-404-Mby-Audio`)
+- Omitting `{story_key}` (the uniqueness scan relies on it)
 
-`{slug}` 选取：专有名／产品名优先（MBY → `Mby`），再补一两个功能词（`Audio` / `Page` / `Cms`）。不要堆动词短语（Deliver / Implement / Add）。
+`{slug}` selection: prefer the proper/product name (MBY → `Mby`), then add one or two feature words (`Audio` / `Page` / `Cms`). Don't pile up verb phrases (Deliver / Implement / Add).
 
-## 多人
+## Multiple people
 
-文档模型：每人／每功能一条 Feature 分支；合入基线后删除。Epic 跨 Sprint 时从 `epic/` 再拉 Feature，做完合回 Epic。本 skill 只建 **Story 级** 那一条 AI 分支。
+The documented model: one Feature branch per person / per feature; deleted after merging into the baseline. When an Epic spans Sprints, pull a Feature from `epic/` again and merge it back into the Epic when done. This skill creates only the one **Story-level** AI branch.
 
-| 场景 | 做法 |
+| Scenario | Approach |
 |------|------|
-| 不同 Story、不同人并行 | 各开各的 `feat-ai/{story_key}-{slug}`，互不占用 |
-| 同一 Story 多人一起改 | **共用**本 skill 维护的那一条；各自 pull / rebase 后推，一条 PR |
-| 同一 Story 要拆子任务 | 人工另开短分支（如 `feat-ai/GCD-404-Schema`），做完合回 Story 级分支或基线。**本 skill 不创建子任务分支** |
-| 同一 Story 已有 ≥2 条 AI 分支 | 停止，交用户挑选／清理，不臆测、不建第三条 |
+| Different Stories, different people in parallel | Each opens its own `feat-ai/{story_key}-{slug}`, not occupying each other |
+| Multiple people changing the same Story together | **Share** the one this skill maintains; each pulls / rebases then pushes, one PR |
+| The same Story needs sub-tasks split out | A human opens a separate short branch (e.g. `feat-ai/GCD-404-Schema`), merging back into the Story-level branch or baseline when done. **This skill doesn't create sub-task branches** |
+| The same Story already has ≥2 AI branches | Stop, hand to the user to pick/clean up, don't guess, don't create a third |
 
-一 Story 一 AI 分支：复入时复用已有 `prefix` + `{story_key}` 的分支，不因摘要改写而再开一条。
+One Story, one AI branch: on re-entry, reuse the existing `prefix` + `{story_key}` branch, don't open another one because the summary was rewritten.
 
-## 远端 vs 本地
+## Remote vs local
 
-| 动作 | 通道 |
+| Action | Channel |
 |------|------|
-| 查远端（唯一性） | GitHub MCP（`get_branch` / `list_branches`，须翻完分页） |
-| 查本地（唯一性） | `git for-each-ref` 匹配前缀＋Story key（覆盖「建了但未推」） |
-| 建官方远端 ref | 本地就绪后**先问用户**；同意且校验 SHA 后 `git push -u origin {branch}`；仅本机推不了时用 MCP `create_branch` |
-| 本地建 / checkout | Git 命令 |
+| Query the remote (uniqueness) | GitHub MCP (`get_branch` / `list_branches`, must page through all) |
+| Query local (uniqueness) | `git for-each-ref` matching prefix + Story key (covers "created but not pushed") |
+| Create the official remote ref | After the local is ready, **ask the user first**; after consent and SHA verification, `git push -u origin {branch}`; use MCP `create_branch` only when local can't push |
+| Create / checkout locally | Git commands |
 
-禁止：未经本回合明确同意就 push；把未校验的本地分支顶成官方远端；force-push。
+Forbidden: pushing without explicit consent in this turn; promoting an unverified local branch to the official remote; force-push.
 
-「创建分支」不等于同意推送。用户说「推送」后再 `git push`。后续功能 commit 的 push 也不在本 skill。
+"Create branch" doesn't equal consent to push. Run `git push` only after the user says "push." Pushing subsequent feature commits is also not in this skill.

@@ -6,7 +6,7 @@ description: >-
   level back-links the Jira Story. The body often exceeds the MCP single-write limit, so it uses
   scripts/upload_confluence_v2.py uniformly for upload. The landing spot, naming, and paths follow
   the team config. Use when the user asks to publish, sync, or push a tech solution to Confluence;
-  triggers: 技术方案上传 / 发布技术方案 / 同步技术方案 / publish tech solution.
+  triggers: publish tech solution / 技术方案上传 / 发布技术方案 / 同步技术方案.
 metadata:
   agent: Tech Solution Agent
 ---
@@ -154,6 +154,9 @@ python .cursor/skills/tech-solution-publish/scripts/upload_confluence_v2.py --wr
 **spike / detail -> Jira Web remote link (this Agent writes it directly)**
 
 The spike (onto the spike ticket) and detail (onto the Story) back-links land the same way: **a Jira native Web remote link** to the Confluence solution page. Rationale: the external URL belongs in Jira's **Web links** area, not "Linked Work Items" (Issue Links only accept issue↔issue) and not the description subsection. Atlassian MCP exposes no write tool for remote links, so this Agent creates it over Jira REST via the publish script's `--jira-remote-link` mode (credentials reused from `confluenceRest`, idempotent by `globalId`):
+
+> **Why this write-back is not optional (discoverability).** For the detail tier this Web remote link is the **primary way downstream picks up the solution** — the development step resolves the Story's tech solution from its links / remote-web-links. If this write-back is skipped or silently fails (left only as "pending"), the solution becomes effectively invisible from the Story: it lives in Confluence but nothing on the ticket points to it, and downstream may wrongly conclude "no tech solution exists." So on the detail tier, **treat a failed remote-link write-back as a reported gap that needs closing**, not a soft optional — surface it in the report's write-back line and hand off pending content so a human closes the loop.
+
 
 ```bash
 python .cursor/skills/tech-solution-publish/scripts/upload_confluence_v2.py --jira-remote-link --issue "<Story key (detail) / Spike key (spike)>" --link-url "<Confluence solution URL>" --link-title "<solution page title>" --relationship "Tech Solution" --icon-url "https://<site>/wiki/favicon.ico"

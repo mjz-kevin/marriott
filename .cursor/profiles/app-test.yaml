@@ -115,6 +115,30 @@ code:
       tool: gradle                     # skill 按 OS 选 wrapper：Unix=./gradlew，Windows=gradlew.bat（不硬编码 ./gradlew）
       tasks: [clean, assembleOneTstDebug] # gradle wrapper 8.11.1 / AGP 8.9.3 / Kotlin 2.1.10；构建 flavor=oneTst（PR 门禁在 Harness .harness/.../*.yaml，GitHub PRValidation.yml 的 pull_request 触发已注释、仅 workflow_dispatch）；须用 JDK 17（勿用 Android Studio 内置更高版本 JDK）；本地构建前置：仓库根目录需 Vault 密钥文件 secret_android_api_keys.json，私有依赖仓库（腾讯 EdgeOne maven.cnb.cool）需 EDGE_ONE_REPO_USER/PW 凭据
       static_check_tasks: [clean, detekt] # 静态检查用标准 detekt 任务（gradle/detekt.gradle 提供；detektAll 未在 gradle 定义、勿用）；detekt 真实 PR 门禁在 Harness（.harness .../detekt.yaml 跑 ./gradlew --no-daemon detekt）
+  git_hooks:                          # 各仓本地 git 钩子行为（dev-agent 提交前须知：提交会触发这些检查/校验，提前预跑与对齐避免"撞上才知道"；非硬编码命令，仅声明语义与真实脚本来源）
+    android:                           # 版本化钩子：源在 config/hooks/，由 gradle/git-hooks.gradle.kts 的 installGitHooks 任务在 preBuild 时复制到 .git/hooks/
+      mechanism: versioned_config_hooks # core.hooksPath 未设，走默认 .git/hooks；每次 gradle build 自动安装
+      pre_commit: detekt               # 跑 `./gradlew --no-daemon detekt`（Kotlin 静态检查），失败阻断提交
+      commit_msg:                      # 强制提交信息格式（config/hooks/commit-msg），dev-agent 生成 Android 提交信息必须满足
+        format: "[CNAPP-XXXXX] description"  # 首行须以 [CNAPP-数字] 开头（ticket 号 1–6 位）后接一个空格再接描述
+        subject_issue_tag: required    # 与 CMS 不同：issue 标注是强制的，不可省
+        min_desc_chars: 20             # 描述至少 20 字符（少于则阻断）
+        max_desc_chars: 72             # 建议上限 72（超过仅警告，不阻断）
+        min_words: 3                   # 建议至少 3 个词（少于仅警告）
+        language: english_only         # 描述仅允许英文字母/数字/空格/基本标点，含中文等字符阻断
+        bypass_prefixes: [Merge, Revert, feat:, fix:, docs:, chore:, build:, ci:, style:, refactor:, perf:, WIP, Release] # 这些特殊前缀跳过格式校验（详见脚本）
+    ios:                               # ios-dragon-app 当前无任何自定义 git 钩子
+      mechanism: none
+      pre_commit: null
+      commit_msg: null
+  commit:                             # 提交信息约定（dev-agent D6 生成 commit message 用）；按 repo 区分，与 git_hooks.*.commit_msg 对齐
+    android:
+      convention: jira_bracket_prefix  # 恒为 `[CNAPP-XXXXX] description`（受 commit-msg 钩子强制，见上）；描述英文、≥20 字符、≥3 词
+      language: english                # 强制英文，禁中文
+    ios:
+      convention: conventional_commits # 无钩子强制；遵循仓库历史惯例（Conventional Commits），issue 标注可选
+      subject_issue_tag: optional
+      language: any
   contract:                           # contract-diff 口径：接口契约以技术方案 detail 的接口定义为基线
     source: tech_solution_detail       # 契约基线来源：Story 级明细方案的接口定义章节
     match: field_level                 # 比对粒度：逐字段（Swift 看 Codable/CodingKeys；Kotlin 看 data class/注解）
@@ -122,10 +146,14 @@ code:
 # ---------------------------------------------------------------- 代码审核（代码审核类 skill 用）
 review:
   rules_source:                       # code-review-rules 用：APP 团队编码规范来源。扫描本地仓库得到：Android 有 detekt/editorconfig；iOS 暂无 lint 规范文件。
-    kind: repo_file                   # 来源类型：confluence（团队规范页）/ repo_file（仓库内规范文件）/ url（官方规范页）；本节按来源就近标注
+    kind: repo_file                   # 来源类型：confluence（团队规范页）/ repo_file（仓库内规范文件）/ github（GitHub MCP get_file_contents）；本节按来源就近标注
     common:                           # 跨语言通用规范：对所有语言子键（swift/kotlin/typescript）一并适用
       - name: Marriott Naming Conventions
-        url: https://git.marriott.com/pages/Productcore/marriott-naming-conventions/   # 官方权威页（字段/类型/枚举/日期命名 + Code Review Checklist），跨团队通用
+        kind: confluence                # 经 Atlassian(Confluence) MCP getConfluencePage 读取
+        confluence:
+          space: TIP
+          page_id: "262439119"
+          url: https://marriottcloud.atlassian.net/wiki/spaces/TIP/pages/262439119/Marriott+Naming+Conventions
         dimensions: [命名, 分层/职责]
     swift: []                         # iOS（ios-dragon-app）暂无 SwiftLint/SwiftFormat 规范文件 → 该语言仅按 common + 内置通用维度审核；有规范后追加
     kotlin:                           # Android（android-dragon-app）仓库内规范文件
@@ -139,7 +167,6 @@ review:
         path: .editorconfig
         url: https://git.marriott.com/cnexperience/android-dragon-app/blob/dev/.editorconfig
         dimensions: [命名]
-  security_baseline: []               # 安全基线来源：当前为空 → 用 skill 内置通用安全基线；后续可由团队在 Confluence 维护后填入（name + url 列表）
   ignore_globs:                       # diff-fetch 免审文件：生成物/锁文件不纳入审核上下文
     - "**/Package.resolved"           # SPM 锁文件
     - "**/*.pbxproj"                  # Xcode 工程文件（改动噪声大，非业务代码）
