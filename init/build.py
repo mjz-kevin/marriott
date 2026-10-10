@@ -11,8 +11,9 @@ AI SDLC 分发包构建脚本。
      内含 install.sh / install.ps1、角色 README。**角色包不含运行时，也不含离线 MCP 包
      （mcp-offline）——后者已随运行时初始化包铺到 runtime/mcp-offline/，角色包安装脚本直接复用。**
 
-  2) 运行时初始化包（加 --runtime <平台>）：只把 res 下对应平台的绿色运行时 zip 连同一份
-     精简安装脚本打成一个包，专门用于初始化运行时（不含 agents/skills/profiles/mcp）：
+  2) 运行时初始化包（加 --runtime <平台>）：把 res 下对应平台的绿色运行时 zip、离线 MCP 包
+     （res/mcp-offline）、离线工具包（res/tools：mermaid-cli / md-to-pdf / 对应平台 Chromium）
+     连同一份精简安装脚本打成一个包，专门用于初始化运行时（不含 agents/skills/profiles/mcp.json）：
        dist/AI-SDLC-Runtime-<platform>-<ver>.zip
      平台取值：win / mac-intel / mac-silicon。
 
@@ -22,7 +23,8 @@ AI SDLC 分发包构建脚本。
   - 用 --version 显式指定则跳过询问；用 --yes 则一律取默认值不询问。
 
 设计要点：
-  - 缺失的 agent（如 dev/verify/code-review/test）自动用 init/placeholders/<name>.md 兜底。
+  - roles.json 中声明但 .cursor/agents 下尚不存在的 agent，自动用 init/placeholders/<name>.md 兜底
+    （两者都没有则构建失败）；当前所有 agent 均已落地，placeholders 仅作为预留机制。
   - 每个包内自带安装脚本与 README，用户拿到 Win/Mac 都可一键安装。
   - 纯标准库实现，绿色版 Python 也能跑；不联网、不装依赖。
 
@@ -337,8 +339,9 @@ def build_role(role: str, cfg: dict, common: dict, version: str, assets: dict) -
             warnings.append(f"公共文件『{fname}』不存在，已跳过")
 
     # 4.5) 离线 MCP 包（figma / github / harness）不随角色包分发：它已由运行时初始化包铺到
-    #      ~/.cursor/AI-SDLC/runtime/mcp-offline/。角色包安装脚本直接复用运行时里的即可，
-    #      不再重复携带（若运行时未装则回退 npx 联网，与之前行为一致）。
+    #      ~/.cursor/AI-SDLC/runtime/mcp-offline/（Windows 为 C:\AI-SDLC\runtime\mcp-offline\），
+    #      角色包安装脚本生成 mcp.json 时直接指向运行时里的入口 js。
+    #      init/allowlist_*.txt 为内部白名单参考，不随包分发。
 
     # 5) 安装 / 卸载脚本（从 init/templates 拷入每个包）
     #    install.sh / uninstall.sh 保持 LF + 可执行位；install.ps1 / uninstall.ps1 写成
@@ -346,7 +349,7 @@ def build_role(role: str, cfg: dict, common: dict, version: str, assets: dict) -
     #    uninstall.* 会注入「AI SDLC 全量资产清单」——卸载与角色无关，清除所有角色的资产。
     _write_install_scripts(role_dir, assets)
 
-    # 7) manifest.json（安装脚本据此把资产落到 ~/.cursor/）
+    # 6) manifest.json（安装脚本据此把资产落到 ~/.cursor/）
     manifest = {
         "role": role,
         "title": cfg.get("title", role),
@@ -362,7 +365,7 @@ def build_role(role: str, cfg: dict, common: dict, version: str, assets: dict) -
     with (role_dir / "manifest.json").open("w", encoding="utf-8") as f:
         json.dump(manifest, f, ensure_ascii=False, indent=2)
 
-    # 8) 角色 README
+    # 7) 角色 README
     _write_role_readme(role_dir, role, cfg, manifest)
 
     return manifest
@@ -389,10 +392,11 @@ def _write_role_readme(role_dir: Path, role: str, cfg: dict, manifest: dict) -> 
     a("安装脚本会：")
     a("- 把 agents 复制到 `~/.cursor/agents/`，skills 复制到 `~/.cursor/skills/`；")
     a("- 把 profiles 复制到 `~/.cursor/profiles/`，mcp 示例复制到 `~/.cursor/`；")
-    a("- 自检 npx（运行时优先，回退系统 PATH）并生成 `~/.cursor/mcp.json`（凭证字段留空，已存在则保留已填凭证）。\n")
+    a("- 自检 node（运行时优先，回退系统 PATH）并生成 `~/.cursor/mcp.json`：figma / marriott-github / harness "
+      "用 node 绝对路径直跑运行时里的离线 MCP 包入口（凭证字段留空，已存在则保留已填凭证）。\n")
     a("> 运行时（node / python）不随角色包分发。若尚未安装，请先运行独立的**运行时初始化包**"
       "（`AI-SDLC-Runtime-<平台>-<版本>.zip`）把绿色运行时铺到 `~/.cursor/AI-SDLC/runtime/`（Windows 为 `C:\\AI-SDLC\\runtime\\`）；"
-      "否则安装脚本会回退到系统 PATH 上的 node/npx。\n")
+      "否则安装脚本会回退到系统 PATH 上的 node，且离线 MCP 包入口缺失，需自行处理。\n")
     a("安装完成后：打开 `~/.cursor/mcp.json` 填入凭证，再在 Cursor 的 MCP 设置里确认 server 已连接即可。agents / skills 由 Cursor 自动识别，无需重启。\n")
     a("## 一键卸载\n")
     a("在包目录内执行（与角色无关，会清除**所有角色**的 agents/skills/profiles(含 setup.json)/mcp 示例；"
@@ -416,7 +420,7 @@ def _write_role_readme(role_dir: Path, role: str, cfg: dict, manifest: dict) -> 
     a("\n## 说明\n")
     a("- 标注「占位」的 Agent / 「源缺失」的 Skill 表示该能力尚未在工具链落地，属预留；")
     a("  正式版本发布后重新运行安装脚本覆盖即可。")
-    a("- 凭证（Atlassian / Figma / GitHub token）需自行填入 `~/.cursor/mcp.json`，脚本不代填。")
+    a("- 凭证（Atlassian / Figma / GitHub token / Harness API Key）需自行填入 `~/.cursor/mcp.json`，脚本不代填。")
     (role_dir / "README.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -537,7 +541,8 @@ def build_runtime_pkg(platform: str, version: str) -> Path:
     lines = [
         f"# AI SDLC 运行时初始化包 · {plat_label}\n",
         f"> 版本：{version}\n",
-        "本包只用于**初始化离线绿色运行时**（node / python），不含 agents / skills / profiles / mcp。\n",
+        "本包只用于**初始化离线绿色运行时**：node / python、离线 MCP 包（figma / github / harness）、"
+        "离线工具包（mermaid-cli / md-to-pdf / Chromium）；不含 agents / skills / profiles / mcp.json。\n",
         "## 安装\n",
         "解压后在包目录内执行：\n",
     ]
@@ -556,7 +561,7 @@ def build_runtime_pkg(platform: str, version: str) -> Path:
         ]
     lines += [
         "## 说明\n",
-        "- 幂等：运行时目录已存在则跳过（如需重装先删除运行时目录）。",
+        "- 分组件幂等：运行时本体 / 每个离线 MCP 包 / 每个离线工具包各自判断，已就位的跳过、缺失的补齐（如需重装某组件先删除其目录）。",
         "- 运行时就位后，再安装任一角色包（PO/TL/Dev/QA），其安装脚本会自动复用此运行时并生成 `~/.cursor/mcp.json`。",
     ]
     (pkg_dir / "README.md").write_text("\n".join(lines) + "\n", encoding="utf-8")

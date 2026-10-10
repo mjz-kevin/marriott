@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # AI SDLC 角色分发包 · macOS / Linux 安装脚本
 # 把本包内的 agents / skills / profiles / mcp 示例落到 ~/.cursor/，
-# 并把随包的 macOS 绿色运行时（node/python）铺到 ~/.cursor/AI-SDLC/runtime/。
+# 并复用运行时初始化包已铺好的 ~/.cursor/AI-SDLC/runtime/（node + 离线 MCP 包）生成 ~/.cursor/mcp.json。
 # 幂等：重复运行会覆盖同名资产（profiles/setup.json 与已填凭证的 mcp.json 除外）。凭证不代填。
 set -euo pipefail
 
@@ -58,121 +58,17 @@ fi
 # 清理 macOS 垃圾文件
 find "$CURSOR_HOME/agents" "$CURSOR_HOME/skills" -name ".DS_Store" -delete 2>/dev/null || true
 
-# ---- macOS 专属：铺开随包绿色运行时到 ~/.cursor/AI-SDLC/runtime/ ----
-# 与 Windows 侧一致，采用「离线随包运行时」策略：包内可能带以下任一形态的运行时载荷——
-#   1) 目录 AI-SDLC/runtime/                        （已解开，直接拷贝，最省事）
-#   2) 按架构分包（推荐，与 AI-SDLC-windows.zip 对齐）：
-#        Apple Silicon(M系列) → AI-SDLC-macOS-Silicon.zip
-#        Intel                → AI-SDLC-macOS-Intel.zip
-#   3) 通用压缩包 AI-SDLC-macos.zip 或 .tar.gz       （含目标架构的 AI-SDLC/runtime/）
-# 铺到用户级 ${CURSOR_HOME}/AI-SDLC/，得到 ${CURSOR_HOME}/AI-SDLC/runtime/。不污染系统、无需 sudo、无需 brew。
+# ---- 运行时（node/python + 离线 MCP 包 + 离线工具包）不随角色包分发 ----
+# 由独立的运行时初始化包（AI-SDLC-Runtime-mac-<arch>-<ver>.zip）铺到 ~/.cursor/AI-SDLC/runtime/。
+# 本脚本只复用已就位的运行时：定位 node 与离线 MCP 入口，写进 mcp.json。
 RUNTIME_HOME="$CURSOR_HOME/AI-SDLC"
-RUNTIME_ROOT="$RUNTIME_HOME/runtime"
-
-install_runtime() {
-  # 已铺开则幂等跳过
-  if [ -d "$RUNTIME_ROOT" ]; then
-    echo "--> 检测到 ${RUNTIME_ROOT} 已存在，跳过运行时铺开（如需重装请先删除 ${RUNTIME_HOME}）"
-    return 0
-  fi
-  mkdir -p "$RUNTIME_HOME"
-
-  # 形态 1：包内已带解开的 AI-SDLC/runtime/
-  if [ -d "$PKG_DIR/AI-SDLC/runtime" ]; then
-    echo "--> 拷贝随包运行时目录到 ${RUNTIME_HOME} ..."
-    cp -R "$PKG_DIR/AI-SDLC/runtime" "$RUNTIME_HOME/"
-    echo "    运行时已就位：${RUNTIME_ROOT}"
-    return 0
-  fi
-
-  # 形态 2/3：定位压缩包。按当前 CPU 架构优先选架构分包，再回退通用包。
-  local arch_zip="" zip_pkg="" tgz_pkg=""
-  case "$(uname -m)" in
-    arm64)  arch_zip="$PKG_DIR/AI-SDLC-macOS-Silicon.zip" ;;
-    x86_64) arch_zip="$PKG_DIR/AI-SDLC-macOS-Intel.zip" ;;
-  esac
-  if [ -n "$arch_zip" ] && [ -f "$arch_zip" ]; then
-    zip_pkg="$arch_zip"
-  elif [ -f "$PKG_DIR/AI-SDLC-macos.zip" ]; then
-    zip_pkg="$PKG_DIR/AI-SDLC-macos.zip"
-  else
-    for cand in "$PKG_DIR/AI-SDLC-macos.tar.gz" "$PKG_DIR/AI-SDLC-macos.tgz"; do
-      [ -f "$cand" ] && tgz_pkg="$cand" && break
-    done
-  fi
-
-  if [ -n "$zip_pkg" ]; then
-    echo "--> 解压运行时 $(basename "$zip_pkg") 到 ${CURSOR_HOME} ..."
-    if command -v unzip >/dev/null 2>&1; then
-      unzip -oq "$zip_pkg" -d "$CURSOR_HOME"
-    else
-      # macOS 自带 ditto，可解 zip
-      ditto -x -k "$zip_pkg" "$CURSOR_HOME"
-    fi
-  elif [ -n "$tgz_pkg" ]; then
-    echo "--> 解压运行时 $(basename "$tgz_pkg") 到 ${CURSOR_HOME} ..."
-    tar -xzf "$tgz_pkg" -C "$CURSOR_HOME"
-  else
-    echo "    ⚠️ 本包未包含 macOS 运行时（AI-SDLC/runtime/、AI-SDLC-macOS-Silicon.zip / AI-SDLC-macOS-Intel.zip 或 AI-SDLC-macos.zip/.tar.gz）。"
-    echo "       将回退到系统 PATH 上的 node/npx（若无则相关 MCP server 无法启动）。"
-    return 1
-  fi
-
-  # 清理 macOS 打包产生的资源分叉目录 / 垃圾文件（若运行时 zip 是在 macOS 上用 Finder/zip 打的）
-  rm -rf "$CURSOR_HOME/__MACOSX"
-  find "$CURSOR_HOME/AI-SDLC" -name ".DS_Store" -type f -delete 2>/dev/null || true
-
-  if [ -d "$RUNTIME_ROOT" ]; then
-    echo "    运行时已解压到 ${RUNTIME_ROOT}"
-  else
-    echo "    ⚠️ 解压后未发现 ${RUNTIME_ROOT}，请检查运行时包内结构（应为 AI-SDLC/runtime/...）。"
-    return 1
-  fi
-}
-
-install_runtime || true
-
-# ---- 铺开离线 MCP 包（figma / github / harness）到 runtime/mcp-offline/ ----
-# 载荷来源：包内 mcp-offline/ 下的 figma-*.zip / github-*.zip / harness-*.zip（带版本号，纯 JS 跨架构通用）。
-# 每个 zip 内为 node_modules/...，分别解压到 mcp-offline/figma/、mcp-offline/github/、mcp-offline/harness/。
-# 幂等：对应子目录已存在则跳过该包。
-install_mcp_offline() {
-  local base="$RUNTIME_ROOT/mcp-offline"
-  local src="$PKG_DIR/mcp-offline"
-  if [ ! -d "$src" ]; then
-    echo "--> 本包未带离线 MCP 包（mcp-offline/），跳过（figma/github/harness 将回退到 npx 联网方式）"
-    return 0
-  fi
-  mkdir -p "$base"
-  # $1=子目录名(figma/github/harness)  $2=zip 通配前缀
-  _unzip_one() {
-    local sub="$1" glob="$2" dst="$base/$1"
-    if [ -d "$dst" ]; then
-      echo "    检测到 ${dst} 已存在，跳过 $sub"
-      return 0
-    fi
-    local zipf
-    zipf="$(ls "$src"/$glob 2>/dev/null | sort | tail -n1)"
-    if [ -z "$zipf" ] || [ ! -f "$zipf" ]; then
-      echo "    ⚠️ 未找到 $sub 的离线包（$glob），跳过"
-      return 1
-    fi
-    echo "--> 解压 $(basename "$zipf") 到 ${dst} ..."
-    mkdir -p "$dst"
-    if command -v unzip >/dev/null 2>&1; then
-      unzip -oq "$zipf" -d "$dst"
-    else
-      ditto -x -k "$zipf" "$dst"
-    fi
-    rm -rf "$dst/__MACOSX"
-    find "$dst" -name ".DS_Store" -type f -delete 2>/dev/null || true
-  }
-  _unzip_one figma   "figma-*.zip"
-  _unzip_one github  "github-*.zip"
-  _unzip_one harness "harness-*.zip"
-  echo "    离线 MCP 包处理完成（figma / github / harness）"
-}
-install_mcp_offline || true
+RUNTIME_ROOT="${AI_SDLC_RUNTIME:-$RUNTIME_HOME/runtime}"
+if [ -d "$RUNTIME_ROOT" ]; then
+  echo "--> 检测到运行时：${RUNTIME_ROOT}"
+else
+  echo "--> ⚠️ 未检测到运行时（${RUNTIME_ROOT}）。请先安装运行时初始化包（AI-SDLC-Runtime-mac-*.zip），"
+  echo "       否则将回退到系统 PATH 上的 node，且离线 MCP 包入口缺失。"
+fi
 
 # ---- 定位运行时里的可执行（按 CPU 架构选对应目录）----
 # 目录命名遵循官方/本项目约定：
@@ -215,7 +111,7 @@ _find_runtime_bin() {
   return 1
 }
 
-# npx / node 从 node-*-darwin-* 目录找
+# node 从 node-*-darwin-* 目录找
 resolve_node_bin() { _find_runtime_bin node "$1"; }
 # python3 优先从独立 python-*-darwin-* 目录找
 resolve_python_bin() { _find_runtime_bin python "$1"; }
@@ -245,7 +141,7 @@ HARNESS_ENTRY="$MCP_OFFLINE_ROOT/harness/node_modules/harness-mcp-v2/build/index
 if [ -f "$FIGMA_ENTRY" ] && [ -f "$GITHUB_ENTRY" ] && [ -f "$HARNESS_ENTRY" ]; then
   echo "--> 离线 MCP 包已就位：${MCP_OFFLINE_ROOT}"
 else
-  echo "--> ⚠️ 未找到离线 MCP 包入口（${MCP_OFFLINE_ROOT}），figma/github/harness 需自行提供或改回 npx 方式。"
+  echo "--> ⚠️ 未找到离线 MCP 包入口（${MCP_OFFLINE_ROOT}），请先安装运行时初始化包后重跑本脚本。"
 fi
 
 
@@ -261,7 +157,7 @@ elif PY="$(command -v python 2>/dev/null)"; then
 fi
 [ -n "$PY" ] && echo "--> 自检 python：$PY [$PY_SOURCE]"
 
-# ---- 生成 ~/.cursor/mcp.json（macos 模板：删 _comment、填 npx 绝对路径、幂等保留已填凭证）----
+# ---- 生成 ~/.cursor/mcp.json（macos 模板：删 _comment、填 node 绝对路径 + 离线 MCP 入口、幂等保留已填凭证）----
 MCP_TEMPLATE="$CURSOR_HOME/mcp.example.macos.json"
 MCP_TARGET="$CURSOR_HOME/mcp.json"
 if [ -f "$MCP_TEMPLATE" ]; then

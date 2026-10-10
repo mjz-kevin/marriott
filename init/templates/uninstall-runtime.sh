@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # AI SDLC 运行时初始化包 · macOS 卸载脚本
 # 与 install-runtime.sh 对应：删除铺到 ~/.cursor/AI-SDLC/ 的绿色运行时（node/python）
-# 及其下的离线 MCP 包（mcp-offline）。不触碰 agents / skills / profiles / mcp.json。
+# 及其下的离线 MCP 包（mcp-offline）、离线工具包（tools：mermaid-cli / md-to-pdf / Chromium）。
+# 不触碰 agents / skills / profiles / mcp.json。
 #
 # 可选开关：
 #   -y|--yes      不询问，直接删除（默认会二次确认）
@@ -22,7 +23,7 @@ for arg in "$@"; do
     -n|--dry-run) DRY_RUN=1 ;;
     --mcp-only) MCP_ONLY=1 ;;
     -h|--help)
-      sed -n '2,11p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+      sed -n '2,10p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
       exit 0 ;;
     *) echo "未知参数：${arg}（用 --help 查看用法）"; exit 2 ;;
   esac
@@ -60,7 +61,7 @@ if [ "$MCP_ONLY" = 1 ]; then
     echo "    已取消"
   fi
 else
-  echo "    目标：${RUNTIME_HOME}（node/python + 离线 MCP 包）"
+  echo "    目标：${RUNTIME_HOME}（node/python + 离线 MCP 包 + 离线工具包）"
   if confirm "    ⚠️ 即将删除整个运行时目录 ${RUNTIME_HOME}，确认？"; then
     rm_path "$RUNTIME_HOME" "运行时"
   else

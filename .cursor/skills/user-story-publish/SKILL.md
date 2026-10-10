@@ -214,7 +214,28 @@ Don't auto-transition forward; the schedule is a PO decision.
 | Don't hardcode constants | The target project is derived from the Parent Epic key (or the team-config override); link types / initial status come from the team config |
 | Markdown in / Markdown out | Write: always `contentFormat: "markdown"`. Read: always `responseContentFormat: "markdown"`. Never author or re-submit Wiki (`h2.`, `{{code}}`, `[url\|url\|smart-link]`) |
 
-## 4. Output report
+## 4. Wiki read/render verification
+
+Wiki is a read/export serialization of ADF, never a write format. When a read returns Wiki tokens, or someone claims a ticket "renders broken", verify before concluding — most Wiki tokens are correct serialization, not corruption.
+
+**Step 1 — re-read as Markdown first (mandatory before any judgement)**: re-fetch via `getJiraIssue` with `responseContentFormat: "markdown"`. If that returns `##` headings / backtick inline code / `[text](url)` links, the stored ADF is intact — the earlier Wiki view was just serialization, do nothing. Only if the Markdown read itself shows a defect do you proceed.
+
+**Step 2 — classify what you see** (don't flag a correct serialization as a bug):
+
+| Observed token | Verdict | Meaning |
+|------|------|------|
+| `h2. Heading` | Correct | Wiki serialization of an ADF heading; renders fine in the UI |
+| `{{CrashReporter.kt}}` | Correct | Wiki monospace/inline-code; `{{x}}` is **not** an unreplaced `{guidance}` placeholder |
+| `*bold*` / `[url\|url\|smart-link]` | Correct | Wiki bold / smart-link serialization; renders fine |
+| single-pair `{role}` / `{Figma link}` in the Markdown read | **Broken** | A real unreplaced `{guidance}` placeholder leaked from the template — fix the content |
+| stray `}` / `{}}` next to a code term in the rendered body | **Broken** | Nested Wiki braces around a brace-bearing snippet (`{{swazzler { }}}`) — fix the token |
+| `**xxx**` shown literally in the rendered body | **Broken** | Markdown submitted as plain text without `contentFormat: "markdown"` — resubmit |
+
+**Step 3 — fix only a true defect, and only via the write channel**: never hand-edit Wiki back into the field. Rewrite the affected text in Markdown and resubmit through `editJiraIssue` with `contentFormat: "markdown"` (Jira re-converts to ADF). For a brace-bearing snippet, write it as a single backtick pair with literal braces (`` `swazzler { }` ``), never `{{swazzler { }}}`.
+
+> Rule of thumb: `{{...}}` double braces = Wiki monospace (correct); `{...}` single braces surviving a Markdown read = leaked guidance placeholder (fix). Distinguishing the two is the whole point of reading as Markdown first.
+
+## 5. Output report
 
 ```markdown
 Created {n} Stories (skipped {m} duplicates)
@@ -229,7 +250,7 @@ Created {n} Stories (skipped {m} duplicates)
 - **Unfilled fields**: {the list of fields requiring human estimation}
 ```
 
-## 5. Troubleshooting
+## 6. Troubleshooting
 
 | Symptom | Handling |
 |------|------|
@@ -244,7 +265,7 @@ Created {n} Stories (skipped {m} duplicates)
 | External URL rejected by "Linked Work Items" | Expected — Issue Links only accept issue↔issue; put the external URL in Web links via `--jira-remote-link` instead |
 | Missing team constant | Stop, state the missing item and the corresponding owner to complete it |
 
-## 6. Related
+## 7. Related
 
 - Input format: the Story list produced by the upstream User Story authoring step (field table in its template)
 - Upstream: user-story-authoring

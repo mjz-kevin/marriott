@@ -1,6 +1,7 @@
 # AI SDLC 运行时初始化包 · Windows 卸载脚本 (PowerShell)
 # 与 install-runtime.ps1 对应：删除解压到 C:\AI-SDLC\ 的绿色运行时（node/python）
-# 及其下的离线 MCP 包（mcp-offline）。不触碰 agents / skills / profiles / mcp.json。
+# 及其下的离线 MCP 包（mcp-offline）、离线工具包（tools：mermaid-cli / md-to-pdf / Chromium）。
+# 不触碰 agents / skills / profiles / mcp.json。
 #
 # 可选开关：
 #   -Yes       不询问，直接删除（默认会二次确认）
@@ -51,7 +52,7 @@ if ($McpOnly) {
         Write-Host "    已取消"
     }
 } else {
-    Write-Host "    目标：$RuntimeHome（node/python + 离线 MCP 包）"
+    Write-Host "    目标：$RuntimeHome（node/python + 离线 MCP 包 + 离线工具包）"
     if (Confirm-Del "    ⚠️ 即将删除整个运行时目录 $RuntimeHome，确认？") {
         Remove-One $RuntimeHome "运行时"
     } else {

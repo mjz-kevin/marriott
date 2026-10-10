@@ -95,5 +95,5 @@ done
 echo ""
 echo "==> 卸载完成 ✅"
 echo "    已保留 $CURSOR_HOME/mcp.json（含用户凭证），未删除。"
-echo "    运行时（~/.cursor/AI-SDLC/）如需卸载，请运行运行时包内的 uninstall-runtime.sh。"
+echo "    运行时（~/.cursor/AI-SDLC/）如需卸载，请运行运行时初始化包内的 uninstall.sh。"
 echo "    agents / skills 变更 Cursor 会自动识别，无需重启。"

@@ -165,7 +165,7 @@ repo:
   name: ios                        # repo id (from the profile's code.repos)
   baseline_ref: develop            # the branch / tag the baseline was checked out from
   baseline_sha: "abc123…"          # the baseline commit at checkout
-  feature_branch: ai/CNAPP-121-member-benefits-list   # the one AI-exclusive branch (naming owned by feature-branch Skill)
+  feature_branch: feat-ai/CNAPP-121-Member-Benefits   # the one AI-exclusive branch (naming owned by feature-branch Skill, per code.branch.template)
   branch_created: true
   head_sha: "def456…"              # the branch head this Agent last produced
   pushed_sha: null                 # last pushed commit; null = not yet pushed
@@ -193,7 +193,7 @@ verify:                            # inline verify<->fix loop log (append-only)
   last_report: null                # docs/VERIFY-REPORT_…_aN_….md
   history: []                      # append {attempt, verdict, at, head_sha, failed_items, report}
 commit:
-  message: null                    # the commit message used (after sensitive-data-guard)
+  message: null                    # the commit message used (after sensitive-data-guard); ends with the code.ai_provenance.commit_trailer paragraph
   committed_sha: null
 created_at: 2026-09-25T09:50:00+08:00
 updated_at: 2026-09-25T10:30:00+08:00
@@ -337,9 +337,10 @@ flowchart TD
      - `convention: conventional_commits` → `type(scope): subject` (pick an accurate `type` — feat/fix/docs/refactor/chore/test… — and a `scope` matching the area), a concise imperative subject, then a body summarizing the change; place the Story key per `subject_issue_tag` (append `[KEY]` to the subject when `optional`/desired, omit when the convention doesn't use it).
      - `convention: jira_bracket_prefix` (e.g. android) → first line **exactly** `[<STORY-KEY>] <description>` with the description in the profile's `language`, meeting `min_desc_chars` / `min_words`, under `max_desc_chars`; never a `type(scope):` subject where the hook wants the bracket prefix.
      - Respect `language` (e.g. English-only where required), keep the subject within the hook's length bounds, and **when in doubt match the repo's own recent `git log` style** so the message reads consistent with history rather than merely legal.
+   - **Append the AI-provenance trailer (mandatory).** Read `code.ai_provenance.commit_trailer` from the profile (e.g. `AI-Assisted: Cursor dev-agent`) and put it as the **last paragraph** of the message, separated from the subject / body by one blank line (git-trailer form, so `git log --grep` / `git interpret-trailers` can find it after merge). Never put it on the first line — the subject stays exactly as the convention above requires (the android commit-msg hook validates the first line only, so the trailer doesn't affect it). If the profile has no `ai_provenance.commit_trailer`, fall back to `AI-Assisted: Cursor dev-agent`. Every commit this Agent creates carries it, including fix-attempt commits.
    - These are **declared in the profile, not hardcoded**; if the profile lacks a `git_hooks`/`commit` entry for the repo, fall back to reading the repo's actual hook scripts (`.husky/`, `.git/hooks/`, `config/hooks/`, `core.hooksPath`) read-only, and infer the convention from recent `git log`, before committing.
 3. Run `sensitive-data-guard` over the final diff **and** the commit message; on a hit -> `blocked`.
-4. Commit on the Feature branch, using the profile-compliant message from step 2 (references the Story key per the repo's convention and summarizes the change). If the commit is still rejected by a hook, treat the hook output as a failed check -> fix within scope and retry, do **not** `--no-verify` to bypass it. **Never force-push.** Record `commit.message`, `commit.committed_sha`, `repo.head_sha`.
+4. Commit on the Feature branch, using the profile-compliant message from step 2 (references the Story key per the repo's convention, summarizes the change, and ends with the AI-provenance trailer). If the commit is still rejected by a hook, treat the hook output as a failed check -> fix within scope and retry, do **not** `--no-verify` to bypass it. **Never force-push.** Record `commit.message`, `commit.committed_sha`, `repo.head_sha`.
 5. **Ask the DEV before pushing (mandatory).** Pushing to the remote **always** requires the DEV's explicit approval in this turn — this holds for the very first push of the branch and for every subsequent push, with no exception. Do **not** push automatically, and do **not** treat a `pass` verdict, an earlier "create branch", or any prior push as standing consent.
    - Set node=`D6_push`, `status: waiting_user`, persist, and prompt the DEV to confirm the push (spell out the branch, the commit SHA about to be pushed, and the target remote in the status card). Record the request in `sessions/`.
    - **Approved this turn** -> `git push -u origin {feature_branch}` (never force-push). Record `repo.pushed_sha`, then continue to step 6. Persist the approval verbatim to `sessions/`.
@@ -357,7 +358,7 @@ The auto verify<->fix loop has passed all four automated checks, but **those are
 2. **Branch on the DEV's local-verification result:**
    - **Works / no problem** -> go to step 3 (open the PR).
    - **Has a problem** -> go to step 4 (gather more info, fix, re-verify locally).
-3. 👤 **DEV confirms it works -> open the PR via the `create-pr` skill.** Only after the DEV reports the local run is good, **trigger the `create-pr` skill** (it selects the team PR template and fills every section from the real diff) to raise a Pull Request to the target branch, per the profile's branching / PR rules. Record in `sessions/` that the PR was opened (and the PR URL if returned), then set `status: done`. This is the single, intended way this Agent's work turns into a PR — don't open the PR by hand or by any other path.
+3. 👤 **DEV confirms it works -> open the PR via the `create-pr` skill.** Only after the DEV reports the local run is good, **trigger the `create-pr` skill** (it selects the team PR template and fills every section from the real diff) to raise a Pull Request to the target branch, per the profile's branching / PR rules. **Tell `create-pr` this PR comes from dev-agent**, so it ticks the template's "AI Assistance" item and applies the `code.ai_provenance.pr_label` label (see that skill's AI-provenance rule). Record in `sessions/` that the PR was opened (and the PR URL, and whether the label was applied or skipped because it doesn't exist in the repo), then set `status: done`. This is the single, intended way this Agent's work turns into a PR — don't open the PR by hand or by any other path.
 4. **Local verification failed — gather more info, then fix and re-verify locally.**
    1. Set `status: waiting_user` and **prompt the DEV to supply more information** about what went wrong: exact repro steps, the failing screen / endpoint, console / log output, expected vs. actual, and any config / data preconditions. Record the DEV's answer verbatim in `sessions/`. If the DEV's report is too thin to act on, keep asking until it's actionable — don't guess.
    2. With that info, treat it as a **new fix attempt**: bump `attempt`, go back to **D4** to fix **only** the reported problem (plus any regression it implies), re-run **D5** (the four checks) and **D6** (commit & push, re-asking push approval), landing back here.
@@ -422,4 +423,5 @@ When blocked, spell out the reason, who handles it, and how to continue after it
 - Writing to Jira beyond status transitions and comments; restructuring or deleting Jira fields / tickets.
 - Committing or pushing content that fails `sensitive-data-guard`; deciding the branch-naming rule, build commands, commit-message convention, or test framework yourself, or hardcoding team constants (these come from the profile / the repo's own hook scripts). **Bypassing a repo's git hooks (e.g. `git commit --no-verify`, `git push --no-verify`)** — a hook rejection is a real failed check to fix within scope, never to skip.
 - Saving this Agent's own artifacts outside `.ai-sdlc/` (unless the user explicitly specifies); overwriting an existing note / snapshot file.
+- Committing without the AI-provenance trailer (`code.ai_provenance.commit_trailer`), or opening the PR without telling `create-pr` it is AI-assisted (so the "AI Assistance" item and the PR label get applied).
 - Reading or writing another Agent's state file; deleting historical files under `.ai-sdlc/`.

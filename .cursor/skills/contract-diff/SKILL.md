@@ -8,7 +8,7 @@ description: >-
   solution's interface contract;
   triggers: contract diff / contract check / 接口契约检查 / 契约比对 / 接口比对 / 接口方案检查.
 metadata:
-  agent: Verification Agent
+  agent: Dev Agent (D5)
 ---
 
 # contract-diff — field-by-field comparison of implementation vs solution interfaces

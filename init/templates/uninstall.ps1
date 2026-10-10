@@ -85,5 +85,5 @@ foreach ($f in $McpExamples) {
 Write-Host ""
 Write-Host "==> 卸载完成 ✅"
 Write-Host "    已保留 $CursorHome\mcp.json（含用户凭证），未删除。"
-Write-Host "    运行时（C:\AI-SDLC\）如需卸载，请运行运行时包内的 uninstall-runtime.ps1。"
+Write-Host "    运行时（C:\AI-SDLC\）如需卸载，请运行运行时初始化包内的 uninstall.ps1。"
 Write-Host "    agents / skills 变更 Cursor 会自动识别，无需重启。"

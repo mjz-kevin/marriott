@@ -61,3 +61,8 @@ N/A
 
 ## Notes for Reviewers
 <!-- Anything reviewers should pay special attention to, known limitations, follow-up TODOs, etc. -->
+
+## AI Assistance
+<!-- Provenance of the code. When the PR is opened by dev-agent, tick the first item and keep the tool name. -->
+- [ ] AI-assisted: code / unit tests were generated with Cursor dev-agent and reviewed by the author
+- [ ] No AI assistance

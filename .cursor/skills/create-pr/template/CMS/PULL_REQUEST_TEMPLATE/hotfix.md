@@ -46,3 +46,8 @@ Usage: append ?template=hotfix.md to the PR creation page URL
 ## Follow-up
 <!-- A hotfix is often a temporary mitigation; list the follow-up work needed and its tickets -->
 - [ ]
+
+## AI Assistance
+<!-- Provenance of the code. When the PR is opened by dev-agent, tick the first item and keep the tool name. -->
+- [ ] AI-assisted: code / unit tests were generated with Cursor dev-agent and reviewed by the author
+- [ ] No AI assistance

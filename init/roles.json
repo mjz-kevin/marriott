@@ -1,5 +1,5 @@
 {
-  "_comment": "AI SDLC 角色分发清单。build.py 读取本文件，按角色把 .cursor 下的 agents/skills 及公共资产打包。字段说明见下方 _fields。资产名对应 ../.cursor/agents/<name>.md 与 ../.cursor/skills/<name>/。agent 若在 .cursor/agents 下不存在，会用 init/placeholders/<name>.md 兜底并在包内标注『能力尚未就绪』。",
+  "_comment": "AI SDLC 角色分发清单。build.py 读取本文件，按角色把 .cursor 下的 agents/skills 及公共资产打包。字段说明见下方 _fields。资产名对应 ../.cursor/agents/<name>.md 与 ../.cursor/skills/<name>/。agent 若在 .cursor/agents 下不存在，会用 init/placeholders/<name>.md 兜底并在包内标注『能力尚未就绪』。卸载脚本的全量资产清单也由本文件汇总生成，新增资产只需改这里。",
   "_fields": {
     "agents": "该角色随包分发的 Agent（.md，来自 .cursor/agents 或 init/placeholders）",
     "skills": "该角色专属 Skill（目录，来自 .cursor/skills）",
@@ -10,13 +10,16 @@
     "_comment": "所有角色都会收到的公共 Skill 与文件。",
     "skills": [
       "sensitive-data-guard",
-      "profile-select"
+      "profile-select",
+      "md-to-pdf"
     ],
     "profiles": [
       "app-test.yaml",
       "app-prod.yaml",
       "cms-test.yaml",
       "cms-prod.yaml",
+      "test_case_memory.yaml",
+      "test_script_memory.yaml",
       "setup.json"
     ],
     "files": [
@@ -40,12 +43,13 @@
     },
     "TL": {
       "title": "Tech Lead",
-      "phase": "需求设计 / Refinement / 开发 / Code Review",
-      "_comment": "TL 含 PRD 级技术方案(tech-solution-prd)；Dev 与之基本一致但不含该 Skill，其余（开发 + CodeReview）相同。",
+      "phase": "需求设计 / Refinement / 开发 / Code Review / CI/CD",
+      "_comment": "TL 含 PRD 级技术方案(tech-solution-prd)；Dev 与之基本一致但不含该 Skill，其余（开发 + CodeReview + CI/CD）相同。",
       "agents": [
         "tech-solution-agent",
         "dev-agent",
-        "code-review-agent"
+        "code-review-agent",
+        "cicd-agent"
       ],
       "skills": [
         "requirement-clarify",
@@ -70,12 +74,13 @@
     },
     "Dev": {
       "title": "Developer",
-      "phase": "需求设计 / Refinement / 开发 / Code Review",
-      "_comment": "Dev 与 TL 内容基本一致（技术方案 + 开发 + CodeReview）；差异：Dev 不含 tech-solution-prd（PRD 级技术方案由 TL 负责）。",
+      "phase": "需求设计 / Refinement / 开发 / Code Review / CI/CD",
+      "_comment": "Dev 与 TL 内容基本一致（技术方案 + 开发 + CodeReview + CI/CD）；差异：Dev 不含 tech-solution-prd（PRD 级技术方案由 TL 负责）。",
       "agents": [
         "tech-solution-agent",
         "dev-agent",
-        "code-review-agent"
+        "code-review-agent",
+        "cicd-agent"
       ],
       "skills": [
         "requirement-clarify",
@@ -99,15 +104,16 @@
     },
     "QA": {
       "title": "Quality Assurance",
-      "phase": "开发(用例预生成) / 功能测试 / Release 回归",
-      "agents": ["test-agent"],
+      "phase": "开发(用例预生成) / 功能测试 / Release 回归 / CI/CD",
+      "_comment": "QA 测试类 Skill 仅随 QA 角色分发（由 ai-test-agent 编排）；cicd-agent + harness-invoke 用于触发构建 / 部署。",
+      "agents": ["ai-test-agent", "cicd-agent"],
       "skills": [
+        "jira-to-test-case",
         "test-case-authoring",
         "test-case-to-script",
-        "auto-test-run",
-        "test-report-publish",
-        "story-bug-create",
-        "regression-bug-create",
+        "test-debug-script",
+        "test-page-elements",
+        "test-run-report-bug",
         "harness-invoke"
       ]
     }

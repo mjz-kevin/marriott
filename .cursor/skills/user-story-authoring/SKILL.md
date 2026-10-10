@@ -170,7 +170,7 @@ Any failure -> re-split.
 - All back-links listed in the team-configured link set are complete
 - All six INVEST items pass
 - No field requiring human estimation is filled
-- No **`Example`** tag residue, unreplaced `{…}` guidance placeholders, HTML comments, Wiki markup (`h2.`, `{{…}}`, `[url|url|smart-link]`), or high-confidence template example paste (per prd-authoring quality-gates G2a); **do not** flag business-domain terms alone (Bonvoy, Marriott, etc.)
+- No **`Example`** tag residue, unreplaced `{…}` guidance placeholders, HTML comments, Wiki markup (`h2.`, `{{…}}`, `[url|url|smart-link]`), or high-confidence template example paste (per prd-authoring quality-gates G2a); **do not** flag business-domain terms alone (Bonvoy, Marriott, etc.). Judge by brace depth: a surviving **single-pair `{x}`** is a leaked guidance placeholder (fix); a **double-pair `{{x}}`** is Wiki monospace serialization, not a placeholder — re-read with `responseContentFormat: "markdown"` before calling it broken
 - Label is complete per `mcp.jira.labels`: `ai_provenance` applied; every `mandatory` category has a value (`business_domain` decided against the official domain definitions on `labels.source`, not literal title wording); when a ticket's Component is `iOS`, the `iOS` platform label is present (Component ↔ platform label consistent); no label outside the enum
 - When the team requires self-contained descriptions: each description is self-contained
 
