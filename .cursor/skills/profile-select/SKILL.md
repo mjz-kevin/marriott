@@ -1,7 +1,9 @@
 ---
 name: profile-select
 description: >-
-  Select and locally remember the current AI SDLC team profile (.cursor/profiles/*.yaml).
+  Select and locally remember the current AI SDLC team profile. The profile *.yaml files live
+  in the current user's home .cursor/profiles/ (~/.cursor/profiles on macOS/Linux,
+  %USERPROFILE%\.cursor\profiles on Windows); use `profile.py resolve` to get the exact path.
   On first use it lists the available profiles for the user to choose from, saves the
   choice locally (per repository), and afterward every Agent and Skill reads the current
   profile from here without asking again; it re-selects only when the user explicitly asks
@@ -12,10 +14,28 @@ description: >-
 
 # profile-select (selecting and remembering the team profile)
 
-Centrally manages "which team profile is current." Profile files live in the repo at
-`.cursor/profiles/*.yaml` (shared and versioned); **the selection itself** is saved locally
+Centrally manages "which team profile is current." **the selection itself** is saved locally
 on the user's machine (not committed) and remembered per repo root path, so **each machine +
 each repo is asked only once**.
+
+## Where the profile files live (profile path)
+
+The profile `*.yaml` files are installed into **the current user's home `.cursor/profiles/`
+directory** (the install scripts under `init/templates/` copy `profiles/` into `~/.cursor/`):
+
+- **macOS / Linux:** `~/.cursor/profiles/*.yaml`  (i.e. `$HOME/.cursor/profiles/`)
+- **Windows:** `%USERPROFILE%\.cursor\profiles\*.yaml`
+
+If the `CURSOR_HOME` environment variable is set at install time, the base is `$CURSOR_HOME/profiles/`
+instead of the home `.cursor`.
+
+**How the scripts find it (do not hardcode):** `profile.py` resolves the directory at runtime by
+walking **up from the script's own location** (`<cursor-home>/skills/profile-select/scripts/`) until
+it finds a sibling `.cursor/profiles` — so when the skill is installed under `~/.cursor/skills/...`,
+it resolves to `~/.cursor/profiles/`. Always use the path printed by `profile.py resolve` as the
+single source of truth; never assume a hardcoded path. For a dev checkout where the skill lives at
+`<repo>/.cursor/skills/profile-select/scripts/`, the same walk-up logic resolves to the repo's
+`<repo>/.cursor/profiles/`.
 
 | Dimension | Description |
 |-----------|-------------|
@@ -27,14 +47,15 @@ each repo is asked only once**.
 ## Cross-platform notes (macOS / Windows)
 
 - The scripts depend only on the **Python 3 standard library**.
-- **Resolve the Python interpreter from `setup.json` first (same source as `upload_confluence_v2.py`).** Before running any command below, read the repo file `.cursor/profiles/setup.json` (it's short), and take the `python` field from the section matching the current platform (`windows` / `macos` / `linux`), falling back to the `common` section. Use that absolute path as the `python` in every command (expand a leading `~` to the user's home). Only if both the platform section and `common` leave `python` empty (or the file is missing), fall back to the `python` / `python3` on your system `PATH`. This keeps the interpreter consistent with the portable runtime layout (e.g. `~/.cursor/AI-SDLC/runtime/python-*/bin/python3` on macOS, `C:/AI-SDLC/runtime/python-*/python.exe` on Windows).
+- **Resolve the Python interpreter from `setup.json` first (same source as `upload_confluence_v2.py`).** Before running any command below, read `setup.json` from the resolved profiles directory (the `.cursor/profiles/` printed by `profile.py resolve`'s parent — e.g. `~/.cursor/profiles/setup.json`; it's short), and take the `python` field from the section matching the current platform (`windows` / `macos` / `linux`), falling back to the `common` section. Use that absolute path as the `python` in every command (expand a leading `~` to the user's home). Only if both the platform section and `common` leave `python` empty (or the file is missing), fall back to the `python` / `python3` on your system `PATH`. This keeps the interpreter consistent with the portable runtime layout (e.g. `~/.cursor/AI-SDLC/runtime/python-*/bin/python3` on macOS, `C:/AI-SDLC/runtime/python-*/python.exe` on Windows).
 - Location of the memory file (can be overridden with `PROFILE_SELECT_HOME`):
   - **Windows:** `%APPDATA%\ai-sdlc-profile-select\selection.json`
   - **macOS / Linux:** `~/.config/ai-sdlc-profile-select/selection.json`
 - The memory is bucketed by **repo root path**, so different repos don't affect each other.
 
 The commands below assume the skill root `.cursor/skills/profile-select` as the working
-directory; the scripts walk up to locate the repo's `.cursor/profiles`, independent of the
+directory; the scripts walk up from the script location to locate the `.cursor/profiles`
+directory (resolving to `~/.cursor/profiles/` once installed), independent of the
 current working directory.
 
 ## When to use
