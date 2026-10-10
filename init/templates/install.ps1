@@ -1,6 +1,6 @@
 # AI SDLC 角色分发包 · Windows 安装脚本 (PowerShell)
 # 把本包内的 agents / skills / profiles / mcp 示例落到 %USERPROFILE%\.cursor\，
-# 并把随包的 AI-SDLC-windows.zip 解压到 C:\（得到 C:\AI-SDLC\runtime\）。
+# 并复用运行时初始化包已铺好的 C:\AI-SDLC\runtime\（node + 离线 MCP 包）生成 mcp.json。
 # 幂等：重复运行会覆盖同名资产（profiles\setup.json 与已填凭证的 mcp.json 除外）。凭证不代填。
 #
 # 首次运行若被执行策略拦截，先执行：
@@ -60,66 +60,20 @@ if (Test-Path $profilesSrc) {
 Write-Host "--> 安装 mcp 示例到 $CursorHome"
 Copy-Contents (Join-Path $PkgDir "cursor-files") $CursorHome
 
-# ---- Windows 专属：解压运行时到 C:\ ----
-$runtimeZip = Join-Path $PkgDir "AI-SDLC-windows.zip"
-$runtimeRoot = "C:\AI-SDLC\runtime"
-if (Test-Path $runtimeZip) {
-    if (Test-Path $runtimeRoot) {
-        Write-Host "--> 检测到 $runtimeRoot 已存在，跳过运行时解压（如需重装请先删除 C:\AI-SDLC）"
-    } else {
-        Write-Host "--> 解压运行时 AI-SDLC-windows.zip 到 C:\ ..."
-        try {
-            Expand-Archive -Path $runtimeZip -DestinationPath "C:\" -Force
-            Write-Host "    运行时已解压到 C:\AI-SDLC\"
-        } catch {
-            Write-Warning "解压到 C:\ 失败（可能无写入权限）。请手动把 AI-SDLC-windows.zip 解压到 C:\，得到 C:\AI-SDLC\runtime\。"
-            Write-Warning $_.Exception.Message
-        }
-        # 清理 macOS 打包产生的资源分叉目录 / 垃圾文件（若 zip 是在 macOS 上打的）
-        Remove-Item -Recurse -Force "C:\__MACOSX" -ErrorAction SilentlyContinue
-        Get-ChildItem -Path "C:\AI-SDLC" -Recurse -Force -Filter ".DS_Store" -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
-    }
+# ---- 运行时（node/python + 离线 MCP 包 + 离线工具包）不随角色包分发 ----
+# 由独立的运行时初始化包（AI-SDLC-Runtime-win-<ver>.zip）铺到 C:\AI-SDLC\runtime\。
+# 本脚本只复用已就位的运行时：定位 node.exe 与离线 MCP 入口，写进 mcp.json。
+$runtimeRoot = if ($env:AI_SDLC_RUNTIME) { $env:AI_SDLC_RUNTIME } else { "C:\AI-SDLC\runtime" }
+if (Test-Path $runtimeRoot) {
+    Write-Host "--> 检测到运行时：$runtimeRoot"
 } else {
-    Write-Warning "本包未包含 AI-SDLC-windows.zip，跳过运行时解压。请另行获取绿色版运行时并解压到 C:\AI-SDLC\runtime\。"
+    Write-Warning "未检测到运行时（$runtimeRoot）。请先安装运行时初始化包（AI-SDLC-Runtime-win-*.zip），否则将回退到系统 PATH 上的 node，且离线 MCP 包入口缺失。"
 }
-
-# ---- 铺开离线 MCP 包（figma / github / harness）到 runtime\mcp-offline\ ----
-# 来源：包内 mcp-offline\ 下 figma-*.zip / github-*.zip / harness-*.zip（带版本号，纯 JS 跨架构通用）。
-# 每个 zip 内为 node_modules\...，分别解压到 mcp-offline\figma\、mcp-offline\github\、mcp-offline\harness\。
-$mcpSrc = Join-Path $PkgDir "mcp-offline"
-$mcpBase = Join-Path $runtimeRoot "mcp-offline"
-if (Test-Path $mcpSrc) {
-    New-Item -ItemType Directory -Force -Path $mcpBase | Out-Null
-    foreach ($spec in @(@{ sub = "figma"; glob = "figma-*.zip" }, @{ sub = "github"; glob = "github-*.zip" }, @{ sub = "harness"; glob = "harness-*.zip" })) {
-        $dst = Join-Path $mcpBase $spec.sub
-        if (Test-Path $dst) {
-            Write-Host "--> 检测到 $dst 已存在，跳过 $($spec.sub)"
-            continue
-        }
-        $zipf = Get-ChildItem -Path $mcpSrc -Filter $spec.glob -ErrorAction SilentlyContinue |
-                Sort-Object Name | Select-Object -Last 1
-        if (-not $zipf) {
-            Write-Warning "未找到 $($spec.sub) 的离线包（$($spec.glob)），跳过"
-            continue
-        }
-        Write-Host "--> 解压 $($zipf.Name) 到 $dst ..."
-        try {
-            Expand-Archive -Path $zipf.FullName -DestinationPath $dst -Force
-        } catch {
-            Write-Warning "解压 $($zipf.Name) 失败：$($_.Exception.Message)"
-        }
-        Remove-Item -Recurse -Force (Join-Path $dst "__MACOSX") -ErrorAction SilentlyContinue
-    }
-    Write-Host "    离线 MCP 包处理完成（figma / github / harness）"
-} else {
-    Write-Host "--> 本包未带离线 MCP 包（mcp-offline\），跳过（figma/github/harness 将回退到 npx 联网方式）。"
-}
-
 
 # ---- 自检：定位 node.exe（绿色版运行时 → 系统 PATH）----
 function Resolve-Node {
-    # 1) 环境变量 AI_SDLC_RUNTIME 或默认 C:\AI-SDLC\runtime 下的 node-*\node.exe（取字典序最大=最新）
-    $root = if ($env:AI_SDLC_RUNTIME) { $env:AI_SDLC_RUNTIME } else { "C:\AI-SDLC\runtime" }
+    # 1) 运行时根目录（$env:AI_SDLC_RUNTIME 或默认 C:\AI-SDLC\runtime）下的 node-*\node.exe（取字典序最大=最新）
+    $root = $runtimeRoot
     if (Test-Path $root) {
         $nodeDir = Get-ChildItem -Path $root -Directory -Filter "node-*" -ErrorAction SilentlyContinue |
                    Sort-Object Name | Select-Object -Last 1
@@ -148,7 +102,7 @@ $harnessEntry = ((Join-Path $runtimeRoot "mcp-offline\harness\node_modules\harne
 if ((Test-Path $figmaEntry) -and (Test-Path $githubEntry) -and (Test-Path $harnessEntry)) {
     Write-Host "--> 离线 MCP 包已就位：$($runtimeRoot)\mcp-offline"
 } else {
-    Write-Warning "未找到离线 MCP 包入口（$($runtimeRoot)\mcp-offline），figma/github/harness 需自行提供或改回 npx 方式。"
+    Write-Warning "未找到离线 MCP 包入口（$($runtimeRoot)\mcp-offline），请先安装运行时初始化包后重跑本脚本。"
 }
 
 $mcpTemplate = Join-Path $CursorHome "mcp.example.windows.json"

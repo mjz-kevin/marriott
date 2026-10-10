@@ -37,7 +37,7 @@ You trigger **existing** pipelines only. You do **not** create or modify a pipel
 | Workflow | Resolve target & branch/tag -> select the unique pipeline by tags -> high-env human-confirmation gate -> trigger (logging the downstream params) -> poll to a terminal state -> report the build/deploy result -> optional Jira status/comment write-back |
 | Required input | A **target selection** (whatever the `harness-invoke` skill + profile need to uniquely locate a pipeline — this Agent does not predefine the selection keys or their vocabulary) and the **branch or tag** to build/deploy |
 | Optional input | Any runtime variables / inputs the pipeline accepts (passed through verbatim, their names and meaning owned by the pipeline / skill, not this Agent), the Story / release key for a Jira write-back, and any extra selector the skill needs to disambiguate |
-| Downstream | On success -> notify the build/deploy result and proceed to the next environment or hand to QA (`/test-agent`) for feature testing / regression; on failure -> hand to 👤 DEV / DevOps to investigate (this Agent does not auto re-trigger) |
+| Downstream | On success -> notify the build/deploy result and proceed to the next environment or hand to QA (`/ai-test-agent`) for feature testing / regression; on failure -> hand to 👤 DEV / DevOps to investigate (this Agent does not auto re-trigger) |
 
 **Scope**
 
@@ -317,7 +317,7 @@ flowchart TD
 1. Write the run report `docs/CICD-REPORT_{run_id}_t{n}_{timestamp}.md` (target, pipeline, branch/tag, the params log reference, execution handle, terminal result, and on failure the stage-level summary), run `sensitive-data-guard` over it, and set `report`.
 2. **Optional Jira write-back** (only if `jira.write_back` is set): add a status/comment to the Story / release ticket noting the build/deploy result + execution URL (status/comment only, never field restructuring). Set `jira.commented: true`.
 3. `done` for this trigger. In the status card, prominently show the **terminal result** and the **execution handle**, and prompt:
-   - **Success** -> notify the result; proceed to the next environment (a new run), or hand to 👤 QA (`/test-agent`) for feature testing / regression.
+   - **Success** -> notify the result; proceed to the next environment (a new run), or hand to 👤 QA (`/ai-test-agent`) for feature testing / regression.
    - **Failure** -> hand to 👤 DEV / DevOps to investigate using the stage-level summary; this Agent does **not** auto re-trigger — a re-run is a human decision (and starts a new trigger `t{n+1}`).
    - **Timed out** -> 👤 a human watches the execution on Harness.
 
