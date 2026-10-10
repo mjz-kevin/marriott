@@ -7,7 +7,7 @@ description: >-
   acceptance criteria and confirm the implementation satisfies the solution;
   triggers: acceptance check / task acceptance / 任务验收 / 逐条验收 / 验收检查 / 验收标准核验.
 metadata:
-  agent: Verification Agent
+  agent: Dev Agent (D5)
 ---
 
 # acceptance-check — verifying item by item against each task's acceptance criteria

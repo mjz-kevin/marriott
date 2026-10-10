@@ -7,7 +7,7 @@ description: >-
   the code compiles and builds, or when a build check is needed after a development commit;
   triggers: build verify / compile check / 编译验证 / 构建验证 / build 校验 / 编译检查.
 metadata:
-  agent: Verification Agent
+  agent: Dev Agent (D5)
 ---
 
 # build-verify — compile / build verification and structured root-cause analysis of failures

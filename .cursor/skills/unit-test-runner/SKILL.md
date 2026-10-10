@@ -6,7 +6,7 @@ description: >-
   Use when the verification step needs to run unit tests and tally the results;
   triggers: run unit tests / unit test runner / 跑单测 / 执行单元测试 / 单测执行 / 覆盖率统计.
 metadata:
-  agent: Verification Agent
+  agent: Dev Agent (D5)
 ---
 
 # unit-test-runner — running unit tests and summarizing pass rate and coverage
