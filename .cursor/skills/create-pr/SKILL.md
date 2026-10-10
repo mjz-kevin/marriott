@@ -67,6 +67,7 @@ Never hardcode the template text from memory; the files win. If either side lack
 - Fill "Impact" per what the diff actually touches (does it need a DB migration? config/env-var changes? is it backward compatible?).
 - Tick a checklist item only when the diff can substantiate it; otherwise leave it unticked, and clearly point out the items the author needs to verify.
 - "Screenshots" section: if there are no UI/visual-related file changes, tick "no visual changes"; otherwise prompt the author to attach screenshots/recordings.
+- "AI Assistance" section (AI provenance): tick **"AI-assisted"** when the PR is opened by `dev-agent` (the caller says so), or the branch starts with the profile's `code.branch.prefix` (e.g. `feat-ai/`), or the commits in `<base_sha>..HEAD` carry the `code.ai_provenance.commit_trailer` (check with `git log --format=%B <base_sha>..HEAD` and look for the trailer line). Otherwise leave **both** items unticked for the author to choose — never tick "No AI assistance" on the author's behalf.
 - Never fabricate test results, ticket numbers, or approval records.
 
 **Step 5 — Hand the draft to the user for review**, displayed in a code block, confirming with the user before creating anything.
@@ -78,6 +79,12 @@ gh pr create --base <base> --title "<title>" --body-file <tmpfile>
 ```
 
 Prefer `--body-file` over `--body` to preserve markdown formatting and line breaks. Don't use `?template=` to pass the scenario template here — that URL parameter works only on GitHub's web "New PR" page and has no effect on `gh`.
+
+**AI-provenance label.** When Step 4 ticked "AI-assisted," also apply the label `code.ai_provenance.pr_label` from the current profile (via `profile-select`; fall back to `AIGenerated` if the profile has none):
+
+1. First check the label exists in the target repo: `gh label list --search <label>` (or GitHub MCP `list_labels`). `gh pr create --label` fails the whole creation when the label is missing, so never pass an unchecked label.
+2. Exists -> add `--label <label>` to `gh pr create` (or, if the PR is created via GitHub MCP, call `add_labels` on the PR number right after).
+3. Missing -> create the PR **without** the label, and tell the user the label doesn't exist yet and a repo maintainer needs to create it (don't run `gh label create` yourself unless the user explicitly asks). The "AI Assistance" tick in the body still records the provenance.
 
 ## Notes
 

@@ -131,7 +131,7 @@ code:
         max_desc_chars: 72             # 建议上限 72（超过仅警告，不阻断）
         min_words: 3                   # 建议至少 3 个词（少于仅警告）
         language: english_only         # 描述仅允许英文字母/数字/空格/基本标点，含中文等字符阻断
-        bypass_prefixes: [Merge, Revert, feat:, fix:, docs:, chore:, build:, ci:, style:, refactor:, perf:, WIP, Release] # 这些特殊前缀跳过格式校验（详见脚本）
+        bypass_prefixes: [Merge, Revert, "feat:", "fix:", "docs:", "chore:", "build:", "ci:", "style:", "refactor:", "perf:", WIP, Release] # 这些特殊前缀跳过格式校验（详见脚本）
     ios:                               # ios-dragon-app 当前无任何自定义 git 钩子
       mechanism: none
       pre_commit: null
@@ -144,6 +144,9 @@ code:
       convention: conventional_commits # 无钩子强制；遵循仓库历史惯例（Conventional Commits），issue 标注可选
       subject_issue_tag: optional
       language: any
+  ai_provenance:                      # AI 辅助代码溯源标识（dev-agent D6 / create-pr 用）：落在 commit 与 PR 上，合并后仍可追溯
+    commit_trailer: "AI-Assisted: Cursor dev-agent"  # 追加在 commit message 末尾的 git trailer（与正文空一行，作最后一段）；android commit-msg 钩子只校验首行，不受影响
+    pr_label: AIGenerated             # PR 上打的 GitHub label（与 Jira ai_provenance 同名）；仓库无此 label 时不自建，提示 DEV 处理
   contract:                           # contract-diff 口径：接口契约以技术方案 detail 的接口定义为基线
     source: tech_solution_detail       # 契约基线来源：Story 级明细方案的接口定义章节
     match: field_level                 # 比对粒度：逐字段（Swift 看 Codable/CodingKeys；Kotlin 看 data class/注解）

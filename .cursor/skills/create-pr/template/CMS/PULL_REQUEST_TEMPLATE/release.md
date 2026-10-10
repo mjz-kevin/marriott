@@ -53,3 +53,8 @@ Usage: append ?template=release.md to the PR creation page URL
 <!-- Key metrics and verification steps to confirm after going live -->
 1.
 2.
+
+## AI Assistance
+<!-- Provenance of the code. When the PR is opened by dev-agent, tick the first item and keep the tool name. -->
+- [ ] AI-assisted: code / unit tests were generated with Cursor dev-agent and reviewed by the author
+- [ ] No AI assistance

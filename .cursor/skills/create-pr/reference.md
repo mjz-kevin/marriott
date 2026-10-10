@@ -35,6 +35,7 @@ Hints for judging from the diff:
 - **Impact** — check the diff: migrations (schema/SQL files), config/env vars (`*.env`, config files, `libs.versions.toml`, `*.gradle`, `Info.plist`, etc.), and backward compatibility, and fill accordingly.
 - **Breaking Change & Rollback** — unless a public API/contract changes, fill `N/A`.
 - **Screenshots** — if there are no UI/asset-file changes, tick "no visual changes"; otherwise ask the author to attach before/after screenshots/recordings.
+- **AI Assistance** — tick "AI-assisted" when opened by `dev-agent`, the branch has the `code.branch.prefix` (e.g. `feat-ai/`), or the commits carry the `code.ai_provenance.commit_trailer`; then also apply `code.ai_provenance.pr_label` (only if the label exists in the repo). Otherwise leave both items for the author.
 
 ## Draft display format
 

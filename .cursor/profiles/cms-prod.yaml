@@ -109,6 +109,9 @@ code:
     convention: conventional_commits   # type(scope): subject，如 feat(cms): ... / fix: ... / docs: ...
     subject_issue_tag: optional        # 历史提交多不带 issue 标注（靠 PR 关联）；带 [KEY] 溯源亦可，二者皆合规
     language: any                      # 无字符集限制（可中英）
+  ai_provenance:                      # AI 辅助代码溯源标识（dev-agent D6 / create-pr 用）：落在 commit 与 PR 上，合并后仍可追溯
+    commit_trailer: "AI-Assisted: Cursor dev-agent"  # 追加在 commit message 末尾的 git trailer（与正文空一行，作最后一段）；CMS 两仓无 commit-msg 钩子
+    pr_label: AIGenerated             # PR 上打的 GitHub label（与 Jira ai_provenance 同名）；仓库无此 label 时不自建，提示 DEV 处理
   contract:                           # contract-diff 口径：接口契约以技术方案 detail 的接口定义为基线
     source: tech_solution_detail       # 契约基线来源：Story 级明细方案的接口定义章节
     match: field_level                 # 比对粒度：逐字段（TS 看 interface/type/zod schema；payload 看 collection field）
