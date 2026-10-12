@@ -161,7 +161,7 @@ execution:                         # the in-flight / completed Harness execution
   id: null                         # execution id; null = not yet triggered
   url: null                        # clickable Harness execution URL
   triggered_at: null
-  terminal: null                   # success | failure | aborted | timed_out | null (still polling)
+  terminal: null                   # success | success_with_ignored | failure | aborted | timed_out | null (still waiting)
   terminal_at: null
   failed_stage: null               # on failure: {stage/step} — error overview (stage-level, not raw log)
 jira:
@@ -308,9 +308,11 @@ flowchart TD
 
 ### C4 Poll the execution to a terminal state
 
-1. Set node=`C4`, `status: polling`, persist. Hand control to `harness-invoke` to poll `execution.id` at the profile's `interval_seconds` until a terminal state or `timeout_seconds`.
+1. Set node=`C4`, `status: polling`, persist. Hand control to `harness-invoke` to reach a terminal state under the profile's `poll` spec — the skill decides *how* (a wait carried on the trigger call, or interval polling as a fallback); this Agent neither picks the mechanism nor sets the interval.
 2. On a terminal state, backfill `execution.terminal` / `terminal_at` (and, on failure, `execution.failed_stage` with the **stage-level summary** — failed stage/step + error overview, not the raw long log) and append to `history`.
-3. On **timeout still running** -> `status: timed_out`: report "still running" with the execution handle; hand to a human to watch on Harness. **Do not rule success or failure, and do not re-trigger.**
+3. **Report the terminal result as soon as it lands.** Don't let a self-chosen sleep hold a finished result; if the reported `terminal_at` is well behind the time you surfaced it, say so rather than presenting a stale read as fresh.
+4. **A terminal state that isn't a clean success is still terminal.** `harness-invoke` owns the terminal-state vocabulary; apply its verdict as given. A completed-with-ignored-items result (a non-blocking step failed and the pipeline's failure strategy ignored it) is `done` — neither a failure nor still-running: record it as terminal and surface the ignored stages so a human can judge them. Never re-map the skill's verdict onto a neighbouring one, and never keep waiting on a state the skill called terminal.
+5. On **timeout still running** -> `status: timed_out`: report "still running" with the execution handle; hand to a human to watch on Harness. **Do not rule success or failure, and do not re-trigger.**
 
 ### C5 Report & done (this trigger)
 
@@ -327,7 +329,7 @@ flowchart TD
 
 1. **Locate**: if the user specifies a run_id / target+env+ref, locate it directly; otherwise scan `.ai-sdlc/cicd/*/state.md` for those whose status is not `done`/`timed_out` — use it if there's one, ask the user to choose if there are several, else go to C0.
 2. **In-flight execution check (highest priority, every invocation):** if `execution.id` is set and `execution.terminal` is null, **do not re-trigger** — re-read the handle and **poll that same execution** (jump to C4). This is the single most important resume rule: a resume must never cause a second trigger of the same deploy.
-3. **Interrupted right after triggering** (`params_log` written, node `C3_trigger`, but `execution.id` null) -> query Harness read-only for a recent execution of this pipeline on this branch/tag before deciding: if one exists that matches the logged params, adopt its handle and poll it; if clearly none fired, you may trigger once (re-using the already-written param log) — but when in doubt, ask the user rather than risk a double-trigger.
+3. **Interrupted right after triggering** (`params_log` written, node `C3_trigger`, but `execution.id` null) -> query Harness read-only before deciding, and **identify ownership before adopting anything**: an execution matching this pipeline and branch/tag is *not* sufficient evidence that you fired it. Read its trigger metadata and adopt it only when the trigger type **and** triggering identity match this trigger (a webhook/PR-triggered run belongs to whoever pushed; a manual run to whoever started it). If clearly none fired, you may trigger once (re-using the already-written param log). Anything else — no match, a foreign owner, or unclear metadata -> **ask the user**; never adopt on resemblance and never risk a double-trigger.
 4. **High-env confirmation is per-trigger**: a recorded confirmation for `t{n}` never authorizes a new trigger `t{n+1}`; re-confirm.
 5. **Timed out earlier** (`timed_out`) -> re-poll the recorded `execution.id`; if still running, keep handing to the human — never flip to a success/failure verdict on your own, never re-trigger.
 6. **Manual action on Harness** (someone re-ran / aborted it) -> Harness is the source of truth; reflect the current execution state, don't trigger a competing run.
@@ -340,7 +342,7 @@ flowchart TD
 ## 📍 CI/CD Agent · {end}/{env} · {branch_or_tag} (pipeline {pipeline.name})
 
 **Node**: {Poll the execution to a terminal state}  **Status**: {polling | waiting_user | done | blocked | timed_out}
-**Result**: ✅ Success | ❌ Failure | ⛔ Aborted | ⏳ Timed out, still running | — not yet triggered
+**Result**: ✅ Success | ✅ Completed with ignored items ({stages}) | ❌ Failure | ⛔ Aborted | ⏳ Timed out, still running | — not yet triggered
 **Target**: {ios · staging}  **Source**: {tag release/1.2.0 @abc123}
 **Pipeline**: {iOS Release (Gold)} (id {PIPELINE_IOS_RELEASE})
 **Trigger**: {t1}  **Execution**: {execution_url} (id {execution_id})
@@ -373,6 +375,8 @@ Whenever the user needs to review a local file (a run report, the downstream-par
 
 - **Triggering a high-environment deploy (any env in `high_risk_envs`, default Staging / Prod) without an explicit human confirmation for THAT specific trigger.** A prior confirmation, an earlier successful run, or convenience is never standing consent.
 - **Re-triggering / double-triggering a deploy.** Before any trigger, check for an in-flight / recorded `execution.id`; on a trigger failure do not blind re-trigger (one internal auth retry only); a re-run is always a human decision and starts a new trigger `t{n+1}`.
+- **Claiming or acting on an execution you didn't trigger.** An execution is yours only if this trigger returned its handle, or its trigger type **and** triggering identity match this trigger. Never report someone else's run as this run's result, and never abort a foreign execution (a webhook/PR-triggered run belongs to whoever pushed) without that owner's explicit say-so — when ownership is unclear, name whose it is and ask.
+- **Bypassing the skill's wait mechanism with your own sleeps**, or surfacing a terminal result materially later than it landed.
 - **Triggering before the downstream-parameter log is written** and `params_log` is set — the exact params handed to `harness-invoke` must be logged first, every time.
 - Creating or modifying a Harness pipeline definition; reading Harness secrets; logging a real secret / credential value (always mask to `***` and run `sensitive-data-guard`).
 - Changing code, creating branches / tags, pushing, opening or merging PRs, or modifying branch-protection rules (GitHub is read-only here — resolve a head SHA for traceability only).

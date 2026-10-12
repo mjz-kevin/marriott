@@ -61,20 +61,43 @@ mcp:
     base_url: https://marriott.harness.io   # Harness 实例地址（UI URL 前缀；skill 可用 url 快捷方式让 MCP 自动抽取 scope）
     org_id: cnexperience                    # Harness Organization 标识（MCP 调用必传）
     project_id: cncms                       # Harness Project 标识（CMS；MCP 调用必传）
-    pipelines:                         # 构建/部署类流水线扁平清单（真实 identifier）；harness-invoke 按 app 定位唯一 id。CMS 按应用分（非按仓库/环境），已排除 REMEDIATION 占位/integrity/migration/utility 等非常规部署
-      - { id: cncms_cicd_custom, name: "cncms-CICD",                app: cncms,          env: deploy }   # cncms 主 CI/CD 部署
-      - { id: DiDiCICDFE,        name: "DiDi-CICD-FE",              app: didi,           env: deploy }   # 滴滴前端部署
-      - { id: memberdaycicd,     name: "member-day-deploy",         app: member-day,     env: deploy }   # member-day 部署
-      - { id: legalpagedeploy,   name: "legal-page-deploy",         app: legal-page,     env: deploy }   # legal-page 部署
-      - { id: MBYCICDFE,         name: "MBY-CICD-FE",               app: mby,            env: deploy }   # MBY 前端部署
-      - { id: PaymentConsoleCICD,name: "Payment-Console-CICD",      app: payment-console,env: deploy }   # 支付控制台部署
-      - { id: CDONLY,            name: "travelpartner-proxy-deploy",app: travelpartner,  env: deploy }   # travelpartner 代理部署
-    high_risk_envs: [staging, prod]    # 高风险环境：触发前必须人工确认；这些部署流水线内部按目标环境选择，触发 prod 前须人工确认
-    poll:                              # 触发后轮询执行状态的口径（harness-invoke 用）
-      timeout_seconds: 3600            # 轮询总超时；超时回报「仍在运行」并给 execution 句柄，不判成败
-      interval_seconds: 30             # 轮询间隔
-
-
+    # account_id 与 API 凭据不写在此处：二者均从 MCP 配置（mcp.json → harness 服务的 env）读取，
+    # 保持单一事实来源，也避免凭据与账号标识随 profile 进入版本库。
+    #
+    # 本节只记录「人的决策」：哪条流水线属于本团队交付路径、哪个环境算高风险、哪条禁止 agent 触发。
+    # 不记录可从 Harness 查到的事实（入参规格与默认值、取值域、input set、stage 结构、
+    # 环境→stage 子集、service/infra 取值）——那些一律由 harness-invoke 在触发前运行时读取，
+    # 以 Harness 为唯一权威来源。手抄这些会产生两份真相：配置一旦滞后，skill 会拿过期规格
+    # 去跟使用者确认参数，比没有规格更危险。
+    pipelines:                         # 交付流水线清单；CMS 按 app 唯一定位。
+                                       # 未登记 = 不可触发（skill 遇无匹配即停止，不猜），故检查/沙箱类无需在此列出。
+      - { id: cncms_cicd_custom_migration, app: cncms,            repo: cncms }       # cncms 主部署，团队实际在用
+      - { id: DiDiCICDFE,                  app: didi,             repo: monorepo }
+      - { id: MBYCICDFE,                   app: mby,              repo: monorepo }
+      - { id: CampUtilitiesCICDFE,         app: camp-utilities,   repo: monorepo }
+      - { id: PaymentConsoleCICD,          app: payment-console,  repo: cnconsoles }  # 该仓未登记在 github.repos
+      - { id: memberdaycicd,               app: member-day,       repo: monorepo }
+      - { id: legalpagedeploy,             app: legal-page,       repo: monorepo }
+      - { id: cncmsossuploadjobdeploy,     app: cncms-oss-upload, repo: cncms }
+      - { id: CDONLY,                      app: travelpartner,    repo: null }        # CD-only，无 CI 阶段
+    deny_list:                         # 看起来像可触发的交付流水线，但明令禁止 agent 触发。
+                                       # 其危险性从名称与 API 元数据都看不出来，只能由人写下来。
+      - id: utility
+        reason: >-
+          手动运维/应急工具：environmentRef 与 serviceRef 均为无默认值的自由输入（可指向生产），
+          且 action=delete 会执行 K8sDelete 删除集群资源。名称完全不体现该能力。
+      - id: HARNESS_STO_REMEDIATION_PLACEHOLDER
+        reason: >-
+          Harness STO 动态执行占位壳（allowDynamicExecutions: true）：本体只有一个 noop 脚本，
+          但运行时 YAML 可被完全覆盖，等同任意流水线执行入口。由 STO 平台驱动，非团队交付路径。
+    high_risk_envs: [stg, prod]        # 高风险环境：触发前必须人工确认。用真实 environment identifier（stg，不是 staging）。
+                                       # 判定依据是本次触发解析出的目标环境，不是流水线名称或标签。
+    allow_stage_execution_fallback: true   # 允许 harness-invoke 在 MCP 无法限定 stage 子集时，改用其随附的
+                                       # stage 子集封装触发晋级链流水线（见 skill 文档）。置 false 则一律改由人在 UI 触发。
+    poll:                              # 触发后等待执行状态的口径
+      mode: server_wait                # 优先用 MCP 的服务端阻塞等待（wait=true），而非 LLM 轮询循环
+      timeout_seconds: 3600            # 等待总超时（server_wait 上限 7200）；超时回报「仍在运行」并给句柄，不判成败
+      interval_seconds: 30             # 回退轮询时的间隔
 # ---------------------------------------------------------------- 代码工程（开发/验证类 skill 用）
 code:
   languages: [typescript]              # 语言栈：TypeScript
