@@ -123,6 +123,63 @@ python init/build.py --runtime mac-intel
 4. **生成 `~/.cursor/mcp.json`**：`figma` / `marriott-github` / `harness` 的 `command` 写成 node 绝对路径（Windows 为 `node.exe`），`args[0]` 写成对应离线包入口 js，不走 npx、不联网；删除 `_comment`，凭证字段留空，已存在的 mcp.json 会保留已填凭证；
 5. 提示用户填 `~/.cursor/mcp.json` 凭证，再在 Cursor MCP 设置里确认 Atlassian / figma / marriott-github / harness 四个 server 已连接（agents / skills 自动识别，无需重启）。
 
+## 升级与重装：直接覆盖 vs 先卸载
+
+两类包的安装逻辑不同，判断方法也不同：
+
+- **角色包** `install` 是"覆盖同名"：把新包里的文件逐个拷过去，同名就覆盖，但**不会删掉新包里已经没有的东西**。
+- **运行时包** `install-runtime` 是"已就位就跳过"：运行时本体、每个离线 MCP 包、每个工具包各自检查，目录已存在且非空就**整个跳过，不会覆盖**。
+
+### 角色包
+
+**可以直接覆盖安装**（解压新版本后直接跑 `install`）：
+
+- 同一个角色升级到新版本，而且新版本只是**修改或新增**了 agent、skill 或 profile，没有删掉或改名任何东西；
+- 团队 profile（`*.yaml`）更新：每次安装都会无条件覆盖；
+- `mcp.json` 需要重新生成（比如运行时装好了、node 路径变了）：重跑 `install` 就行，已经填好的凭证会保留。
+
+**需要先卸载再安装**（先跑 `uninstall`，再跑新包的 `install`）：
+
+| 场景 | 为什么直接覆盖不行 |
+| --- | --- |
+| 新版本**删除或改名**了某个 Agent / Skill | 旧的 agent 或 skill 会留在 `~/.cursor/`，和新的同时生效，可能被误触发 |
+| 新版本删除了某个 Skill 里的文件（`references/` / `scripts/` 等） | 覆盖只会更新同名文件，删掉的旧文件会一直留着 |
+| **换角色**（比如 Dev 改成 QA），或者想只保留单一角色 | 上一个角色的 agents / skills 不会被清掉 |
+| 运行时版本升级，`setup.json` 里的路径需要更新 | 安装时如果 `setup.json` 已存在，会保留原文件不覆盖；卸载会把它删掉，重装后拿到新路径 |
+| 本地资产乱了或装坏了，想回到干净状态 | 卸载按全量清单清理，再重新安装 |
+
+> 同时装多个角色（比如 TL 和 QA 两个包都装）可以直接依次覆盖安装，共用的 skill 会按后装的那个版本来。
+> 角色包卸载**不会**删除 `~/.cursor/mcp.json`（凭证保留），也不碰运行时，所以"先卸载再安装"之后不用重填凭证。
+> ⚠️ 测试记忆 profile（`test_case_memory.yaml` / `test_script_memory.yaml`）也会在安装时被覆盖。如果你在 `~/.cursor/profiles/` 下本地改过这两个文件，重装前请先备份。
+
+### 运行时包
+
+**可以直接重跑 `install-runtime`**：
+
+- 第一次安装；
+- 运行时已经装过，但新版本**新增**了离线 MCP 包或工具包（比如以前没有 `md-to-pdf`），重跑会只补缺的部分；
+- 上次安装中途断了，留下了空目录：空目录会被当成"没装好"，重新解压。
+
+**需要先卸载再安装**（因为已就位的组件不会被覆盖，直接重跑等于什么都没做）：
+
+| 场景 | 卸载方式 |
+| --- | --- |
+| node / python **版本升级** | `uninstall-runtime` 全量卸载后再装；装完**重跑角色包 `install`**，刷新 `mcp.json` 里的 node 路径（要更新 `setup.json` 的话也需要先卸载角色包，见上表） |
+| 离线 MCP 包（figma / github / harness）**版本升级** | 只删 MCP 包：`./uninstall.sh --mcp-only`（mac）/ `.\uninstall.ps1 -McpOnly`（win）→ 再跑 `install-runtime` → 再重跑角色包 `install` |
+| 离线工具包（mermaid-cli / md-to-pdf / Chromium）**版本升级** | 目前没有单独卸载工具包的开关：要么全量卸载运行时，要么手动删掉 `runtime/tools/<工具名>/` 后重跑 `install-runtime` |
+| 运行时损坏（目录不是空的，但文件不完整） | 全量卸载运行时后重装 |
+
+### 速查
+
+| 我要做的事 | 操作 |
+| --- | --- |
+| 同一角色日常升级（只改了内容，没删也没改名） | 直接跑新包的 `install` |
+| 升级的版本说明里有"删除 / 改名"某个 Agent 或 Skill | 角色包 `uninstall` → 新包 `install` |
+| 换角色 | 角色包 `uninstall` → 新角色包 `install` |
+| 只是 profile 有更新 | 直接跑新包的 `install` |
+| 运行时新增了组件 | 直接跑 `install-runtime` |
+| 运行时里某个组件要升级版本 | 先卸载对应部分 → `install-runtime` → 重跑角色包 `install` |
+
 ## 卸载（发给最终用户）
 
 每个角色包内都附带卸载脚本，且**与角色无关**——无论装的是哪个角色包，卸载脚本都会按内置的
