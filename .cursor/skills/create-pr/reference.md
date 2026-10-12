@@ -4,9 +4,13 @@ Detailed template-selection rules and full template notes. The SKILL loads this 
 
 ## Template selection
 
-**Rule: determine the scenario template first, then layer on the general template.** Determine from the diff characteristics which scenario in the table below it belongs to; when it can't be determined or is a mixed type, list the candidates and let the user choose. **Whichever scenario is selected, additionally layer on the general template `pull_request_template.md`** (general sections are always kept, scenario sections are layered on, and for duplicate same-named sections the scenario template wins).
+**Rule: select exactly one template; never merge templates.** Decide in this order:
 
-| Change characteristics | Scenario template (then layer on the general template) |
+1. The change characteristics clearly match one row in the table below -> use that scenario template.
+2. Mixed type / conflicting signals / no clear evidence -> let the user choose (`AskQuestion`: candidate scenario templates, most likely first, plus the general template as an option).
+3. Only when the user explicitly asked for silent / non-interactive execution **and** the scenario is undeterminable -> use the general template `pull_request_template.md` without asking.
+
+| Change characteristics | Template |
 |----------|------|
 | A new user-facing feature | `PULL_REQUEST_TEMPLATE/feature.md` |
 | Fixing a defect / handling a bug ticket | `PULL_REQUEST_TEMPLATE/bugfix.md` |
@@ -14,7 +18,7 @@ Detailed template-selection rules and full template notes. The SKILL loads this 
 | A structural change that doesn't change behavior | `PULL_REQUEST_TEMPLATE/refactor.md` |
 | Docs / comments / README only | `PULL_REQUEST_TEMPLATE/docs.md` |
 | A version release / merge into a release branch | `PULL_REQUEST_TEMPLATE/release.md` |
-| Mixed / undeterminable | Let the user pick the scenario; if still undeterminable, use only the general template `pull_request_template.md` |
+| Mixed / undeterminable | Let the user choose; in silent mode only, the general template `pull_request_template.md` |
 
 Hints for judging from the diff:
 - Only `*.md` / doc-path changes → `docs`.
@@ -25,6 +29,8 @@ Hints for judging from the diff:
 - Version bump, CHANGELOG, tag → `release`.
 
 ## Per-section fill-in guidance
+
+Apply only to the sections present in the selected template; don't add sections from other templates.
 
 - **What & Why** — 2–4 sentences. State what changed and why. Cite the specific modules in the diff.
 - **Related** — fill the branch's Jira ticket into the Jira field; use `Closes #<n>` only when the issue number is known. Never fabricate.
@@ -40,7 +46,7 @@ Hints for judging from the diff:
 ## Draft display format
 
 Put the filled-in body in a code block, followed by a short note listing:
-- Which scenario template + general template were used (the two layered) and why;
+- Which single template was used and how it was chosen (determined from the diff + evidence / picked by the user / general template because silent mode and undeterminable);
 - Which checklist items are left unticked and need the author to handle.
 
 ## gh CLI notes

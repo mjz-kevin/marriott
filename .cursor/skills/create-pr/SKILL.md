@@ -26,9 +26,9 @@ Copy the checklist below and track progress:
 
 ```
 - [ ] Step 1: Gather the diff and branch context
-- [ ] Step 2: Determine the matching scenario template (let the user choose if undeterminable)
-- [ ] Step 3: Read the two files "scenario template + general template" verbatim
-- [ ] Step 4: Fill every section of the layered template from the diff
+- [ ] Step 2: Select exactly one template (scenario if determinable; else user picks; general only in silent mode)
+- [ ] Step 3: Read the selected template file verbatim
+- [ ] Step 4: Fill every section of the selected template from the diff
 - [ ] Step 5: Hand the draft to the user for review
 - [ ] Step 6: Create the PR (only when the user asks)
 ```
@@ -50,17 +50,17 @@ If `git merge-base` produces no output (no origin/HEAD, etc.), fall back to `HEA
 
 Extract the Jira ticket number from the branch name (naming convention: `[JIRA-TICKET]-[description]`, e.g. `GTI-1234-config-data-new-arch`).
 
-**Step 2 — Determine the scenario template.** Per the table in [reference.md](reference.md), determine from the diff characteristics which scenario in `PULL_REQUEST_TEMPLATE/` this change belongs to (feature/bugfix/hotfix/refactor/docs/release). **When it can't be determined or the change is a mixed type, don't default on your own — list the candidate scenarios and let the user choose.**
+**Step 2 — Select exactly one template. Templates are never merged** — the PR body uses the sections of one template file only. Decide in this order:
 
-**Step 3 — Read the two files "scenario template + general template."** Whichever scenario template is selected, additionally layer on the general template `pull_request_template.md`:
+1. **Determinable -> use the scenario template.** Per the table in [reference.md](reference.md), if the diff / branch / ticket characteristics clearly point to one scenario in `PULL_REQUEST_TEMPLATE/` (feature/bugfix/hotfix/refactor/docs/release), select that scenario template directly, and state the evidence for the choice in the draft note.
+2. **Undeterminable (mixed type, conflicting signals, or no clear evidence) -> let the user choose.** Don't default on your own; use `AskQuestion` to list the candidate scenario templates (the most likely first, marked "(Recommended)"), plus the general template `pull_request_template.md` as an option. Use whatever the user picks.
+3. **Silent mode and undeterminable -> use the general template.** Only when the user has explicitly asked to run silently / without questions (e.g. "静默执行", "don't ask me", "run non-interactively") **and** the scenario can't be determined, fall back to the general template `pull_request_template.md` without asking, and note in the draft "general template used: silent mode, scenario undeterminable." Silent mode never overrides rule 1 — a determinable scenario still uses its scenario template.
 
-- First read the selected scenario template `PULL_REQUEST_TEMPLATE/{scenario}.md`;
-- Then read the general template `template/PR/pull_request_template.md`;
-- **Merge** the two's sections: the general template's general sections (the team's constant items such as the self-test checklist, impact, sensitive info) are always kept; the scenario template's specific sections are layered in; for duplicate same-named sections the scenario template wins and doesn't appear twice.
+Being invoked by `dev-agent` is not by itself silent mode; it's silent only when the user asked for it.
 
-Never hardcode the template text from memory; the files win. If either side lacks a section, fill to the union.
+**Step 3 — Read the selected template file verbatim.** Read only the one selected file (`PULL_REQUEST_TEMPLATE/{scenario}.md` or `pull_request_template.md`). Never hardcode the template text from memory and never pull sections in from another template; the file wins.
 
-**Step 4 — Fill every section of the layered template from the diff:**
+**Step 4 — Fill every section of the selected template from the diff** (the items below apply only to the sections the selected template actually has):
 - Write a specific "What & Why" — citing the files/modules actually changed.
 - Tick the correct "Type of change."
 - List real, reproducible test steps.
