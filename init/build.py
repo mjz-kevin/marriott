@@ -98,6 +98,30 @@ def _git_tag_at_head() -> str:
     return ""
 
 
+def _git_commit_info() -> dict:
+    """当前 git HEAD 的短 SHA 与工作区是否有未提交改动；非 git 仓库返回空值。
+
+    写进 manifest，安装后落到 ~/.cursor/ai-sdlc-installed/，便于开发版（时间戳版本号）追溯来源。
+    """
+    info = {"commit": "", "dirty": False}
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(REPO_ROOT), "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if out.returncode == 0:
+            info["commit"] = out.stdout.strip()
+        st = subprocess.run(
+            ["git", "-C", str(REPO_ROOT), "status", "--porcelain"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if st.returncode == 0:
+            info["dirty"] = bool(st.stdout.strip())
+    except Exception:
+        pass
+    return info
+
+
 def _ask_yes_no(prompt: str, default_yes: bool = True) -> bool:
     """交互式 y/n 询问；非交互终端（无 TTY）时直接返回默认值。"""
     if not sys.stdin or not sys.stdin.isatty():
@@ -349,13 +373,19 @@ def build_role(role: str, cfg: dict, common: dict, version: str, assets: dict) -
     #    uninstall.* 会注入「AI SDLC 全量资产清单」——卸载与角色无关，清除所有角色的资产。
     _write_install_scripts(role_dir, assets)
 
-    # 6) manifest.json（安装脚本据此把资产落到 ~/.cursor/）
+    # 6) manifest.json（安装脚本据此把资产落到 ~/.cursor/，并作为版本记录写入
+    #    ~/.cursor/ai-sdlc-installed/role-<role>.json，供 ai-sdlc-info skill 查询）
+    #    注意：首行必须是单独的 "{"——install.sh 无 python 时靠它在首行后插入 installed_at。
+    git_info = _git_commit_info()
     manifest = {
+        "kind": "role",
         "role": role,
         "title": cfg.get("title", role),
         "phase": cfg.get("phase", ""),
         "version": version,
         "built_at": datetime.now(timezone.utc).isoformat(),
+        "commit": git_info["commit"],
+        "dirty": git_info["dirty"],
         "agents": agent_report,
         "skills": skill_report,
         "profiles": common.get("profiles", []),
@@ -398,6 +428,11 @@ def _write_role_readme(role_dir: Path, role: str, cfg: dict, manifest: dict) -> 
       "（`AI-SDLC-Runtime-<平台>-<版本>.zip`）把绿色运行时铺到 `~/.cursor/AI-SDLC/runtime/`（Windows 为 `C:\\AI-SDLC\\runtime\\`）；"
       "否则安装脚本会回退到系统 PATH 上的 node，且离线 MCP 包入口缺失，需自行处理。\n")
     a("安装完成后：打开 `~/.cursor/mcp.json` 填入凭证，再在 Cursor 的 MCP 设置里确认 server 已连接即可。agents / skills 由 Cursor 自动识别，无需重启。\n")
+    a("## 查看已安装版本\n")
+    a("安装脚本会把本包版本记录到 `~/.cursor/ai-sdlc-installed/role-<角色>.json`"
+      "（运行时包记录在同目录 `runtime.json`），重装时会提示「旧版本 → 新版本」。查询方式：\n")
+    a("- 在 Cursor 对话里直接问：「当前 AI SDLC 是什么版本」（由公共 skill `ai-sdlc-info` 回答）；")
+    a("- 或命令行：`python ~/.cursor/skills/ai-sdlc-info/scripts/version.py`。\n")
     a("## 一键卸载\n")
     a("在包目录内执行（与角色无关，会清除**所有角色**的 agents/skills/profiles(含 setup.json)/mcp 示例；"
       "**保留** `~/.cursor/mcp.json` 与你自己的 agent/skill；运行时另用运行时包的卸载脚本）：\n")
@@ -521,13 +556,16 @@ def build_runtime_pkg(platform: str, version: str) -> Path:
         _write_ps1(INIT_DIR / "templates" / "install-runtime.ps1", pkg_dir / "install.ps1")
         _write_ps1(INIT_DIR / "templates" / "uninstall-runtime.ps1", pkg_dir / "uninstall.ps1")
 
-    # 3) manifest
+    # 3) manifest（安装后作为版本记录写入 ~/.cursor/ai-sdlc-installed/runtime.json）
+    git_info = _git_commit_info()
     manifest = {
         "kind": "runtime",
         "platform": platform,
         "runtime_zip": zip_name,
         "version": version,
         "built_at": datetime.now(timezone.utc).isoformat(),
+        "commit": git_info["commit"],
+        "dirty": git_info["dirty"],
     }
     with (pkg_dir / "manifest.json").open("w", encoding="utf-8") as f:
         json.dump(manifest, f, ensure_ascii=False, indent=2)

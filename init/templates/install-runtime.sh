@@ -13,6 +13,22 @@ CURSOR_HOME="${CURSOR_HOME:-$HOME/.cursor}"
 echo "==> AI SDLC 运行时初始化器 (macOS)"
 echo "    目标：$CURSOR_HOME/AI-SDLC/runtime"
 
+# ---- 版本信息：本包版本 vs 已安装运行时版本（记录在 ~/.cursor/ai-sdlc-installed/runtime.json）----
+_json_str() { sed -n "s/.*\"$1\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" "$2" 2>/dev/null | head -n1; }
+VERSION_DIR="$CURSOR_HOME/ai-sdlc-installed"
+RUNTIME_RECORD="$VERSION_DIR/runtime.json"
+NEW_VER=""
+[ -f "$PKG_DIR/manifest.json" ] && NEW_VER="$(_json_str version "$PKG_DIR/manifest.json")"
+OLD_VER=""
+[ -f "$RUNTIME_RECORD" ] && OLD_VER="$(_json_str version "$RUNTIME_RECORD")"
+if [ -z "$OLD_VER" ]; then
+  echo "    版本：${NEW_VER:-未知}（首次安装或旧安装未留版本记录）"
+elif [ "$OLD_VER" = "$NEW_VER" ]; then
+  echo "    版本：${NEW_VER}（与已安装版本相同）"
+else
+  echo "    版本：${OLD_VER} → ${NEW_VER}"
+fi
+
 RUNTIME_HOME="$CURSOR_HOME/AI-SDLC"
 RUNTIME_ROOT="$RUNTIME_HOME/runtime"
 
@@ -172,6 +188,19 @@ if [ -d "$TOOLS_SRC" ]; then
   echo "    离线工具包处理完成（mermaid-cli + md-to-pdf + Chromium）"
 else
   echo "--> 本包未带离线工具包（tools/），跳过（mermaid 渲染将回退 npx 联网 + 系统 Chrome）。"
+fi
+
+# ---- 写版本记录：本包 manifest + installed_at → ~/.cursor/ai-sdlc-installed/runtime.json ----
+# 放在 AI-SDLC/ 之外，便于 ai-sdlc-info skill 与角色包记录统一读取。
+# 注意：运行时分组件幂等，已就位的组件不会被重铺，因此该版本表示「最近一次运行的运行时包版本」。
+if [ -f "$PKG_DIR/manifest.json" ]; then
+  mkdir -p "$VERSION_DIR"
+  {
+    echo "{"
+    echo "  \"installed_at\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\","
+    tail -n +2 "$PKG_DIR/manifest.json"
+  } > "$RUNTIME_RECORD"
+  echo "--> 已记录运行时版本：${NEW_VER}（${RUNTIME_RECORD}）"
 fi
 
 

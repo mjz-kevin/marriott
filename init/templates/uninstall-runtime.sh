@@ -64,6 +64,11 @@ else
   echo "    目标：${RUNTIME_HOME}（node/python + 离线 MCP 包 + 离线工具包）"
   if confirm "    ⚠️ 即将删除整个运行时目录 ${RUNTIME_HOME}，确认？"; then
     rm_path "$RUNTIME_HOME" "运行时"
+    # 运行时版本记录（角色记录 role-*.json 归角色卸载脚本管）
+    rm_path "$CURSOR_HOME/ai-sdlc-installed/runtime.json" "运行时版本记录"
+    if [ "$DRY_RUN" != 1 ] && [ -d "$CURSOR_HOME/ai-sdlc-installed" ] && [ -z "$(ls -A "$CURSOR_HOME/ai-sdlc-installed" 2>/dev/null)" ]; then
+      rmdir "$CURSOR_HOME/ai-sdlc-installed" 2>/dev/null || true
+    fi
   else
     echo "    已取消"
   fi

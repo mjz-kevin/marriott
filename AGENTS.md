@@ -53,7 +53,7 @@ ai-sdlc/
 
 | 分组 | Skills |
 | --- | --- |
-| 公共（所有角色） | `sensitive-data-guard`、`profile-select`、`md-to-pdf` |
+| 公共（所有角色） | `sensitive-data-guard`、`profile-select`、`md-to-pdf`、`ai-sdlc-info` |
 | 需求（PO） | `requirement-clarify`、`prd-authoring`、`prd-publish`、`user-story-authoring`、`user-story-publish` |
 | 技术方案 | `tech-solution-prd`（仅 TL）、`tech-solution-spike`、`tech-solution-detail`、`tech-solution-publish` |
 | 开发与验证 | `baseline-checkout`、`feature-branch`、`unit-test-authoring`、`build-verify`、`unit-test-runner`、`contract-diff`、`acceptance-check`、`create-pr` |

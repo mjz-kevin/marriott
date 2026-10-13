@@ -55,6 +55,13 @@ if ($McpOnly) {
     Write-Host "    目标：$RuntimeHome（node/python + 离线 MCP 包 + 离线工具包）"
     if (Confirm-Del "    ⚠️ 即将删除整个运行时目录 $RuntimeHome，确认？") {
         Remove-One $RuntimeHome "运行时"
+        # 运行时版本记录（角色记录 role-*.json 归角色卸载脚本管）
+        $CursorHome = if ($env:CURSOR_HOME) { $env:CURSOR_HOME } else { Join-Path $env:USERPROFILE ".cursor" }
+        $versionDir = Join-Path $CursorHome "ai-sdlc-installed"
+        Remove-One (Join-Path $versionDir "runtime.json") "运行时版本记录"
+        if (-not $DryRun -and (Test-Path $versionDir) -and -not (Get-ChildItem -Force -Path $versionDir -ErrorAction SilentlyContinue)) {
+            Remove-Item -LiteralPath $versionDir -Force -ErrorAction SilentlyContinue
+        }
     } else {
         Write-Host "    已取消"
     }

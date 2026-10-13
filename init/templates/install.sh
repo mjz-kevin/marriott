@@ -11,9 +11,49 @@ CURSOR_HOME="${CURSOR_HOME:-$HOME/.cursor}"
 
 echo "==> AI SDLC 安装器 (macOS/Linux)"
 
+# ---- 版本信息：本包版本 vs 已安装版本（记录在 ~/.cursor/ai-sdlc-installed/role-<角色>.json）----
+# 从 JSON 里取某个字符串字段的第一处取值（manifest 为 build.py 生成的规整 JSON，sed 足够）
+_json_str() { sed -n "s/.*\"$1\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" "$2" 2>/dev/null | head -n1; }
+
+# 纯数字点分版本比较：$1 < $2 返回 0；任一方含非数字（如时间戳版本 20261013-141500）返回 2（不可比）
+_ver_lt() {
+  local a="$1" b="$2"
+  case "$a$b" in *[!0-9.]*) return 2 ;; esac
+  [ -n "$a" ] && [ -n "$b" ] || return 2
+  [ "$a" = "$b" ] && return 1
+  local IFS=.
+  local -a x=($a) y=($b)
+  local i=0 n=${#x[@]}
+  [ ${#y[@]} -gt "$n" ] && n=${#y[@]}
+  while [ "$i" -lt "$n" ]; do
+    local p=${x[$i]:-0} q=${y[$i]:-0}
+    if [ $((10#$p)) -lt $((10#$q)) ]; then return 0; fi
+    if [ $((10#$p)) -gt $((10#$q)) ]; then return 1; fi
+    i=$((i + 1))
+  done
+  return 1
+}
+
+VERSION_DIR="$CURSOR_HOME/ai-sdlc-installed"
+ROLE=""
+NEW_VER=""
 if [ -f "$PKG_DIR/manifest.json" ]; then
-  ROLE="$(sed -n 's/.*"role"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$PKG_DIR/manifest.json" | head -n1)"
+  ROLE="$(_json_str role "$PKG_DIR/manifest.json")"
+  NEW_VER="$(_json_str version "$PKG_DIR/manifest.json")"
   echo "    角色：${ROLE:-未知}"
+fi
+ROLE_RECORD="$VERSION_DIR/role-${ROLE:-unknown}.json"
+OLD_VER=""
+[ -f "$ROLE_RECORD" ] && OLD_VER="$(_json_str version "$ROLE_RECORD")"
+if [ -z "$OLD_VER" ]; then
+  echo "    版本：${NEW_VER:-未知}（首次安装或旧安装未留版本记录）"
+elif [ "$OLD_VER" = "$NEW_VER" ]; then
+  echo "    版本：${NEW_VER}（与已安装版本相同，重装覆盖）"
+else
+  echo "    版本：${OLD_VER} → ${NEW_VER}"
+  if _ver_lt "$NEW_VER" "$OLD_VER"; then
+    echo "    ⚠️ 本包版本低于已安装版本，这是一次【降级安装】；如非有意，请改用最新角色包。"
+  fi
 fi
 echo "    目标：$CURSOR_HOME"
 
@@ -251,8 +291,21 @@ else
   echo "    ⚠️ 未找到 ${MCP_TEMPLATE}，跳过 mcp.json 生成。"
 fi
 
+# ---- 写版本记录：把本包 manifest 加上 installed_at 落到 ~/.cursor/ai-sdlc-installed/role-<角色>.json ----
+# 每个角色单独一个文件，多角色叠装互不覆盖；ai-sdlc-info skill 读取这里回答「当前装的是什么版本」。
+# manifest.json 首行固定为 "{"（build.py 保证），在其后插入 installed_at，无需 python。
+if [ -f "$PKG_DIR/manifest.json" ] && [ -n "$ROLE" ]; then
+  mkdir -p "$VERSION_DIR"
+  {
+    echo "{"
+    echo "  \"installed_at\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\","
+    tail -n +2 "$PKG_DIR/manifest.json"
+  } > "$ROLE_RECORD"
+  echo "--> 已记录安装版本：${ROLE} ${NEW_VER}（${ROLE_RECORD}）"
+fi
+
 echo ""
-echo "==> 安装完成 ✅"
+echo "==> 安装完成 ✅（${ROLE:-未知角色} ${NEW_VER:-未知版本}）"
 echo "后续步骤："
 echo "  1) 打开 $CURSOR_HOME/mcp.json，填入 Atlassian / Figma / GitHub / Harness 凭证（敏感信息需手动填）："
 echo "     - Confluence/Jira: email + api_token  https://id.atlassian.com/manage-profile/security/api-tokens"
@@ -261,3 +314,5 @@ echo "     - GitHub: GITHUB_TOKEN                https://git.marriott.com/settin
 echo "     - Harness: HARNESS_ACCOUNT_ID + HARNESS_API_KEY  marriott.harness.io → 头像 → Account Settings / My API Keys（新建 Personal Access Token）"
 echo "  2) 在 Cursor 的 MCP 设置里确认 Atlassian / figma / marriott-github / harness 四个 server 已连接"
 echo "     （agents / skills 已放入 ~/.cursor/，Cursor 会自动识别，无需重启）"
+echo "  3) 之后想查看当前安装的版本：在 Cursor 对话里问「当前 AI SDLC 是什么版本」，"
+echo "     或运行 python3 $CURSOR_HOME/skills/ai-sdlc-info/scripts/version.py"

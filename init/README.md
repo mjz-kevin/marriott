@@ -55,7 +55,7 @@ init/
 | **Dev** | tech-solution-agent, dev-agent, code-review-agent, cicd-agent | 与 TL 相同，但**不含** `tech-solution-prd` |
 | **QA** | ai-test-agent, cicd-agent | jira-to-test-case, test-case-authoring, test-case-to-script, test-debug-script, test-page-elements, test-run-report-bug, harness-invoke |
 
-> 公共 Skill（全部角色都装）：`sensitive-data-guard`、`profile-select`、`md-to-pdf`。
+> 公共 Skill（全部角色都装）：`sensitive-data-guard`、`profile-select`、`md-to-pdf`、`ai-sdlc-info`。
 > `create-pr` **不是**公共 Skill，只随 TL / Dev 分发；测试类 Skill 只随 QA 分发。
 > 公共资产：4 份团队 profile（`app-test` / `app-prod` / `cms-test` / `cms-prod`）+ 2 份测试记忆 profile（`test_case_memory.yaml` / `test_script_memory.yaml`）+ `setup.json`、两份 `mcp.example.*.json`。
 > `init/allowlist_*.txt` 不随包分发。
@@ -86,6 +86,8 @@ python init/build.py --runtime mac-intel
 - 若当前 git `HEAD` 正好在某个 tag 上 → 询问是否用该 tag 作为版本号（配合 git flow 打 tag 发版）；
 - 否则默认用时间戳 `YYYYMMDD-HHMMSS`，同样询问确认；
 - 拒绝默认值时可手输自定义版本号；`--yes` 则一律取默认、不询问。
+
+两类包的 `manifest.json` 都会记录 `version`、`built_at`，以及构建时的 git `commit`（短 SHA）和 `dirty`（工作区是否有未提交改动），开发版（时间戳版本号）也能追溯到源码。
 
 产物在 `init/dist/`：
 
@@ -121,7 +123,26 @@ python init/build.py --runtime mac-intel
 2. 把 mcp 示例 → `~/.cursor/`；
 3. **复用已就位的运行时**：定位 node（运行时优先，回退系统 PATH；可用环境变量 `AI_SDLC_RUNTIME` 指定运行时根目录）和 `runtime/mcp-offline/` 下的离线 MCP 入口 js；运行时缺失会提示先装运行时包；
 4. **生成 `~/.cursor/mcp.json`**：`figma` / `marriott-github` / `harness` 的 `command` 写成 node 绝对路径（Windows 为 `node.exe`），`args[0]` 写成对应离线包入口 js，不走 npx、不联网；删除 `_comment`，凭证字段留空，已存在的 mcp.json 会保留已填凭证；
-5. 提示用户填 `~/.cursor/mcp.json` 凭证，再在 Cursor MCP 设置里确认 Atlassian / figma / marriott-github / harness 四个 server 已连接（agents / skills 自动识别，无需重启）。
+5. 提示用户填 `~/.cursor/mcp.json` 凭证，再在 Cursor MCP 设置里确认 Atlassian / figma / marriott-github / harness 四个 server 已连接（agents / skills 自动识别，无需重启）；
+6. **记录安装版本**：开始时打印「已安装版本 → 本包版本」（低于已安装版本会提示降级），结束时把本包 `manifest.json` 加上 `installed_at` 写到 `~/.cursor/ai-sdlc-installed/role-<role>.json`（每个角色一个文件，多角色叠装互不覆盖）。
+
+## 查看已安装版本
+
+安装记录统一放在 `~/.cursor/ai-sdlc-installed/`（Windows 为 `%USERPROFILE%\.cursor\ai-sdlc-installed\`）：
+
+| 文件 | 写入方 | 内容 |
+| --- | --- | --- |
+| `role-<role>.json` | 角色包 `install` | 版本、构建时间、commit、安装时间、该角色的 agents / skills 清单 |
+| `runtime.json` | 运行时包 `install-runtime` | 版本、平台、构建时间、commit、安装时间 |
+
+查询方式：
+
+- 在 Cursor 对话里直接问「当前 AI SDLC 是什么版本」，由公共 skill `ai-sdlc-info` 回答。它还会检查各角色记录的 agents / skills 是否还在、多个角色是否版本不一致、是否缺运行时记录；
+- 或在命令行运行 `python ~/.cursor/skills/ai-sdlc-info/scripts/version.py`（加 `--json` 输出结构化结果）。
+
+> 用本功能上线前的旧包安装的用户没有版本记录，`ai-sdlc-info` 会提示「未找到记录」，重装一次最新角色包（和运行时包）即可。
+> 运行时安装器按组件幂等，`runtime.json` 表示「最近一次运行的运行时包版本」，已就位而被跳过的组件不会被这次安装更新。
+> 卸载时：角色包 `uninstall` 删除全部 `role-*.json`，运行时包全量卸载时删除 `runtime.json`（`--mcp-only` / `-McpOnly` 不删）。
 
 ## 升级与重装：直接覆盖 vs 先卸载
 
@@ -185,7 +206,7 @@ python init/build.py --runtime mac-intel
 每个角色包内都附带卸载脚本，且**与角色无关**——无论装的是哪个角色包，卸载脚本都会按内置的
 「AI SDLC 全量资产清单」（构建时由 `build.py` 从 `roles.json` 汇总注入）清除**所有角色**相关资产：
 
-- 删除所有角色涉及的 **agents**、**skills**、全部 **profiles（含 `setup.json`）**、**mcp 示例模板**（`mcp.example.*.json`）；
+- 删除所有角色涉及的 **agents**、**skills**、全部 **profiles（含 `setup.json`）**、**mcp 示例模板**（`mcp.example.*.json`）、**角色版本记录**（`ai-sdlc-installed/role-*.json`）；
 - **不删除** `~/.cursor/mcp.json`（含用户手填凭证，始终保留）；
 - **不删除**用户自己的 agent / skill（不在清单里的一律不动）；
 - **不删除**运行时 `~/.cursor/AI-SDLC/`（由运行时包的卸载脚本负责）。
