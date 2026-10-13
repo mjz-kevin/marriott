@@ -90,18 +90,36 @@ mcp:
     base_url: https://marriott.harness.io   # Harness 实例地址（UI URL 前缀；skill 可用 url 快捷方式让 MCP 自动抽取 scope）
     org_id: cnexperience                    # Harness Organization 标识（MCP 调用必传）
     project_id: cnmobile                    # Harness Project 标识（移动端 iOS/Android 同一 project；MCP 调用必传）
-    pipelines:                         # 构建/部署类流水线扁平清单（真实 identifier，与本地仓库 .harness/.../pipelines 定义对齐）；harness-invoke 按 platform+env(+usage) 定位唯一 id。仅纳入构建/部署，排除 detekt/Security_Scan 等检查类
-      - { id: iOS_Dragon_App_Testflight_Dev, name: "iOS Dragon App Testflight Dev", platform: ios,     env: dev,  usage: testflight }  # iOS TestFlight（Dev），低环境可直接触发
-      - { id: iOS_Dragon_App_Testflight_Prod,name: "iOS Dragon App Testflight Prod",platform: ios,     env: prod, usage: testflight }  # iOS TestFlight（Prod），高环境触发前须人工确认
-      - { id: Android_Gold_Build,            name: "Android Gold Build",            platform: android, env: prod, usage: gold }        # Android 正式（Gold）构建，高环境触发前须人工确认
-      - { id: Android_Adhoc_Build,           name: "Android Adhoc Build",           platform: android, env: test, usage: adhoc }       # Android Adhoc 构建
-      - { id: Android_Regression_Builds,     name: "Android Regression Builds",     platform: android, env: test, usage: regression }  # Android 回归构建
-    high_risk_envs: [staging, prod]    # 高风险环境：触发前必须人工确认；低环境（test/dev）可直接触发
-    poll:                              # 触发后轮询执行状态的口径（harness-invoke 用）
-      timeout_seconds: 3600            # 轮询总超时；超时回报「仍在运行」并给 execution 句柄，不判成败
-      interval_seconds: 30             # 轮询间隔
-
-
+    # account_id 与 API 凭据不写在此处：二者均从 MCP 配置（mcp.json → harness 服务的 env）读取，
+    # 保持单一事实来源，也避免凭据与账号标识随 profile 进入版本库。
+    #
+    # 本节只记录「人的决策」：哪条流水线属于本团队交付路径、哪个环境算高风险、哪条禁止 agent 触发。
+    # 不记录可从 Harness 查到的事实（入参规格与默认值、取值域、input set、stage 结构）——
+    # 那些一律由 harness-invoke 在触发前运行时读取，以 Harness 为唯一权威来源。
+    pipelines:                         # 交付流水线清单；APP 按 platform + env(+usage) 唯一定位。
+                                       # 未登记 = 不可触发（skill 遇无匹配即停止，不猜），故 detekt / 安全扫描 /
+                                       # 各类 *_Test / *_Sandbox 共 13 条无需在此列出。
+      - { id: iOS_Dragon_App_Testflight_Dev,  platform: ios,     env: dev,  usage: testflight, repo: ios-dragon-app }
+      - { id: iOS_Dragon_App_Testflight_Prod, platform: ios,     env: prod, usage: testflight, repo: ios-dragon-app }
+      - { id: Android_Gold_Build,             platform: android, env: prod, usage: gold,       repo: android-dragon-app }
+      - { id: Android_Adhoc_Build,            platform: android, env: test, usage: adhoc,      repo: android-dragon-app }
+      - { id: Android_Regression_Builds,      platform: android, env: test, usage: regression, repo: android-dragon-app }
+      - { id: Mobile_s3_upload,               platform: both,    env: dev,  usage: config-upload, repo: mobile-config-upload-dev }
+      - { id: Mobile_s3_upload_Prod,          platform: both,    env: prod, usage: config-upload, repo: mobile-config-upload-prod }
+    env_dimension_overrides:           # 某些流水线的真实环境维度不是 env 标签，而是一个运行时输入。
+                                       # 这是「哪个输入才算环境」的团队判断，Harness 无从表达，故必须登记：
+                                       # 否则 Adhoc 的 env 标签是 test，而 flavor=Prod 会构建指向生产后端的包
+                                       # 并经 Appcircle 对外分发，高风险门禁将被完全绕过。
+      Android_Adhoc_Build:
+        input: flavor                  # 该输入的值才是实际目标环境
+        high_risk_values: [Prod]       # 取这些值时按高风险处理，无论 env 标签为何
+    high_risk_envs: [staging, prod]    # 高风险环境：触发前必须人工确认；低环境（test/dev）可直接触发。
+                                       # staging 在本项目无流水线命中，属无害死条目。
+    allow_stage_execution_fallback: false  # 本项目流水线均为单环境、无晋级链，不需要 stage 子集限定
+    poll:                              # 触发后等待执行状态的口径
+      mode: server_wait                # 优先用 MCP 的服务端阻塞等待（wait=true），而非 LLM 轮询循环
+      timeout_seconds: 3600            # 等待总超时；超时回报「仍在运行」并给句柄，不判成败
+      interval_seconds: 30             # 回退轮询时的间隔
 # ---------------------------------------------------------------- 代码工程（开发/验证类 skill 用）
 code:
   languages: [swift, kotlin]           # 语言栈：iOS=swift / Android=kotlin

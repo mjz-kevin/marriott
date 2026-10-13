@@ -314,6 +314,8 @@ When `figma.links` is empty and `decision` is not `none`, add a note in the stat
 - Publish: after 👤 PO sign-off, enter the PRD publishing step (publish / sync to Confluence).
 - Export to PDF locally: convert the finalized local `.md` offline into a readable PDF for local review / archiving / sharing with people who don't use Confluence; **no sign-off required**, doesn't modify the source, doesn't publish (a parallel option, independent of publishing).
 
+These wrap-up options are a **business choice only**. Profile selection is never one of its options and never merged into the same question: the profile is settled at E0 via `profile-select`; if it is somehow still unresolved here, ask the standalone profile question first (per `profile-select` "Asking rules"), then present the wrap-up options separately. If no profile exists at all -> `blocked` with its own message, not an option.
+
 ### E4 Publish and record the URL
 
 1. If the current version file's fingerprint ≠ the `sha256` at sign-off -> it was edited after sign-off, go back to E3.

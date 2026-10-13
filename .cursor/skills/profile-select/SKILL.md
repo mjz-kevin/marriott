@@ -99,6 +99,15 @@ python scripts/profile.py use <name>     # the name is the file name without .ya
 
 If `list` finds no profiles, or the file the user chose doesn't exist -> block, report, and stop; don't guess.
 
+#### Asking rules (mandatory)
+
+Profile selection is a **standalone decision** with its own lifecycle (asked once, then remembered). Never fold it into another question:
+
+1. **One question, profiles only.** The `AskQuestion` for step 2 carries exactly one question whose options are the profiles printed by `profile.py list` (one option per profile, labelled with name + team + Confluence space / Jira project). Don't add business actions (publish / export PDF / skip / keep in Jira, etc.) as options, and don't put "select / configure a profile" as an option inside a business question.
+2. **Ask before, not during.** Resolve the profile at the caller's initialization step (or, at the latest, right before the first step that needs config), and finish this skill **before** presenting any business choice that depends on it. If a later step (e.g. publish) finds no profile remembered, first ask this standalone question, then ask the business question in a separate, subsequent prompt.
+3. **Detect via the script only.** Judge "is there a profile" solely from the exit codes of `profile.py show` / `list` / `resolve`. Never conclude "no profile" from whether the *current workspace* has a `.cursor/profiles/` directory — once installed, profiles live in `~/.cursor/profiles/`.
+4. **No profiles at all is a blocker, not an option.** When `list` exits with 2, report `blocked` with a standalone message (which directory was searched, and that the role package must be installed / profiles copied into `~/.cursor/profiles/`), and stop. Don't offer workarounds that bypass the profile (e.g. "type the Confluence space / parent page manually") mixed into the same question.
+
 ### Step 3 — Resolve the path and hand it downstream
 
 ```bash
