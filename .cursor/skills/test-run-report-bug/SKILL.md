@@ -15,20 +15,20 @@ This skill handles "**first let the user pick a platform (iOS / Android / All / 
 
 1. **Step one is always**: read this file + `.cursor/agents/ai-test-agent.md` (landing/run conventions) + `.cursor/profiles/test_script_memory.yaml` (use the "common root cause" rules to aid attribution).
 2. **Proactively ask for the run platform (hard prerequisite, cannot be skipped)**: **first stop and ask the user to run iOS / Android / All / Custom**, giving choices via `AskQuestion` (see "(1) Proactively ask for the run platform"). **Do not run any pytest before the user picks a platform.**
-3. **MCP self-check**: use `GetDynamicTools` to confirm `Atlassian-MCP-Server` (Jira + Confluence tools) is available; if unavailable, run tests first, save the report locally, and prompt the user to configure `.cursor/mcp.json`, **do not fabricate publishing/filing success**.
+3. **MCP self-check**: use `GetDynamicTools` to confirm `Atlassian-MCP-Server` (Jira + Confluence tools) is available for Jira ticket writes and Confluence dedupe/read-back, and confirm `mcp.json` carries a `confluenceRest` section (the shared upload script reads the publishing credentials from there); if either is missing, run tests first, save the report locally, and prompt the user to configure `.cursor/mcp.json`, **do not fabricate publishing/filing success**.
 
 ## Workflow (must follow in order)
 
 ```
-- [ ] 0. Read `.cursor/agents/ai-test-agent.md` + `.cursor/profiles/test_script_memory.yaml`; GetDynamicTools to confirm Atlassian-MCP-Server (Jira+Confluence) available
+- [ ] 0. Read `.cursor/agents/ai-test-agent.md` + `.cursor/profiles/test_script_memory.yaml`; GetDynamicTools to confirm Atlassian-MCP-Server (Jira+Confluence) available, and confirm `mcp.json` has a `confluenceRest` section for the shared upload script
 - [ ] 1. ⛔ Proactively ask the run platform via AskQuestion: iOS / Android / All / Custom (default iOS)
 - [ ] 2. Determine the run target per the chosen platform: iOS->tests/mobile/ios/plan/debug.py; Android->tests/mobile/android/plan/debug.py; All->run both; Custom->per the user's file/marker
 - [ ] 3. Confirm the environment: Appium /status online, the corresponding real device/simulator connected, the corresponding env ready (iOS: config/env/.env.ios.lle; prompt first if not met, do not blindly run)
 - [ ] 4. Run pytest (see "(2) Run the script", running all registered features for that platform), producing allure-results/ + junitxml + terminal output
 - [ ] 5. Collect run results: parse pass/fail/error/skip stats, and each failed case's step / exception type / traceback key lines / failure screenshot path
 - [ ] 6. Analyze failure root causes: for each failure, classify against test_script_memory.yaml's "common root-cause cheat sheet", giving "root cause + matched rule + fix suggestion"
-- [ ] 7. Organize the Confluence page body (storage format, see "(4) Whole-page report structure"): ⚠️ the error-cause summary goes at the very top of the doc
-- [ ] 8. Publish to the Confluence test_report folder (see "(5) Publishing conventions"): dedupe -> createConfluencePage / updateConfluencePage; return the page link to the user (one page per platform when "All" is chosen)
+- [ ] 7. Organize the Confluence page body as a local **Markdown** file (see "(4) Whole-page report structure"): ⚠️ the error-cause summary goes at the very top of the doc
+- [ ] 8. Publish to the Confluence test_report folder with the **shared upload script** (see "(5) Publishing conventions"): `--parent 4261085398`, title carrying the run timestamp -> read back by the returned `page_id` -> return the page link to the user (one page per platform when "All" is chosen)
 - [ ] 9. ⛔ After the report is published + root-cause analysis is complete, file corresponding Bugs on Jira for the failed cases (see "(6) File Jira Bugs"): create tickets per the fixed config (project CNAPP / issuetype Bug / Severity / Replication Steps), **before creating you must confirm with the user via an `AskQuestion` card dialog (not just a text list)**, then `createJiraIssue` and use `Blocks` to link each Bug to Story CNAPP-7206, backfilling the bug key/link into the report page
 - [ ] 10. If failures need code changes: prompt the user to connect to test-debug-script to fix (this skill does not change code)
 ```
@@ -104,9 +104,9 @@ When the root cause cannot be judged from evidence, mark "root cause pending re-
 | Input box drops characters | one-shot send_keys too fast, should use per-character input | RULE_017 |
 | `StepDefinitionNotFoundError` | the same step sentence uses different keywords but only @given is registered | RULE_019 |
 
-## (4) Whole-page report structure (AI lays out the page accordingly - storage format, following `用例报告模板` pageId `4261053064`)
+## (4) Whole-page report structure (AI lays out the page accordingly - authored as Markdown, converted by the upload script; following `用例报告模板` pageId `4261053064`)
 
-**⚠️ Hard constraint: the error-cause summary must go at the very top of the doc (the first section of the body, below the title and before everything else). The report body writes no images/screenshots (Confluence page creation cannot write images); failure evidence is expressed in text only.**
+**⚠️ Hard constraint: the error-cause summary must go at the very top of the doc (the first section of the body, below the title and before everything else). The report body writes no images/screenshots; failure evidence is expressed in text only.**
 
 - **Top: ⚠️ error-cause summary (pinned, appears first)**:
   - A one-sentence overall conclusion (e.g. "3 cases failed, 2 with the same cause: transition race; 1 locator stale").
@@ -123,9 +123,9 @@ When the root cause cannot be judged from evidence, mark "root cause pending re-
 
 ## (5) Publishing conventions (Confluence test_report folder)
 
-**Artifact location**: the Confluence [test_report folder](https://marriottcloud.atlassian.net/wiki/spaces/~712020dbd6441f05734e4da1386119f88cfbe0/folder/4261085398/test_report) (folderId `4261085398`, same space as `test_case` / `page_doc`, `spaceId 4005003910`, `cloudId 627b9bb1-1899-4ff6-bc6e-066cf136a066`). **One run produces one Confluence page**, not persisted locally (intermediate material like junitxml stays local for traceability).
+**Artifact location**: the Confluence [test_report folder](https://marriottcloud.atlassian.net/wiki/spaces/~712020dbd6441f05734e4da1386119f88cfbe0/folder/4261085398/test_report) (folderId `4261085398`, same space as `test_case` / `page_doc`, space key `~712020dbd6441f05734e4da1386119f88cfbe0`, `spaceId 4005003910`, `cloudId 627b9bb1-1899-4ff6-bc6e-066cf136a066`). **One run produces one Confluence page**; the local Markdown report (`tests/mobile/<platform>/log/last_run_report.md`) is the publishing input and local traceability copy, alongside intermediate material like junitxml.
 
-**Unified template (shared by iOS / Android)**: all run reports are **output following the layout and section structure of [`用例报告模板`](https://marriottcloud.atlassian.net/wiki/spaces/~712020dbd6441f05734e4da1386119f88cfbe0/pages/4261053064) (pageId `4261053064`)** - error-cause summary pinned + six sections (run overview / result stats / case details / failure details and traceback / root-cause analysis and suggestions / appendix). **The report body writes no images/screenshots** (Confluence page creation cannot write images); failure evidence is expressed in text only (exception type, traceback key lines, failing step, root-cause analysis); the screenshot paths are only for local human viewing, not into the Confluence body.
+**Unified template (shared by iOS / Android)**: all run reports are **output following the layout and section structure of [`用例报告模板`](https://marriottcloud.atlassian.net/wiki/spaces/~712020dbd6441f05734e4da1386119f88cfbe0/pages/4261053064) (pageId `4261053064`)** - error-cause summary pinned + six sections (run overview / result stats / case details / failure details and traceback / root-cause analysis and suggestions / appendix). **The report body writes no images/screenshots**; failure evidence is expressed in text only (exception type, traceback key lines, failing step, root-cause analysis); the screenshot paths are only for local human viewing, not into the Confluence body.
 
 **Page naming convention (traceability aligned with test_case titles such as `iOS Test Case - <JIRA_KEY> ...`; report titles use `<platform>` = iOS / Android)**:
 
@@ -134,16 +134,26 @@ When the root cause cannot be judged from evidence, mark "root cause pending re-
 - **When "All (iOS + Android)" is chosen**: **one page per platform** (each title carries its own platform name), not merged; return each link to the user.
 - The report carries a timestamp so multiple runs of the same platform/case leave a trace without overwriting each other (create a new one by default; only update when the user explicitly asks to "update the most recent").
 
-**Publishing method (use `Atlassian-MCP-Server`'s Confluence tool, pass `cloudId` `627b9bb1-1899-4ff6-bc6e-066cf136a066`)**:
+**Publishing method (the report body goes through the shared Confluence upload script; Jira/dedupe/read-back go through `Atlassian-MCP-Server`, `cloudId` `627b9bb1-1899-4ff6-bc6e-066cf136a066`)**:
 
-1. First dedupe in the test_report folder (`getConfluencePageDescendants` to list folder children / `searchConfluenceUsingCql` to search by title).
-2. **Create a new one by default** -> `createConfluencePage` (`spaceId 4005003910`, `parentId 4261085398`, `title` per the naming convention, `body` in storage format; ⚠️ the error-cause summary section at the very top of the body). When "All" is chosen, create one page per platform.
-3. **The user asks to update a same-name/most-recent report** -> `updateConfluencePage` to overwrite.
-4. After successful publishing, return the **Confluence page link** to the user (one link per page for multi-platform); if there are failed cases, prompt "to fix, connect to `test-debug-script`".
+1. First dedupe in the test_report folder (`getConfluencePageDescendants` to list folder children / `searchConfluenceUsingCql` to search by title) to see whether a report for this run already exists.
+2. Write the report body to a local **Markdown** file (e.g. `tests/mobile/<platform>/log/last_run_report.md`), then publish with the shared upload script - **a new page per run by default**, so the `--title` prefix carries the run timestamp (the timestamp is part of the unique key here, unlike the case line):
 
-> **⭐ Prefer "incremental edits" over full-page replacement for updating an existing report page (avoid slow publishing)**: for a **local update** of a report page that is **large and contains tables/panel macros** (e.g. after creating Jira Bugs in step (6), backfilling the Bug Key + link into the top summary table's `Jira Bug` column, or appending a failed-case row), **do not** use `updateConfluencePage` to re-send the whole body - a large payload blows up the tool-call parameters, making it extremely slow or stuck/timeout. Use **granular edits** instead (`updateConfluenceContent`'s partial editing: submit only the minimal "change a cell / append a table row / append a paragraph somewhere" change), tiny payload, one write succeeds. Only **first page creation** or a truly needed full reorder uses a full-page write.
+```bash
+python ~/.cursor/skills/confluence-publish/scripts/upload_confluence_v2.py --md "tests/mobile/ios/log/last_run_report.md" --space "~712020dbd6441f05734e4da1386119f88cfbe0" --parent 4261085398 --title "<platform> 运行报告 - 全部用例 <YYYY-MM-DD HH:mm>" --version-msg "<platform> run report"
+```
 
-> `getContentFormatGuide` first when needed to confirm the storage format; convert Markdown tables to Confluence storage tables before submitting. When MCP is unavailable, save the report to the corresponding platform's `tests/mobile/<platform>/log/last_run_report.md` and prompt the user to publish manually.
+   - `--space` takes the space **key** (`~712020dbd6441f05734e4da1386119f88cfbe0`), not the numeric `spaceId`; `--parent 4261085398` is the test_report folder.
+   - Because the title carries the timestamp, each run yields its own page and runs never overwrite each other. When "All" is chosen, publish **one page per platform** (each title carrying its own platform name).
+   - The script's `--title` prefix dedupe means that if the user explicitly asks to "update the most recent report", you rerun it with **that page's exact existing title prefix** and it updates in place.
+3. The returned JSON gives `action` / `page_id` / `version` / `url`; read back by `page_id` to confirm `status=current` and `parentId` equals `4261085398`.
+4. Return the **Confluence page link** to the user (one link per page for multi-platform); if there are failed cases, prompt "to fix, connect to `test-debug-script`".
+
+> **Why the script**: a run report with full case tables plus traceback blocks easily exceeds the MCP single-write limit, and the script keeps per-column pixel widths so the stats/case tables stay readable. **Do not** write your own publishing script and **do not** hard-code credentials - the script reads them from `mcp.json`.
+
+> **⭐ Prefer "incremental edits" over a full republish for a small local change (avoid slow publishing)**: for a **local update** of an already-published report page (e.g. after creating Jira Bugs in step (6), backfilling the Bug Key + link into the top summary table's `Jira Bug` column), use the Confluence MCP's **granular edit** (`updateConfluenceContent` partial editing: submit only the minimal "change a cell / append a table row" change) - tiny payload, one write succeeds. **First page creation and any full-body regeneration go through the shared upload script.**
+
+> **Body format**: author the report as Markdown and let the script convert it (tables get adaptive pixel column widths). The report body writes **no images/screenshots**; failure evidence is text only. When the script cannot run (credentials missing), save the report to the corresponding platform's `tests/mobile/<platform>/log/last_run_report.md` and prompt the user to publish manually - **do not fabricate publishing success**.
 
 ## (6) File Jira Bugs (executed after the report is generated + root-cause analysis is complete)
 

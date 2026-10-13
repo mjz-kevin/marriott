@@ -53,7 +53,7 @@ ai-sdlc/
 
 | 分组 | Skills |
 | --- | --- |
-| 公共（所有角色） | `sensitive-data-guard`、`profile-select`、`md-to-pdf`、`ai-sdlc-info` |
+| 公共（所有角色） | `sensitive-data-guard`、`profile-select`、`confluence-publish`、`md-to-pdf`、`ai-sdlc-info` |
 | 需求（PO） | `requirement-clarify`、`prd-authoring`、`prd-publish`、`user-story-authoring`、`user-story-publish` |
 | 技术方案 | `tech-solution-prd`（仅 TL）、`tech-solution-spike`、`tech-solution-detail`、`tech-solution-publish` |
 | 开发与验证 | `baseline-checkout`、`feature-branch`、`unit-test-authoring`、`build-verify`、`unit-test-runner`、`contract-diff`、`acceptance-check`、`create-pr` |
@@ -90,7 +90,11 @@ ai-sdlc/
 
 ### Python 脚本
 - 仅用标准库（`pyproject.toml` 无依赖），需同时兼容 **macOS 与 Windows**（路径处理参考各 skill 下的 `platform_paths.py`）。
-- 多个 Skill 各自带一份 `upload_confluence_v2.py` / `platform_paths.py`，**它们是独立副本且当前内容不完全一致**，改动时逐个确认，不要假设同步。
+- **上传 Confluence 一律走公共 skill `confluence-publish`**：`upload_confluence_v2.py` 在仓库内只有
+  这一份（`.cursor/skills/confluence-publish/scripts/`），需求线（PRD / 技术方案 / Story）与测试线
+  （用例 / 运行报告）的发布环节共用。**不要在其它 skill 下复制副本**，也不要另写发布脚本或自拼 REST 调用。
+  脚本靠自身位置向上三级定位 `mcp.json`，改动目录深度会导致凭证解析失效。
+- 多个 Skill 各自带一份 `platform_paths.py`，**它们是独立副本且当前内容不完全一致**，改动时逐个确认，不要假设同步。
 
 ## 6. 构建与验证
 

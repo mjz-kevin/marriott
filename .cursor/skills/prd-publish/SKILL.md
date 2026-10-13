@@ -2,7 +2,7 @@
 name: prd-publish
 description: >-
   Publish or sync a local PRD to Confluence. A PRD body often exceeds the MCP single-write limit,
-  so it uses scripts/upload_confluence_v2.py uniformly: resolve the target space and parent folder
+  so it uses the shared Confluence upload script uniformly: resolve the target space and parent folder
   from the team config, idempotently create or update the page by title, keep the body complete,
   and return the page URL.
   Use when the user asks to publish, sync, or push a PRD to Confluence;
@@ -15,7 +15,7 @@ metadata:
 
 Write the finished PRD into the designated Confluence space and parent folder, generate the title from the naming template, and preserve back-links to related assets; on publish, per `--epic`, automatically fill the back-link pointing to that Jira Epic into the appendix's "Jira link" item, so the local `.md` needs no manual back-fill.
 
-**Publishing method**: the body often exceeds the MCP single-write limit, so use `scripts/upload_confluence_v2.py` uniformly to submit the complete body in one shot via the Confluence REST API (idempotent dedup, version bump, mermaid-to-image, images-to-attachments).
+**Publishing method**: the body often exceeds the MCP single-write limit, so use `~/.cursor/skills/confluence-publish/scripts/upload_confluence_v2.py` uniformly to submit the complete body in one shot via the Confluence REST API (idempotent dedup, version bump, mermaid-to-image, images-to-attachments).
 
 **Archive location**: layered by initiative -> epic; the script automatically looks up the epic's parent in Jira to decide whether an `{initiative}` level is included, and missing folders are created automatically:
 
@@ -34,7 +34,7 @@ Write the finished PRD into the designated Confluence space and parent folder, g
 | Purpose | Idempotently publish the PRD to the designated Confluence path per the space and naming rules |
 | Input | The PO-confirmed local PRD `.md` and the team's Confluence config |
 | Output | A Confluence page (created or updated); returns the title, URL, version, completeness stats, and back-link list |
-| Method | `scripts/upload_confluence_v2.py` (REST upload, not bound by the MCP size limit, submits the complete body) |
+| Method | `~/.cursor/skills/confluence-publish/scripts/upload_confluence_v2.py` (REST upload, not bound by the MCP size limit, submits the complete body) |
 | Scope | A sensitive-info hit stops immediately; the body must match the locally confirmed version section by section, with no trimming; space, parent page, and naming all come from the team config, never hardcoded |
 
 ## 0. Config values
@@ -95,7 +95,7 @@ First run `--dry-run`. The script doesn't write to Confluence and only outputs t
 > **Command form (cross-platform, unified)**: the command is a single line with no line continuations, and can run directly in Windows PowerShell / CMD, macOS, and Linux. `python` in the examples below is a placeholder for the interpreter resolved from `.cursor/profiles/setup.json`: before running, read that short file and take the `python` field from the section matching the current platform (`windows` / `macos` / `linux`), falling back to the `common` section (expand a leading `~`); only when both leave it empty (or the file is missing) fall back to the `python` / `python3` on your PATH. For rendering mermaid the script auto-resolves the toolchain from the same `setup.json` / AI-SDLC runtime (offline mmdc + Chromium first, `npx` fallback), so there's no need to specify a Node path in the command.
 
 ```bash
-python .cursor/skills/prd-publish/scripts/upload_confluence_v2.py --md "<absolute or relative path to PRD.md>" --space "<mcp.confluence.space>" --root "<mcp.confluence.parent_pages.root>" --epic "<Jira Epic key, e.g. CNAPP-5661>" --kind prd --title "<the title prefix from step 4, e.g. APP-PRD-CNAPP-5661>" --dry-run
+python ~/.cursor/skills/confluence-publish/scripts/upload_confluence_v2.py --md "<absolute or relative path to PRD.md>" --space "<mcp.confluence.space>" --root "<mcp.confluence.parent_pages.root>" --epic "<Jira Epic key, e.g. CNAPP-5661>" --kind prd --title "<the title prefix from step 4, e.g. APP-PRD-CNAPP-5661>" --dry-run
 ```
 
 ### Step 6: Run the upload
@@ -103,7 +103,7 @@ python .cursor/skills/prd-publish/scripts/upload_confluence_v2.py --md "<absolut
 Remove `--dry-run`, add `--version-msg` describing this change, then publish for real.
 
 ```bash
-python .cursor/skills/prd-publish/scripts/upload_confluence_v2.py --md "<path to PRD.md>" --space "<space>" --root "<parent_pages.root>" --epic "<Jira Epic key, e.g. CNAPP-5661>" --kind prd --title "<title prefix>" --version-msg "PRD v1.1: add §3 Story"
+python ~/.cursor/skills/confluence-publish/scripts/upload_confluence_v2.py --md "<path to PRD.md>" --space "<space>" --root "<parent_pages.root>" --epic "<Jira Epic key, e.g. CNAPP-5661>" --kind prd --title "<title prefix>" --version-msg "PRD v1.1: add §3 Story"
 ```
 
 - **Automatic folder layering**: laid out by the script per the "Archive location" rules at the top—`--root` is the level-1 root, the script auto-looks-up the epic's direct parent to decide four-level / three-level, the `{initiative}` and `{epic}` folder titles get the Jira summary appended, missing folders are auto-created as empty container pages, and finally the PRD is created/updated under the innermost `{epic}-PRD` folder. The returned JSON's `folders` field lists each level's folder id and whether it was newly created this run. `--initiative <key>` sets the Initiative level manually, `--initiative none` forces it off; on a Jira query failure it silently falls back to no such level (doesn't block publishing).
@@ -142,5 +142,5 @@ python .cursor/skills/prd-publish/scripts/upload_confluence_v2.py --md "<path to
 
 - Upstream: prd-authoring
 - Collaboration: tech-solution-publish (the `{epic}-Tech Solution` under the same `{epic}` folder)
-- Script: scripts/upload_confluence_v2.py
+- Script: provided by the shared Confluence publishing skill (confluence-publish)
 - Credentials: .cursor/mcp.json → confluenceRest

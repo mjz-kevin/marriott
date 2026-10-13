@@ -41,8 +41,8 @@ Create tickets in Jira from the confirmed Story list, fill fields, establish bac
 | The link set to establish | `profiles/{profile}.yaml` → `mcp.jira.links` |
 | Figma embed policy | `profiles/{profile}.yaml` → `mcp.jira.figma_embed` (`mode`: `embed` = inline a UI design image into the description via ADF media — **preferring the design PNG already produced upstream in the Story's source (PRD / Story-list design field)**, falling back to exporting the Figma node to PNG; `link` = clickable link only. `png_scale` export scale; `heading` the heading text before the inlined images). Absent or `mode: link` ⇒ link-only, no image |
 | Jira REST credentials (for Web remote links) | `.cursor/mcp.json` → `confluenceRest` (`base_url` / `email` / `api_token`); the same Atlassian account and token cover Jira REST — the site root is `base_url` minus the trailing `/wiki`, Jira REST lives at `<site>/rest/api/3`. Read by the script, never printed |
-| Web remote-link script | `.cursor/skills/user-story-publish/scripts/upload_confluence_v2.py --jira-remote-link` (pure stdlib, cross-platform, idempotent by `globalId`) |
-| Figma image attach/embed script | `.cursor/skills/user-story-publish/scripts/upload_confluence_v2.py --jira-attach-image` (uploads local PNGs as Jira attachments and inlines them into the description via ADF media over Jira REST; idempotent by filename + media id). Images are produced by the Figma image-download capability (`download_figma_images`) into a local path first |
+| Web remote-link script | `~/.cursor/skills/confluence-publish/scripts/upload_confluence_v2.py --jira-remote-link` (pure stdlib, cross-platform, idempotent by `globalId`) |
+| Figma image attach/embed script | `~/.cursor/skills/confluence-publish/scripts/upload_confluence_v2.py --jira-attach-image` (uploads local PNGs as Jira attachments and inlines them into the description via ADF media over Jira REST; idempotent by filename + media id). Images are produced by the Figma image-download capability (`download_figma_images`) into a local path first |
 
 ## 1. Pre-checks
 
@@ -164,7 +164,7 @@ First establish the Parent (Epic, hierarchy), then go through the team-configure
   Idempotent: same filename reuses the attachment, same media id is not re-inlined. When `figma_embed` is absent or `mode: link`, skip this and keep link-only. If no image source resolves, or export / upload fails, keep the clickable Figma link and note the image gap in the report — do not block ticket creation.
 
 ```bash
-python .cursor/skills/user-story-publish/scripts/upload_confluence_v2.py --jira-attach-image --issue "<ticket key>" --image "<local PNG path>" --embed-heading "UI Design"
+python ~/.cursor/skills/confluence-publish/scripts/upload_confluence_v2.py --jira-attach-image --issue "<ticket key>" --image "<local PNG path>" --embed-heading "UI Design"
 ```
 
 **Supplement images on an already-created Story (side entry, same embed path)**: when the user asks to add / supplement a design image onto a Story that already exists — including one that never went through this creation flow and therefore has no recorded screen↔Story mapping — don't create a new ticket and don't rewrite other fields. Steps, reusing everything above:
@@ -180,7 +180,7 @@ This side entry is team-agnostic — it is driven entirely by `figma_embed`, so 
 - **`tech_solution` — already landed by the tech-solution publishing step (don't re-write by default)**: the tech-solution back-link is written as a Jira **Web remote link** by the tech-solution publishing step itself (right after it publishes detail/spike to Confluence), so this step does **not** write it by default. Only as a **fallback** — when that step reported the remote-link write as failed/pending — create it here via the publish script's `--jira-remote-link` mode over Jira REST (idempotent by `globalId`, so even if it was already written a re-run is a safe `action=update`, no duplicate; credentials reused from `confluenceRest`):
 
 ```bash
-python .cursor/skills/user-story-publish/scripts/upload_confluence_v2.py --jira-remote-link --issue "<ticket key>" --link-url "<Confluence URL>" --link-title "<page title>" --relationship "Tech Solution" --icon-url "https://<site>/wiki/favicon.ico"
+python ~/.cursor/skills/confluence-publish/scripts/upload_confluence_v2.py --jira-remote-link --issue "<ticket key>" --link-url "<Confluence URL>" --link-title "<page title>" --relationship "Tech Solution" --icon-url "https://<site>/wiki/favicon.ico"
 ```
 
   Check the result JSON: `ok=true` with `action=create`/`action=update`. Never write the tech_solution link into the description subsection or a comment; it lives in the Web links area only.
@@ -270,3 +270,4 @@ Created {n} Stories (skipped {m} duplicates)
 - Input format: the Story list produced by the upstream User Story authoring step (field table in its template)
 - Upstream: user-story-authoring
 - Collaboration: tech-solution-publish, prd-publish
+- Script: provided by the shared Confluence publishing skill (confluence-publish)

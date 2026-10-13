@@ -3,27 +3,58 @@
 """
 upload_confluence_v2.py — 将本地 Markdown 发布到 Confluence（storage 格式，纯标准库，跨平台）。
 
-用于 prd-publish / tech-solution-publish 等发布类 skill 的统一上传脚本。
+AI SDLC 工具链中「上传 Confluence」的唯一实现，由公共 skill `confluence-publish` 持有，
+需求线与测试线共用：prd-publish / tech-solution-publish / user-story-publish /
+jira-to-test-case / test-run-report-bug 等发布类 skill 均调用本脚本，不再各自维护副本。
+
 特性：
   - 凭证从 .cursor/mcp.json 的 confluenceRest 读取（base_url/email/api_token）
-  - Markdown -> Confluence storage HTML（标题/表格/列表/引用/代码/mermaid 占位/行内格式）
-  - 按标题在指定父目录下幂等查重：无则新建，有则更新并升版本
-  - 目录层级（文件夹模式，--root/--epic/--kind）：查询 epic 的 Jira 父项自适应分层，
-    有父项为 root → {initiative} → {epic} → {epic}-PRD | {epic}-Tech Solution（四级），
-    无父项省略 {initiative} 层（三级）；缺失文件夹自动建容器页。--initiative 可覆盖。
-    initiative 与 epic 文件夹标题拼为「Jira key-摘要」（如 PORT-1301-会员权益重构），
-    容器夹的幂等查重按 Jira key 前缀匹配，避免摘要文案变动导致重复建夹
-  - mermaid flowchart -> SVG（纯标准库自绘，Windows/macOS/Linux 通用），作附件 + <ac:image> 内联；
-    渲染失败时退化为 code 宏加文字兜底，并在结果中标注 mermaid_pending
+  - Markdown -> Confluence storage HTML（标题/表格/嵌套列表/引用/代码/mermaid 占位/行内格式）
+  - 表格列宽自适应：按各列内容视觉宽度生成 <colgroup> 像素列宽 + data-table-width
+    （Confluence Cloud 忽略百分比列宽，必须用像素且各列之和等于 data-table-width）
+  - 本地图片 ![alt](path) 自动上传为附件并以 <ac:image> 内联；网络图片用 ri:url 外链
+  - 按标题前缀幂等查重：无则新建，有则更新并升版本（摘要尾巴变动不重复建页）
+  - mermaid 渲染：优先 mmdc（@mermaid-js/mermaid-cli）出高分辨率 PNG（支持 flowchart/sequence/
+    gantt 等全图类型），本机无 node/npx 或渲染失败时回退纯标准库自绘 SVG（仅 flowchart/graph）；
+    作附件 + <ac:image> 内联。两条路径都失败时退化为 code 宏加文字兜底，结果中标注 mermaid_pending。
+    文档含 mermaid 且未加 --allow-degraded-diagrams 时，强制要求 mmdc 可用，否则阻断发布
   - 完整性统计：章节数(h2)/Story 数/AC 条数，供 skill 与本地对照
   - 全程 UTF-8
 
+两种落点模式（发布时二选一，互斥）：
+  A) 文件夹模式（需求线：PRD / 技术方案 / Story）——按 Jira 层级自适应建容器夹
+     --root/--epic/--kind：查询 epic 的 Jira 父项自适应分层，有父项为
+     root → {initiative} → {epic} → {epic}-PRD | {epic}-Tech Solution（四级），
+     无父项省略 {initiative} 层（三级）；缺失文件夹自动建容器页。--initiative 可覆盖。
+     initiative 与 epic 文件夹标题拼为「Jira key-摘要」（如 PORT-1301-会员权益重构），
+     容器夹的幂等查重按 Jira key 前缀匹配，避免摘要文案变动导致重复建夹。
+  B) 父级模式（测试线：用例 / 运行报告）——直接落到固定文件夹，不做层级推导
+     --parent <folderId>：如 test_case / cms_case / test_report 文件夹 ID。
+
 用法:
-  # 文件夹模式（推荐）：自动建 initiative → epic 容器夹与 PRD/Tech Solution 叶子夹
-  python upload_confluence_v2.py --md <md> --space CMI --root <根页ID> --epic <Jira Epic key，如 CNAPP-5661> --kind prd --title <标题>
-  # 旧模式：直接指定父页
-  python upload_confluence_v2.py --md <md> --space CMI --parent <id> --title <标题>
-      [--mcp <mcp.json>] [--version-msg <msg>] [--dry-run]
+  # A) 文件夹模式：在 root 下自适应建 {initiative} → {epic} → {epic}-PRD|Tech Solution 并发布
+  python upload_confluence_v2.py --md <md> --space <spaceKey> --root <根页ID> \
+      --epic <Jira Epic key，如 CNAPP-5661> --kind prd --title <标题前缀>
+  #   --initiative 可覆盖 epic 之上的归档层：给定 key（如 PORT-1301）→ 四级；
+  #   省略则查询 Jira 取直接父项；值为 none 时强制三级（省略 {initiative} 层）
+  # B) 父级模式：直接落到指定文件夹（测试用例 / 运行报告）
+  python upload_confluence_v2.py --md <md> --space <spaceKey> --parent <folderId> \
+      --title <标题前缀> [--title-key <Jira key，用于追加摘要尾巴>]
+  # 通用可选:
+      [--title-key <key>] [--initiative <key|none>] [--mcp <mcp.json>]
+      [--version-msg <msg>] [--dry-run] [--allow-degraded-diagrams] [--check-env]
+
+三个附加模式（与发布互斥，各自独立分支、尽早返回）：
+  # 回链：把链接写回目标页附录条目（整页读回→仅替换该条目→整页写回，不动图/mermaid）
+  python upload_confluence_v2.py --writeback-link --page-id <id> \
+      --link-url <url> --link-title <title> [--item-label "Technical solution links"]
+  # Jira 远程链接（Web link）：外部 URL 挂到工单（issue↔issue 的 issuelink 无法承载外部 URL）
+  python upload_confluence_v2.py --jira-remote-link --issue <KEY> \
+      --link-url <url> --link-title <title> [--relationship "Tech Solution"]
+  # Jira 附件图片内嵌：本地图片上传为工单附件并以 ADF media 内嵌进描述
+  python upload_confluence_v2.py --jira-attach-image --issue <KEY> \
+      --image <path> [--image <path> ...] [--embed-heading "UI Design"]
+
 退出码: 0 成功 / 非 0 失败。结果 JSON 打印到 stdout。
 """
 import argparse, base64, glob, html, json, os, platform, re, shutil, ssl, subprocess, sys, tempfile, uuid
@@ -271,11 +302,89 @@ def _inline(s):
     return _autolink_bare_urls(s)
 
 
+def _cell(s):
+    """表格单元格：支持字面 <br>/<br/>/<br /> 换行（先占位，_inline 转义后还原）。"""
+    s = re.sub(r"<br\s*/?>", "\x00BR\x00", s, flags=re.I)
+    s = _inline(s)
+    return s.replace("\x00BR\x00", "<br/>")
+
+
+def _split_cells(row):
+    """按未转义的 | 切分表格行；\\| 视为单元格内的字面竖线。"""
+    row = row.strip().strip("|")
+    parts = re.split(r"(?<!\\)\|", row)
+    return [p.strip().replace("\\|", "|") for p in parts]
+
+
+def _visual_len(s):
+    """去掉常见 markdown 行内标记后，按 CJK 计 2、其余计 1 估算视觉宽度。"""
+    s = re.sub(r"<br\s*/?>", " ", s, flags=re.I)
+    s = re.sub(r"[`*]", "", s)
+    s = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", s)   # 链接只算显示文字
+    w = 0
+    for ch in s:
+        w += 2 if ord(ch) > 0x2E7F else 1            # CJK/全角约计 2
+    return w
+
+
+def _colgroup(header, rows, table_width=760):
+    """按各列内容的最大视觉宽度自适应生成 <colgroup>（Confluence Cloud 要求像素值，
+    百分比会被忽略导致等宽）。返回 (table_width, colgroup_html)：各列像素之和等于
+    table_width，短列（如「优先级」P0/P1）窄、长文本列宽；用平方根压缩避免超长列吞掉
+    全部宽度。每列宽度不小于「表头本身所需宽度」，避免表头被硬折行（如 UI Component→UI Componen/t）。"""
+    ncol = len(header)
+    if ncol <= 1:
+        return table_width, ""
+    import math
+    widths = []
+    for c in range(ncol):
+        cells = [header[c] if c < len(header) else ""]
+        cells += [r[c] if c < len(r) else "" for r in rows]
+        widths.append(max((_visual_len(x) for x in cells), default=1))
+    # 平方根压缩：削弱极长列的主导，同时拉高极短列的占比
+    weights = [math.sqrt(max(w, 1)) for w in widths]
+    total = sum(weights) or 1
+    # 每列下限：全局最小值与「表头所需像素」取大，保证表头单行不折断。
+    # 表头所需像素 ≈ 视觉单位数 × 每单位像素 + 左右内边距（Confluence 单元格约 16px）。
+    PX_PER_UNIT = 9
+    CELL_PAD = 18
+    floor_global = max(48, int(table_width * 0.05))
+    min_px = [max(floor_global, _visual_len(header[c] if c < len(header) else "") * PX_PER_UNIT + CELL_PAD)
+              for c in range(ncol)]
+    # 若各列下限之和已超过 table_width，等比放大 table_width 容纳（宽表允许更宽）。
+    if sum(min_px) > table_width:
+        table_width = sum(min_px)
+    raw = [w / total * table_width for w in weights]
+    px = [max(min_px[c], int(round(raw[c]))) for c in range(ncol)]
+    # 修正总和：多退少补，优先从「离下限最远」的列回收，避免把某列压到表头以下
+    diff = table_width - sum(px)
+    if diff != 0 and px:
+        if diff > 0:
+            widest = max(range(ncol), key=lambda k: px[k])
+            px[widest] += diff
+        else:
+            # 需要收缩：从冗余（px - min_px）最多的列依次扣减，不破坏表头下限
+            need = -diff
+            order = sorted(range(ncol), key=lambda k: px[k] - min_px[k], reverse=True)
+            for k in order:
+                if need <= 0:
+                    break
+                spare = px[k] - min_px[k]
+                take = min(spare, need)
+                px[k] -= take; need -= take
+            if need > 0:  # 仍不足（下限之和≈table_width），并入最宽列
+                px[max(range(ncol), key=lambda k: px[k])] -= need
+    cols = "".join(f'<col style="width: {p}px;"/>' for p in px)
+    return table_width, f"<colgroup>{cols}</colgroup>"
+
+
 def md_to_storage(md_text):
-    """返回 (storage_html, mermaid_blocks, stats)。mermaid 用 [[MERMAID_n]] 占位。"""
+    """返回 (storage_html, mermaid_blocks, images, stats)。
+    mermaid 用 [[MERMAID_n]] 占位；本地图片用 [[IMAGE_n]] 占位。"""
     lines = md_text.split("\n")
-    out, para, mermaid = [], [], []
+    out, para, mermaid, images = [], [], [], []
     i, n = 0, len(lines)
+    img_line_re = re.compile(r'^\s*!\[([^\]]*)\]\(([^)]+)\)\s*$')
 
     def flush():
         if para:
@@ -290,6 +399,11 @@ def md_to_storage(md_text):
         if m:
             flush(); lvl = len(m.group(1))
             out.append(f"<h{lvl}>" + _inline(m.group(2).strip()) + f"</h{lvl}>"); i += 1; continue
+        im = img_line_re.match(line)          # 独占一行的图片 ![alt](path)
+        if im:
+            flush()
+            images.append({"alt": im.group(1).strip(), "src": im.group(2).strip()})
+            out.append(f"[[IMAGE_{len(images)}]]"); i += 1; continue
         if line.strip().startswith("```"):
             flush(); lang = line.strip()[3:].strip(); block = []; i += 1
             while i < n and not lines[i].strip().startswith("```"):
@@ -305,24 +419,68 @@ def md_to_storage(md_text):
             continue
         if line.strip().startswith("|") and i + 1 < n and re.match(r"^\s*\|[\s:|\-]+\|\s*$", lines[i + 1]):
             flush()
-            header = [c.strip() for c in line.strip().strip("|").split("|")]
+            header = _split_cells(line)
             i += 2; rows = []
             while i < n and lines[i].strip().startswith("|"):
-                rows.append([c.strip() for c in lines[i].strip().strip("|").split("|")]); i += 1
-            t = ["<table><tbody><tr>"] + [f"<th><p>{_inline(h)}</p></th>" for h in header] + ["</tr>"]
+                rows.append(_split_cells(lines[i])); i += 1
+            tw, cg = _colgroup(header, rows, 760)
+            layout = ' data-layout="full-width"' if tw > 760 else ' data-layout="default"'
+            t = [f'<table data-table-width="{tw}"{layout}>', cg, "<tbody><tr>"] + [f"<th><p>{_cell(h)}</p></th>" for h in header] + ["</tr>"]
             for r in rows:
-                t.append("<tr>" + "".join(f"<td><p>{_inline(c)}</p></td>" for c in r) + "</tr>")
+                t.append("<tr>" + "".join(f"<td><p>{_cell(c)}</p></td>" for c in r) + "</tr>")
             t.append("</tbody></table>"); out.append("".join(t)); continue
         if line.strip().startswith(">"):
             flush(); q = [re.sub(r"^\s*>\s?", "", line)]; i += 1
             while i < n and lines[i].strip().startswith(">"):
                 q.append(re.sub(r"^\s*>\s?", "", lines[i])); i += 1
             out.append("<blockquote><p>" + _inline(" ".join(q)) + "</p></blockquote>"); continue
-        if re.match(r"^\s*[-*]\s+", line):
-            flush(); items = []
-            while i < n and re.match(r"^\s*[-*]\s+", lines[i]):
-                items.append(re.sub(r"^\s*[-*]\s+", "", lines[i])); i += 1
-            out.append("<ul>" + "".join(f"<li><p>{_inline(it)}</p></li>" for it in items) + "</ul>"); continue
+        lm = re.match(r"^(\s*)([-*]|\d+\.)\s+(.*)$", line)
+        if lm:
+            flush()
+            # 收集连续列表行（含缩进），构建嵌套 <ul>/<ol>
+            rows = []  # (indent:int, ordered:bool, text:str)
+            while i < n:
+                m2 = re.match(r"^(\s*)([-*]|\d+\.)\s+(.*)$", lines[i])
+                if not m2:
+                    break
+                indent = len(m2.group(1).expandtabs(4))
+                ordered = m2.group(2).endswith(".")
+                text = m2.group(3); i += 1
+                # 续行：缩进的非空、非列表、非表格/引用/代码/图片行，并入当前项
+                while i < n:
+                    nxt = lines[i]
+                    if nxt.strip() == "":
+                        break
+                    if re.match(r"^(\s*)([-*]|\d+\.)\s+", nxt):
+                        break
+                    if re.match(r"^\s*(\||>|```|#|!\[)", nxt):
+                        break
+                    if len(nxt) - len(nxt.lstrip()) == 0:
+                        break  # 无缩进 = 新段落，非续行
+                    text += " " + nxt.strip(); i += 1
+                rows.append((indent, ordered, text))
+            # 按缩进用栈组装；每层记录 (indent, ordered)
+            html_out = []
+            stack = []  # list of (indent, ordered)
+            for indent, ordered, text in rows:
+                while stack and indent < stack[-1][0]:
+                    html_out.append("</li></ol>" if stack[-1][1] else "</li></ul>")
+                    stack.pop()
+                if stack and indent == stack[-1][0]:
+                    html_out.append("</li>")  # 关闭同层上一个 li
+                    tag = "ol" if ordered else "ul"
+                    if stack[-1][1] != ordered:  # 同层列表类型切换
+                        html_out.append(f"</{'ol' if stack[-1][1] else 'ul'}><{tag}>")
+                        stack[-1] = (indent, ordered)
+                else:
+                    tag = "ol" if ordered else "ul"
+                    html_out.append(f"<{tag}>")
+                    stack.append((indent, ordered))
+                html_out.append(f"<li><p>{_inline(text)}</p>")
+            while stack:
+                html_out.append("</li></ol>" if stack[-1][1] else "</li></ul>")
+                stack.pop()
+            out.append("".join(html_out)); continue
         if line.strip() == "":
             flush(); i += 1; continue
         para.append(line.strip()); i += 1
@@ -330,11 +488,76 @@ def md_to_storage(md_text):
     body = "".join(out)
     stats = {
         "h2": len(re.findall(r"^##\s+", md_text, re.M)),
-        "stories": len(re.findall(r"Story\s+S?\d+", md_text)),
+        "stories": len(re.findall(r"^#{2,4}\s+Story\s+\d+", md_text, re.M)),
         "ac": len(re.findall(r"\bAC\s*\d+\b", md_text)),
         "mermaid": len(mermaid),
+        "images": len(images),
     }
-    return body, mermaid, stats
+    return body, mermaid, images, stats
+
+
+def jira_browse_url(base_url, key):
+    """由 Confluence base_url 推出同站点的 Jira issue 浏览地址。
+
+    Confluence base_url 形如 https://<site>.atlassian.net/wiki，去掉末尾 /wiki 得站点根，
+    Jira issue 浏览页位于 <site>.atlassian.net/browse/<KEY>。
+    """
+    site = re.sub(r"/wiki/?$", "", base_url)
+    return f"{site}/browse/{urllib.parse.quote(key)}"
+
+
+def _epic_anchor_ok(body, epic):
+    """附录已存在规范的 Epic 锚点：<a href=.../browse/EPIC>EPIC</a>。"""
+    esc = html.escape(epic, quote=False)
+    return bool(re.search(
+        r'<a\s+href="[^"]*/browse/' + re.escape(epic) + r'"[^>]*>\s*'
+        + re.escape(esc) + r'\s*</a>',
+        body, re.I))
+
+
+def inject_epic_link(body, epic, epic_url):
+    """把附录「Jira link」项的占位替换为指向该 Jira Epic 的链接（storage 格式）。
+
+    兼容两种附录写法（与 GCD-359 / GCD-400 实测一致）：
+    - 英文段落：`• Jira link: {占位}` → `<p>&bull; Jira link: ...</p>`
+    - 中文列表：`- **Jira link**：{占位}` → `<li><p><strong>Jira link</strong>：...</p></li>`
+
+    占位可以是空、裸 URL、或已由 _autolink_bare_urls 包过的 `<a href=url>url</a>`；
+    最终统一为 `<a href=epic_url>epic</a>`。
+
+    幂等：仅当已存在规范锚点（href 指向该 Epic 且显示文本为 Epic key）时跳过。
+    仅有裸文本 URL 或 href 正确但显示全文 URL 时仍会规范化。
+    找不到「Jira link」项时回退到正文顶部注入信息条。
+    返回 (body, injected)。
+    """
+    if not epic:
+        return body, False
+    if _epic_anchor_ok(body, epic):
+        return body, False
+    anchor = f'<a href="{html.escape(epic_url, quote=True)}">{html.escape(epic)}</a>'
+    # 附录「Jira link」项在按模板生成的正文里是普通段落 <p>&bull; Jira link: {占位}</p>
+    # （模板行首是字面「•」，md_to_storage 产出 <p>&bull; ...</p>，不是 <li>/<strong> 列表）。
+    # 主匹配即按此真实结构；再兼容历史可能出现的 <li><strong>Jira link</strong> 结构。
+    # 冒号兼容中英文（：/:），项目符号兼容字面「•」与实体「&bull;」，label 与冒号间的
+    # 「（可选）/(Optional)」标注一并吃掉丢弃、重建时统一补「: 」。
+    pat_p = re.compile(
+        r'(<p>\s*(?:•|&bull;)?\s*Jira link)'
+        r'\s*(?:（可选）|\(可选\)|\(optional\)|\(Optional\))?\s*[：:]'
+        r'(.*?)(</p>)', re.I | re.S)
+    m = pat_p.search(body)
+    if m:
+        new_body = body[:m.start()] + m.group(1) + ': ' + anchor + m.group(3) + body[m.end():]
+        return new_body, True
+    pat_li = re.compile(
+        r'(<li>\s*<p>\s*<strong>\s*Jira link\s*</strong>\s*[：:])(.*?)(</p>\s*</li>)',
+        re.I | re.S,
+    )
+    if pat_li.search(body):
+        new_body = pat_li.sub(lambda mm: mm.group(1) + anchor + mm.group(3), body, count=1)
+        return new_body, True
+    # 回退：无标准附录项时，在正文顶部加一条信息条，保证 Epic 回链不丢
+    bar = (f'<p><strong>Jira Epic：</strong>{anchor}</p>')
+    return bar + body, True
 
 
 # ============================= mermaid flowchart -> SVG（纯标准库、跨平台） =============================
@@ -509,7 +732,7 @@ def render_mermaid(code, out_base):
     失败回退纯标准库自绘 SVG（仅 flowchart）。
 
     out_base 为不含扩展名的输出路径前缀。返回 (ok, engine, out_path, content_type)。
-    engine ∈ {"mmdc", "fallback", ""}。回退仅能处理 flowchart；对 sequenceDiagram 等
+    engine ∈ {"mmdc", "fallback", ""}。回退仅能处理 flowchart/graph；对 sequenceDiagram 等
     非 flowchart 语法回退会失败，从而计入 mermaid_pending，避免假成功。
     """
     png = out_base + ".png"
@@ -665,8 +888,68 @@ def replace_mermaid(body, mermaid_blocks, page_id, base_url, auth, workdir, feat
     return body, pending
 
 
+# 支持的本地图片扩展名 -> MIME
+_IMG_MIME = {
+    ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+    ".gif": "image/gif", ".svg": "image/svg+xml", ".webp": "image/webp",
+}
+
+
+def _safe_attach_name(src):
+    """由图片路径生成合法且尽量唯一的附件文件名（保留原名，非法字符替换）。"""
+    base = os.path.basename(src)
+    name, ext = os.path.splitext(base)
+    name = re.sub(r"[^A-Za-z0-9_.-]+", "-", name).strip("-") or "image"
+    return name + ext.lower()
+
+
+def replace_images(body, images, page_id, base_url, auth, md_path):
+    """把 [[IMAGE_n]] 占位替换为 Confluence 图片。
+
+    - 本地图片：按 md 文件所在目录解析相对路径，上传为附件并用 <ac:image><ri:attachment> 内联；
+      文件缺失或上传失败登记 pending。
+    - 网络图片（http/https）：用 <ac:image><ri:url> 外链，不下载。
+    返回 (body, pending)。pending 每项为 {index, src, reason}。
+    """
+    pending = []
+    md_dir = os.path.dirname(os.path.abspath(md_path))
+    for idx, img in enumerate(images, 1):
+        token = f"[[IMAGE_{idx}]]"
+        src = img["src"]
+        alt = html.escape(img.get("alt") or "", quote=True)
+        # 网络图片：直接外链
+        if re.match(r"^https?://", src, re.I):
+            repl = (f'<ac:image ac:align="center" ac:alt="{alt}">'
+                    f'<ri:url ri:value="{html.escape(src, quote=True)}"/></ac:image>')
+            body = body.replace(token, repl); continue
+        # 本地图片
+        path = src if os.path.isabs(src) else os.path.normpath(os.path.join(md_dir, src))
+        ext = os.path.splitext(path)[1].lower()
+        fname = _safe_attach_name(src)
+        reason = None
+        if ext not in _IMG_MIME:
+            reason = f"unsupported ext {ext}"
+        elif not os.path.isfile(path):
+            reason = "file not found"
+        if reason:
+            pending.append({"index": idx, "src": src, "reason": reason})
+            body = body.replace(token, f'<blockquote><p>（图未内联：{html.escape(src)}）</p></blockquote>')
+            continue
+        st, _ = (upload_attachment(base_url, auth, page_id, path, fname, _IMG_MIME[ext])
+                 if page_id else (0, None))
+        if st in (200, 201):
+            repl = (f'<ac:image ac:align="center" ac:alt="{alt}">'
+                    f'<ri:attachment ri:filename="{fname}"/></ac:image>')
+        else:
+            reason = f"upload failed {st}"
+            pending.append({"index": idx, "src": src, "reason": reason})
+            repl = f'<blockquote><p>（图未内联：{html.escape(src)}）</p></blockquote>'
+        body = body.replace(token, repl)
+    return body, pending
+
+
 def _find_direct_child(base_url, auth, parent, title):
-    """在 parent 的直接子项中按精确标题查找（区别于 find_page 的 ancestor 递归查找）。
+    """在 parent 的直接子项中按精确标题查找（ancestor 递归的更精确替代）。
 
     先查 v1 /child/page（page 类型子页）；再用 v2 /folders/{id}/direct-children 兜底，
     以识别新版「Folder」类型的同名子项（v1 child/page 不含 folder）。父级本身可为
@@ -771,14 +1054,17 @@ def ensure_container_by_key(base_url, auth, space, parent, key, title):
 
 
 def _find_child_by_key_prefix(base_url, auth, parent, key):
-    """在 parent 的直接子项中查找标题以 Jira key 前缀开头的容器夹。
+    """在 parent 的直接子项中查找标题以给定前缀开头的子项（容器夹或文档页）。
 
-    命中条件：标题等于 key，或以「key-」开头（如 key=CNAPP-5661 命中
-    「CNAPP-5661-会员权益重构」）。同时覆盖 v1 page 子页与 v2 folder 子项。
-    返回 (id, 现标题)；未命中返回 (None, None)。
+    命中条件：标题等于 key，或以「key-」/「key 」（连字符或空格分隔）开头，例如
+    key=CNAPP-5661 命中「CNAPP-5661-会员权益重构」，
+    key=「iOS Test Case - CNAPP-611」命中「iOS Test Case - CNAPP-611 Guest Info Field Optionality」。
+    两种分隔符都支持，覆盖需求线的「key-摘要」与测试线的「前缀 短名」两种命名风格；
+    分隔符是必需的，所以 key=CNAPP-611 不会误命中 CNAPP-6110 开头的标题。
+    同时覆盖 v1 page 子页与 v2 folder 子项。返回 (id, 现标题)；未命中返回 (None, None)。
     """
     def _match(title):
-        return title == key or title.startswith(f"{key}-")
+        return title == key or title.startswith(f"{key}-") or title.startswith(f"{key} ")
 
     url = f"{base_url}/rest/api/content/{parent}/child/page?limit=200"
     st, data = api("GET", url, auth)
@@ -871,14 +1157,14 @@ def rename_page(base_url, auth, page_id, new_title):
 def _find_leaf_page_by_prefix(base_url, auth, parent, prefix):
     """在叶子夹 parent 的直接子页中，按标题前缀查找目标文档页。
 
-    命中条件：标题等于 prefix，或以「prefix-」开头（如 prefix=APP-TS-Prd-CNAPP-5661
-    命中「APP-TS-Prd-CNAPP-5661-会员权益重构」）。返回 (id, 现标题)；未命中返回 (None, None)。
+    命中条件：标题等于 prefix，或以「prefix-」开头（如 prefix=APP-PRD-CNAPP-5661
+    命中「APP-PRD-CNAPP-5661-会员权益重构」）。返回 (id, 现标题)；未命中返回 (None, None)。
     唯一键落在 prefix（固定前缀+Jira key），摘要尾巴变动不会重复建页。
     """
     return _find_child_by_key_prefix(base_url, auth, parent, prefix)
 
 
-# ============================= 主流程 =============================
+# ============================= 写回 / Jira 链接（REST） =============================
 def get_page_storage(base_url, auth, page_id):
     """按 pageId 拉回整页 storage 与版本（REST，只读）。返回 (title, storage_html, version)。"""
     st, data = api("GET", f"{base_url}/rest/api/content/{page_id}?expand=body.storage,version", auth)
@@ -1038,68 +1324,304 @@ def create_jira_remote_link(base_url, auth, issue_key, link_url, link_title,
         result["error"] = "写后复查未通过（未回读到该 globalId 的远程链接或 URL 不符），请人工核对"
     return result
 
+# ============================= Jira 附件图片内嵌（ADF media） =============================
+def _jira_site(base_url):
+    """由 Confluence base_url 推出 Jira 站点根（去掉末尾 /wiki）。"""
+    return re.sub(r"/wiki/?$", "", base_url)
 
+
+def _guess_image_content_type(path):
+    ext = os.path.splitext(path)[1].lower()
+    return {
+        ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+        ".gif": "image/gif", ".svg": "image/svg+xml", ".webp": "image/webp",
+    }.get(ext, "application/octet-stream")
+
+
+def _jira_find_attachment(site, auth, issue_key, filename):
+    """在工单现有附件中按文件名查已存在的同名附件，返回 (attachment_id, None) 或 (None, None)。
+
+    幂等用：同名附件已存在则复用其 attachment id（media UUID 由 _resolve_media_uuid 另解析）。
+    """
+    key = urllib.parse.quote(issue_key)
+    st, data = api("GET", f"{site}/rest/api/3/issue/{key}?fields=attachment", auth)
+    if st == 200 and isinstance(data, dict):
+        for att in (data.get("fields") or {}).get("attachment") or []:
+            if att.get("filename") == filename:
+                return att.get("id"), None
+    return None, None
+
+
+def jira_upload_attachment(site, auth, issue_key, file_path, filename, content_type):
+    """把本地图片作为附件上传到 Jira 工单（REST，幂等：同名已存在则复用，不重复上传）。
+
+    返回 dict：{"ok", "attachment_id", "media_id", "action", "error"}。
+    media_id 是 ADF media 节点所需的 Media Services UUID（≠ attachment id），
+    由 _resolve_media_uuid 从 attachment content 的 302 重定向解析。
+    """
+    existing_id, _ = _jira_find_attachment(site, auth, issue_key, filename)
+    if existing_id:
+        media_uuid = _resolve_media_uuid(site, auth, existing_id)
+        if media_uuid:
+            return {"ok": True, "attachment_id": existing_id, "media_id": media_uuid,
+                    "action": "reuse"}
+        return {"ok": False, "attachment_id": existing_id, "media_id": None,
+                "action": "reuse", "error": "无法解析已存在附件的 media UUID"}
+    key = urllib.parse.quote(issue_key)
+    boundary, body = _multipart_body(file_path, filename, content_type)
+    st, data = api("POST", f"{site}/rest/api/3/issue/{key}/attachments", auth,
+                   body=body,
+                   headers={"X-Atlassian-Token": "no-check",
+                            "Content-Type": f"multipart/form-data; boundary={boundary}"})
+    if st in (200, 201) and isinstance(data, list) and data:
+        att = data[0]
+        att_id = att.get("id")
+        media_uuid = _resolve_media_uuid(site, auth, att_id)
+        if not media_uuid:
+            return {"ok": False, "attachment_id": att_id, "media_id": None,
+                    "action": "create", "error": "附件已上传但无法解析 media UUID"}
+        return {"ok": True, "attachment_id": att_id, "media_id": media_uuid,
+                "action": "create"}
+    return {"ok": False, "attachment_id": None, "media_id": None, "action": "failed",
+            "error": f"attachment upload failed: {st} {data}"}
+
+
+def _resolve_media_uuid(site, auth, attachment_id):
+    """把 Jira attachment id 解析为 ADF media 节点所需的 Media Services UUID。
+
+    背景：ADF `media` 节点的 `id` 不是 Jira attachment 的数字 id，而是底层 Media
+    Services 的 UUID。直接用 attachment id 会报 400 ATTACHMENT_VALIDATION_ERROR。
+    做法：请求 `GET /rest/api/3/attachment/content/{id}`，它会 302 重定向到带 UUID 的
+    media URL（形如 .../file/<UUID>/...），从 Location 里抽出 UUID。解析失败返回 None。
+    """
+    if not attachment_id:
+        return None
+    url = f"{site}/rest/api/3/attachment/content/{urllib.parse.quote(str(attachment_id))}"
+    req = urllib.request.Request(url, method="GET",
+                                 headers={"Authorization": auth, "Accept": "application/json"})
+    ctx = ssl.create_default_context()
+
+    class _NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, headers, newurl):
+            return None  # 不跟随，手动取 Location
+
+    opener = urllib.request.build_opener(_NoRedirect, urllib.request.HTTPSHandler(context=ctx))
+    location = None
+    try:
+        try:
+            resp = opener.open(req, timeout=60)
+            # 没有重定向（少见）：尝试从最终 URL 里抽 UUID
+            location = resp.geturl()
+        except urllib.error.HTTPError as e:
+            if e.code in (301, 302, 303, 307, 308):
+                location = e.headers.get("Location")
+            else:
+                return None
+    except Exception:
+        return None
+    if not location:
+        return None
+    m = re.search(r"/file/([0-9a-fA-F-]{36})", location)
+    if m:
+        return m.group(1)
+    # 兜底：某些站点把 UUID 放在其他路径段，取第一个像 UUID 的子串
+    m2 = re.search(r"([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})", location)
+    return m2.group(1) if m2 else None
+
+
+def _adf_media_block(media_items):
+    """构造一个 ADF mediaSingle/mediaGroup 块，内嵌已上传的附件图片。
+
+    media_items: [{"media_id","alt"}...]。每张图单独一个 mediaSingle（纵向排列、整行展示）。
+    返回 ADF content 节点列表。
+    """
+    blocks = []
+    for it in media_items:
+        blocks.append({
+            "type": "mediaSingle",
+            "attrs": {"layout": "center"},
+            "content": [{
+                "type": "media",
+                "attrs": {"id": str(it["media_id"]), "type": "file",
+                          "collection": "", **({"alt": it["alt"]} if it.get("alt") else {})},
+            }],
+        })
+    return blocks
+
+
+def jira_embed_images_in_description(site, auth, issue_key, media_items,
+                                     heading="UI Design"):
+    """把已上传附件的图片以 ADF media 节点追加内嵌到工单描述末尾（REST 读 ADF→追加→PUT）。
+
+    读取工单当前 description（ADF），在末尾追加一个标题段 + 每张图的 mediaSingle 块，
+    再整体 PUT 回去。幂等：若描述里已存在相同 media_id 的 media 节点则跳过该张。
+    返回 dict：{"ok","action","embedded","skipped","error"}。
+    """
+    key = urllib.parse.quote(issue_key)
+    st, data = api("GET", f"{site}/rest/api/3/issue/{key}?fields=description", auth)
+    if st != 200 or not isinstance(data, dict):
+        return {"ok": False, "action": "read_failed", "error": f"read description: {st} {data}"}
+    desc = (data.get("fields") or {}).get("description")
+    if not isinstance(desc, dict):
+        desc = {"type": "doc", "version": 1, "content": []}
+    content = desc.get("content") or []
+    desc["content"] = content
+    desc.setdefault("type", "doc")
+    desc.setdefault("version", 1)
+    # 收集描述里已存在的 media id，做幂等去重
+    existing_ids = set()
+    def _walk(nodes):
+        for nd in nodes:
+            if isinstance(nd, dict):
+                if nd.get("type") == "media":
+                    mid = (nd.get("attrs") or {}).get("id")
+                    if mid:
+                        existing_ids.add(str(mid))
+                _walk(nd.get("content") or [])
+    _walk(content)
+    to_embed = [it for it in media_items if str(it["media_id"]) not in existing_ids]
+    skipped = [it["media_id"] for it in media_items if str(it["media_id"]) in existing_ids]
+    if not to_embed:
+        return {"ok": True, "action": "noop", "embedded": [], "skipped": skipped}
+    # 若还没有同名标题段则追加一个 heading
+    has_heading = any(
+        nd.get("type") == "heading" and
+        any((c.get("text") == heading) for c in (nd.get("content") or []))
+        for nd in content if isinstance(nd, dict))
+    if heading and not has_heading:
+        content.append({"type": "heading", "attrs": {"level": 3},
+                        "content": [{"type": "text", "text": heading}]})
+    content.extend(_adf_media_block(to_embed))
+    payload = {"fields": {"description": desc}}
+    st2, data2 = api("PUT", f"{site}/rest/api/3/issue/{key}", auth, body=payload)
+    if st2 not in (200, 204):
+        return {"ok": False, "action": "update_failed",
+                "error": f"description PUT failed: {st2} {data2}"}
+    return {"ok": True, "action": "update",
+            "embedded": [it["media_id"] for it in to_embed], "skipped": skipped}
+
+
+def jira_attach_and_embed_images(base_url, auth, issue_key, images, heading="UI Design"):
+    """一站式：把一组本地图片上传为工单附件并内嵌进描述。
+
+    images: [{"path","filename"(可选),"alt"(可选)}...]。filename 省略时取 path 的 basename。
+    返回聚合结果 dict。任一张上传失败即标记 ok=False，但已成功的仍会内嵌。
+    """
+    site = _jira_site(base_url)
+    result = {"mode": "jira_attach_image", "issue": issue_key, "uploads": [], "heading": heading}
+    media_items = []
+    all_ok = True
+    for img in images:
+        path = img["path"]
+        if not os.path.isfile(path):
+            result["uploads"].append({"path": path, "ok": False, "error": "file not found"})
+            all_ok = False
+            continue
+        filename = img.get("filename") or os.path.basename(path)
+        ctype = _guess_image_content_type(path)
+        up = jira_upload_attachment(site, auth, issue_key, path, filename, ctype)
+        up_entry = {"path": path, "filename": filename, **up}
+        result["uploads"].append(up_entry)
+        if up.get("ok") and up.get("media_id"):
+            media_items.append({"media_id": up["media_id"], "alt": img.get("alt") or filename})
+        else:
+            all_ok = False
+    if media_items:
+        emb = jira_embed_images_in_description(site, auth, issue_key, media_items, heading)
+        result["embed"] = emb
+        if not emb.get("ok"):
+            all_ok = False
+    else:
+        result["embed"] = {"ok": False, "action": "noop", "error": "no image uploaded"}
+        all_ok = False
+    result["ok"] = all_ok
+    return result
+
+# ============================= 主流程 =============================
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--md", default=None)
     ap.add_argument("--space", default=None)
     ap.add_argument("--parent", default=None,
-                    help="直接指定父页 ID（旧模式）。与 --root/--epic/--kind 二选一。")
+                    help="父级模式：直接指定父页 / 文件夹 ID（如固定的 test_case / cms_case / "
+                         "test_report 文件夹），跳过 initiative/epic 层级推导。"
+                         "与 --root/--epic/--kind（文件夹模式）二选一。")
     ap.add_argument("--root", default=None,
-                    help="一级根目录页 ID（Mobile Team Requirement Materials）。与 --epic/--kind 配套。")
-    ap.add_argument("--epic", default=None, help="Epic 容器夹对应的 Jira Epic key（如 CNAPP-5661），不用功能名或中文 slug；夹标题自动拼为「key-摘要」。")
+                    help="文件夹模式：根目录页 ID（profile 的 parent_pages.root）。与 --epic/--kind 配套。")
+    ap.add_argument("--epic", default=None, help="文件夹模式：Epic 容器夹对应的 Jira Epic key（如 CNAPP-5661），不用功能名或中文 slug；夹标题自动拼为「key-摘要」。")
     ap.add_argument("--initiative", dest="initiative", default=None,
                     help="Initiative（Epic 父项）key，作为 epic 之上一级的归档文件夹（如 PORT-1301），"
                          "文件夹标题自动拼为「key-Jira 摘要」。省略时查询 Jira 取直接父项；"
                          "值为 none 时强制无父项，退回三级结构。")
     ap.add_argument("--kind", default=None, choices=["prd", "tech_solution"],
-                    help="决定三级文件夹：prd→{epic}-PRD，tech_solution→{epic}-Tech Solution。")
+                    help="文件夹模式：决定叶子文件夹后缀：prd→{epic}-PRD，tech_solution→{epic}-Tech Solution。")
     ap.add_argument("--title", default=None,
                     help="标题前缀（唯一键），取 profile 的 naming 模板替换 key 后的值，"
-                         "如 APP-TS-Prd-CNAPP-5661 / APP-TS-Spike-CNAPP-1234 / APP-TS-Detail-CNAPP-5678。"
-                         "脚本按此前缀查重，并自动追加「-Jira 摘要」拼成完整标题；命中已有页时按最新摘要改名。不含日期/版本。")
+                         "如 APP-PRD-CNAPP-5661。脚本按此前缀查重，并自动追加「-Jira 摘要」"
+                         "拼成完整页面标题；命中已有页时按最新摘要改名。不含日期/版本。")
     ap.add_argument("--title-key", dest="title_key", default=None,
-                    help="标题唯一键对应的 Jira key，用于查摘要拼可读尾巴："
-                         "PRD 级技术方案=Epic key，Spike=Spike 工单 key，Detail=Story 工单 key。"
-                         "省略时文件夹模式退回用 --epic，旧模式退回纯前缀。")
+                    help="标题可读尾巴所取 Jira 摘要对应的 key：PRD / PRD 级技术方案=Epic key，"
+                         "Spike=Spike 工单 key，Detail=Story 工单 key。省略时文件夹模式退回 --epic，"
+                         "父级模式退回纯前缀（不查 Jira、不追加尾巴）。")
+    ap.add_argument("--title-tail", dest="title_tail", default=None,
+                    help="自定义标题可读尾巴（含前导分隔符，如 \" Guest Info Field Optionality\"）。"
+                         "给定时不查 Jira 摘要，完整标题 = --title + 本值，查重仍只认 --title 前缀。"
+                         "用于标题尾巴由调用方自己撰写（如测试用例的英文短名）且需要随迭代刷新的场景。")
     ap.add_argument("--mcp", default=None)
     ap.add_argument("--version-msg", default="Publish from local doc")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--allow-degraded-diagrams", action="store_true",
                     help="放行图表降级：不强制 mmdc，缺失时回退纯标准库自绘（flowchart 低质量、"
                          "sequenceDiagram 等无法出图）。默认不允许，缺 mmdc 直接阻断发布。")
+    ap.add_argument("--no-epic-link", action="store_true",
+                    help="不在页面正文顶部自动注入指向 Jira Epic 的链接。默认注入（正文已含指向该 "
+                         "Epic 的链接时自动跳过，不重复）。")
     ap.add_argument("--check-env", action="store_true",
                     help="仅环境预检：检查凭证与（文档含 mermaid 时）Node.js/npx 是否就绪，"
                          "报告结果后退出，不发布。缺失时打印按操作系统的安装指引。")
-    # 回链模式：把技术方案链接写回 PRD 附录，按 pageId 直改（REST 整页读回→仅替换附录条目→整页写回），
-    # 不需本地 md 源、无损（不动图/mermaid）、绝不经 MCP。用于「写技术方案的人没有 PRD 本地源」的常态。
+    # ---- 回链模式：把链接写回某页附录条目（REST 整页读回→仅替换条目→整页写回），不动图/mermaid ----
     ap.add_argument("--writeback-link", action="store_true",
-                    help="回链模式：把技术方案链接写回 PRD 附录「Technical solution links」条目。"
+                    help="回链模式：把技术方案等链接写回目标页附录「Technical solution links」条目。"
                          "需配套 --page-id / --link-url / --link-title；此模式不使用 --md/--space。")
     ap.add_argument("--page-id", dest="page_id", default=None,
-                    help="回链模式：目标 PRD 页面 ID（直接指定，避免反向查找歧义）。")
+                    help="回链模式：目标页面 ID（直接指定，避免反向查找歧义）。")
     ap.add_argument("--link-url", dest="link_url", default=None,
-                    help="回链模式：要写入的技术方案 Confluence 页面 URL。")
+                    help="回链模式 / Jira 远程链接模式：要写入的 Confluence 页面 URL。")
     ap.add_argument("--link-title", dest="link_title", default=None,
-                    help="回链模式：链接显示文字（通常为技术方案页标题）。")
+                    help="回链模式 / Jira 远程链接模式：链接显示文字（通常为目标页标题）。")
     ap.add_argument("--item-label", dest="item_label", default="Technical solution links",
                     help="回链模式：目标附录条目 label（默认 Technical solution links；"
                          "如需写到其它条目可指定，例如 Reference document links）。")
-    # ---- Jira 远程链接（Web link）模式：把外部 URL 挂到 Jira 工单的 Web links 区 ----
-    # Jira 的「链接的工作项」只支持 issue↔issue，外部 URL（如 Confluence 技术方案页）归属
-    # Web links（远程链接）；Atlassian MCP 未暴露该写接口，故走 Jira REST（凭证复用 confluenceRest）。
+    # ---- Jira 远程链接（Web link）模式 ----
+    # Jira 的「链接的工作项」只支持 issue↔issue，外部 URL（如 Confluence 页）归属 Web links
+    # （远程链接）；Atlassian MCP 未暴露该写接口，故走 Jira REST（凭证复用 confluenceRest）。
     ap.add_argument("--jira-remote-link", action="store_true",
-                    help="Jira 远程链接模式：把技术方案等外部 URL 作为 Web link 挂到工单。"
+                    help="Jira 远程链接模式：把 Confluence 页等外部 URL 作为 Web link 挂到工单。"
                          "需配套 --issue 与 --link-url / --link-title；此模式不使用 --md/--space。")
     ap.add_argument("--issue", dest="issue", default=None,
-                    help="Jira 远程链接模式：目标工单 key（如 CNAPP-7005）。")
+                    help="Jira 远程链接 / 附件图片模式：目标工单 key（如 CNAPP-7005）。")
     ap.add_argument("--relationship", dest="relationship", default="Tech Solution",
                     help="Jira 远程链接模式：关系文案（默认 Tech Solution）。")
     ap.add_argument("--global-id", dest="global_id", default=None,
                     help="Jira 远程链接模式：幂等键（默认由 link-url 的 pageId 推导为 confluence-page-{id}）。")
     ap.add_argument("--icon-url", dest="icon_url", default=None,
                     help="Jira 远程链接模式：链接小图标 URL（可选，如 Confluence favicon）。")
+    # ---- Jira 附件图片内嵌模式：本地图片上传为工单附件并以 ADF media 内嵌进描述 ----
+    # 用于 UI 设计图直接出现在工单正文（非仅链接）。Atlassian MCP 无附件写接口，故走 Jira REST。
+    ap.add_argument("--jira-attach-image", action="store_true",
+                    help="Jira 附件图片内嵌模式：把本地图片作为工单附件上传并内嵌进描述。"
+                         "需配套 --issue 与 --image（可重复）或 --images-json；此模式不使用 --md/--space。")
+    ap.add_argument("--image", dest="images", action="append", default=[],
+                    help="Jira 附件图片内嵌模式：本地图片路径（可重复多次传多张）。")
+    ap.add_argument("--images-json", dest="images_json", default=None,
+                    help="Jira 附件图片内嵌模式：图片清单 JSON 数组，元素形如 "
+                         "{\"path\":...,\"filename\":...,\"alt\":...}；与 --image 二选一（同时给则合并）。")
+    ap.add_argument("--embed-heading", dest="embed_heading", default="UI Design",
+                    help="Jira 附件图片内嵌模式：内嵌图片前插入的标题段文字（默认 UI Design；传空字符串则不加标题）。")
     args = ap.parse_args()
+
+    here = os.path.dirname(os.path.abspath(__file__))
+    mcp_path = args.mcp or os.path.abspath(os.path.join(here, "..", "..", "..", "mcp.json"))
 
     # ---- 回链模式：独立分支，尽早返回，不走发布主流程 ----
     if args.writeback_link:
@@ -1107,8 +1629,6 @@ def main():
                                   ("--link-title", args.link_title)) if not v]
         if missing:
             raise SystemExit(f"回链模式需提供 {', '.join(missing)}")
-        here = os.path.dirname(os.path.abspath(__file__))
-        mcp_path = args.mcp or os.path.abspath(os.path.join(here, "..", "..", "..", "mcp.json"))
         base_url, email, token = load_creds(mcp_path)
         auth = auth_header(email, token)
         msg = args.version_msg if args.version_msg != "Publish from local doc" \
@@ -1118,14 +1638,12 @@ def main():
         print(json.dumps(res, ensure_ascii=False, indent=2))
         return 0 if res.get("ok") else 1
 
-    # ---- Jira 远程链接（Web link）模式：独立分支，尽早返回，不走发布主流程 ----
+    # ---- Jira 远程链接（Web link）模式：独立分支，尽早返回 ----
     if args.jira_remote_link:
         missing = [k for k, v in (("--issue", args.issue), ("--link-url", args.link_url),
                                   ("--link-title", args.link_title)) if not v]
         if missing:
             raise SystemExit(f"Jira 远程链接模式需提供 {', '.join(missing)}")
-        here = os.path.dirname(os.path.abspath(__file__))
-        mcp_path = args.mcp or os.path.abspath(os.path.join(here, "..", "..", "..", "mcp.json"))
         base_url, email, token = load_creds(mcp_path)
         auth = auth_header(email, token)
         res = create_jira_remote_link(base_url, auth, args.issue, args.link_url, args.link_title,
@@ -1133,29 +1651,68 @@ def main():
         print(json.dumps(res, ensure_ascii=False, indent=2))
         return 0 if res.get("ok") else 1
 
-    if not args.md or not args.space:
-        raise SystemExit("发布模式需提供 --md 与 --space（回链模式请用 --writeback-link）")
-    if not args.title:
-        raise SystemExit("发布模式需提供 --title（回链模式请用 --writeback-link）")
+    # ---- Jira 附件图片内嵌模式：独立分支，尽早返回 ----
+    if args.jira_attach_image:
+        if not args.issue:
+            raise SystemExit("Jira 附件图片内嵌模式需提供 --issue")
+        images = []
+        if args.images_json:
+            try:
+                parsed = json.loads(args.images_json)
+            except Exception as e:
+                raise SystemExit(f"--images-json 解析失败：{e}")
+            if not isinstance(parsed, list):
+                raise SystemExit("--images-json 必须是 JSON 数组")
+            for it in parsed:
+                if isinstance(it, str):
+                    images.append({"path": it})
+                elif isinstance(it, dict) and it.get("path"):
+                    images.append({"path": it["path"], "filename": it.get("filename"),
+                                   "alt": it.get("alt")})
+                else:
+                    raise SystemExit(f"--images-json 元素无效：{it}")
+        for p in args.images:
+            images.append({"path": p})
+        if not images:
+            raise SystemExit("Jira 附件图片内嵌模式需提供 --image 或 --images-json 指定至少一张图片")
+        base_url, email, token = load_creds(mcp_path)
+        auth = auth_header(email, token)
+        res = jira_attach_and_embed_images(base_url, auth, args.issue, images, args.embed_heading)
+        print(json.dumps(res, ensure_ascii=False, indent=2))
+        return 0 if res.get("ok") else 1
 
+    # ---- 发布模式：校验落点模式二选一 ----
+    if not args.md or not args.space:
+        raise SystemExit("发布模式需提供 --md 与 --space")
+    if not args.title:
+        raise SystemExit("发布模式需提供 --title")
     use_folder = bool(args.root or args.epic or args.kind)
     if use_folder:
-        missing = [k for k, v in (("--root", args.root), ("--epic", args.epic), ("--kind", args.kind)) if not v]
+        missing = [k for k, v in (("--root", args.root), ("--epic", args.epic),
+                                  ("--kind", args.kind)) if not v]
         if missing:
             raise SystemExit(f"文件夹模式需同时提供 --root/--epic/--kind，缺少：{', '.join(missing)}")
+        if args.parent:
+            raise SystemExit("--parent 与 --root/--epic/--kind 互斥，请二选一")
     elif not args.parent:
-        raise SystemExit("需提供 --parent（旧模式）或 --root/--epic/--kind（文件夹模式）之一")
+        raise SystemExit("需提供 --parent（父级模式）或 --root/--epic/--kind（文件夹模式）之一")
 
-    here = os.path.dirname(os.path.abspath(__file__))
-    mcp_path = args.mcp or os.path.abspath(os.path.join(here, "..", "..", "..", "mcp.json"))
     base_url, email, token = load_creds(mcp_path)
     auth = auth_header(email, token)
 
     with open(args.md, encoding="utf-8") as f:
         md = f.read()
-    body, mermaid_blocks, stats = md_to_storage(md)
+    body, mermaid_blocks, images, stats = md_to_storage(md)
     feature = re.sub(r"[^A-Za-z0-9]+", "-", os.path.splitext(os.path.basename(args.md))[0]).strip("-")
     workdir = os.path.dirname(os.path.abspath(args.md))
+
+    # 自动注入 Jira Epic 回链至附录「Jira link」项（见 inject_epic_link）。
+    # 幂等——仅当附录已存在规范锚点 <a href=.../browse/EPIC>EPIC</a> 时跳过。
+    # 父级模式（无 --epic，如测试线落固定文件夹）不注入。
+    epic_url = jira_browse_url(base_url, args.epic) if args.epic else None
+    epic_link_injected = False
+    if args.epic and not args.no_epic_link:
+        body, epic_link_injected = inject_epic_link(body, args.epic, epic_url)
 
     # 环境预检：只报告不发布，供 skill 在正式发布前提前暴露"本机能否出图"。
     if args.check_env:
@@ -1179,6 +1736,7 @@ def main():
 
     # 解析 initiative（Epic 父项）以确定归档层级：--initiative 显式指定优先，值为 none 时强制无父项；
     # 未指定则查询 Jira 取直接父项。有父项时在归档路径插入一级 {initiative} 文件夹，否则维持三级。
+    # 父级模式不涉及层级推导，跳过。
     initiative = None
     if use_folder:
         if args.initiative:
@@ -1186,18 +1744,23 @@ def main():
         else:
             initiative = get_jira_parent(base_url, auth, args.epic)
 
-    # 标题 = 前缀（唯一键，如 APP-TS-Prd-CNAPP-5661）+「-Jira 摘要」可读尾巴。
-    # 摘要由脚本查 Jira 取（--title-key 指定：PRD 级=epic，spike=spike_key，detail=story_key；
-    # 省略时文件夹模式退回 --epic，旧模式退回纯前缀）。查重按前缀匹配，命中后按最新完整标题改名。
+    # 标题 = 前缀（唯一键，如 APP-PRD-CNAPP-5661）+ 可读尾巴。
+    # 尾巴来源优先 --title-tail（调用方自撰，如测试用例英文短名），否则查 Jira 摘要
+    # （--title-key 指定摘要来源 key；省略时文件夹模式退回 --epic，父级模式退回纯前缀）。
+    # 两种方式都不影响唯一键；查重按前缀匹配，命中后按最新完整标题改名。
     title_prefix = args.title
-    summary_key = args.title_key or (args.epic if use_folder else None)
-    summary_tail = ""
-    if summary_key:
-        kt, _ = get_jira_issue_title(base_url, auth, summary_key)
-        summary_tail = kt[len(summary_key):] if kt.startswith(summary_key) else ""
+    if args.title_tail is not None:
+        summary_tail = args.title_tail
+    else:
+        summary_key = args.title_key or (args.epic if use_folder else None)
+        summary_tail = ""
+        if summary_key:
+            kt, _ = get_jira_issue_title(base_url, auth, summary_key)
+            summary_tail = kt[len(summary_key):] if kt.startswith(summary_key) else ""
     full_title = title_prefix + summary_tail
 
-    result = {"title": full_title, "title_prefix": title_prefix, "stats": stats, "base_url": base_url}
+    result = {"title": full_title, "title_prefix": title_prefix, "stats": stats, "base_url": base_url,
+              "epic_url": epic_url, "epic_link_injected": epic_link_injected}
 
     if args.dry_run:
         result.update({"dry_run": True, "storage_chars": len(body),
@@ -1209,11 +1772,11 @@ def main():
     if use_folder:
         parent, ensured = resolve_parent(base_url, auth, args.space, args.root, args.epic, args.kind, initiative)
         result["folders"] = ensured
-        # 文件夹模式下方案页是叶子夹的直接子页，按标题前缀（前缀+Jira key）查重；摘要尾巴变动不重复建页。
+        # 文档页是叶子夹的直接子页，按标题前缀（前缀+Jira key）查重；摘要尾巴变动不重复建页。
         existing_id, existing_title = _find_leaf_page_by_prefix(base_url, auth, parent, title_prefix)
     else:
+        # 父级模式：在指定父页/文件夹下按标题前缀查子项（与文件夹模式同一套查重，避免尾巴变动重复建页）。
         parent = args.parent
-        # 旧模式：在固定父页下按标题前缀查子页（与文件夹模式一致，避免摘要尾巴变动重复建页）。
         existing_id, existing_title = _find_child_by_key_prefix(base_url, auth, parent, title_prefix)
 
     if existing_id:
@@ -1223,13 +1786,18 @@ def main():
             rename_page(base_url, auth, page_id, full_title)
             result["renamed_from"] = existing_title
     else:
-        st, data = create_page(base_url, auth, args.space, parent, full_title, body)
+        # 首发先建页拿 page_id（图片/mermaid 作附件必须挂在已存在的页上）；
+        # 建页 body 先把占位符替换为提示文字，避免 update 若失败时页面残留裸 [[MERMAID_n]]/[[IMAGE_n]]。
+        seed = re.sub(r"\[\[(?:MERMAID|IMAGE)_\d+\]\]",
+                      "<blockquote><p>（内容渲染中…）</p></blockquote>", body)
+        st, data = create_page(base_url, auth, args.space, parent, full_title, seed)
         if st not in (200, 201):
             result["error"] = f"create failed: {st} {data}"
             print(json.dumps(result, ensure_ascii=False, indent=2)); return 1
         page_id = data["id"]; result["action"] = "create"
 
     body, pending = replace_mermaid(body, mermaid_blocks, page_id, base_url, auth, workdir, feature)
+    body, img_pending = replace_images(body, images, page_id, base_url, auth, args.md)
     ver = get_version(base_url, auth, page_id)
     st, data = update_page(base_url, auth, page_id, full_title, body, ver, args.version_msg)
     if st not in (200, 201):
@@ -1241,6 +1809,7 @@ def main():
         "version": data["version"]["number"] if isinstance(data, dict) else None,
         "url": base_url + data["_links"]["webui"] if isinstance(data, dict) else None,
         "mermaid_pending": pending,
+        "image_pending": img_pending,
     })
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0
