@@ -1,6 +1,7 @@
 ---
 name: test-case-to-script
-description: Turn pseudocode into executable pytest + pytest-bdd + Appium (iOS) test code (`test-case-to-script`). Supports the "implement a feature" entry: find the corresponding pseudocode in tests/mobile/ios/pre_code/<feature>.md, produce step definitions split by "page" into tests/mobile/ios/steps/<page>_steps.py (one-to-one with Page Objects, never one file per Jira Key), have the feature combine these generic steps across pages via BDD, and export in steps/__init__.py. After generating, the user must debug on a real device; only save the case after debugging passes. Use when the user already has pseudocode, or asks to implement a feature and wants runnable scripts.
+description: >-
+  Turn pseudocode into executable pytest + pytest-bdd + Appium (iOS) test code (`test-case-to-script`). Supports the "implement a feature" entry: find the corresponding pseudocode in tests/mobile/ios/pre_code/<feature>.md, produce step definitions split by "page" into tests/mobile/ios/steps/<page>_steps.py (one-to-one with Page Objects, never one file per Jira Key), have the feature combine these generic steps across pages via BDD, and export in steps/__init__.py. After generating, the user must debug on a real device; only save the case after debugging passes. Use when the user already has pseudocode, or asks to implement a feature and wants runnable scripts.
 ---
 
 # test-case-to-script: pseudocode -> executable pytest+Appium code
