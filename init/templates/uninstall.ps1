@@ -7,6 +7,7 @@
 #   - skills：所有角色 + 公共的 skill（~\.cursor\skills\<name>\）
 #   - profiles：所有 *.yaml 以及 setup.json（~\.cursor\profiles\）
 #   - mcp 示例模板：mcp.example.macos.json / mcp.example.windows.json
+#   - 角色版本记录：~\.cursor\ai-sdlc-installed\role-*.json
 # 明确【不删】：
 #   - ~\.cursor\mcp.json（含用户手填凭证）——始终保留
 #   - 用户自己的 agent / skill（不在清单里的一律不动）
@@ -80,6 +81,19 @@ foreach ($p in $Profiles) {
 Write-Host "--> 卸载 mcp 示例模板"
 foreach ($f in $McpExamples) {
     if ($f) { Remove-One (Join-Path $CursorHome $f) "mcp 示例" }
+}
+
+# ---- 5) 角色版本记录（~\.cursor\ai-sdlc-installed\role-*.json；runtime.json 归运行时卸载脚本管）----
+Write-Host "--> 清理角色版本记录"
+$versionDir = Join-Path $CursorHome "ai-sdlc-installed"
+if (Test-Path $versionDir) {
+    Get-ChildItem -Path $versionDir -Filter "role-*.json" -File -ErrorAction SilentlyContinue | ForEach-Object {
+        Remove-One $_.FullName "版本记录"
+    }
+    # 目录已空（运行时记录也不在）则一并删掉
+    if (-not $DryRun -and -not (Get-ChildItem -Force -Path $versionDir -ErrorAction SilentlyContinue)) {
+        Remove-Item -LiteralPath $versionDir -Force -ErrorAction SilentlyContinue
+    }
 }
 
 Write-Host ""

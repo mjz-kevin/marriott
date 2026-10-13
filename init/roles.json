@@ -11,7 +11,8 @@
     "skills": [
       "sensitive-data-guard",
       "profile-select",
-      "md-to-pdf"
+      "md-to-pdf",
+      "ai-sdlc-info"
     ],
     "profiles": [
       "app-test.yaml",

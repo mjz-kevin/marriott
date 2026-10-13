@@ -8,6 +8,7 @@
 #   - skills：所有角色 + 公共的 skill（~/.cursor/skills/<name>/）
 #   - profiles：所有 *.yaml 以及 setup.json（~/.cursor/profiles/）
 #   - mcp 示例模板：mcp.example.macos.json / mcp.example.windows.json
+#   - 角色版本记录：~/.cursor/ai-sdlc-installed/role-*.json
 # 明确【不删】：
 #   - ~/.cursor/mcp.json（含用户手填凭证）——始终保留
 #   - 用户自己的 agent / skill（不在清单里的一律不动）
@@ -25,7 +26,7 @@ for arg in "$@"; do
     -y|--yes) : ;;                 # 兼容保留：本脚本默认即无交互
     -n|--dry-run) DRY_RUN=1 ;;
     -h|--help)
-      sed -n '2,19p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+      sed -n '2,18p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
       exit 0 ;;
     *) echo "未知参数：${arg}（用 --help 查看用法）"; exit 2 ;;
   esac
@@ -91,6 +92,20 @@ for f in "${MCP_EXAMPLES[@]}"; do
   [ -n "$f" ] || continue
   rm_path "$CURSOR_HOME/$f" "mcp 示例"
 done
+
+# ---- 5) 角色版本记录（~/.cursor/ai-sdlc-installed/role-*.json；runtime.json 归运行时卸载脚本管）----
+echo "--> 清理角色版本记录"
+VERSION_DIR="$CURSOR_HOME/ai-sdlc-installed"
+if [ -d "$VERSION_DIR" ]; then
+  for rec in "$VERSION_DIR"/role-*.json; do
+    [ -e "$rec" ] || continue
+    rm_path "$rec" "版本记录"
+  done
+  # 目录已空（运行时记录也不在）则一并删掉
+  if [ "$DRY_RUN" != 1 ] && [ -z "$(ls -A "$VERSION_DIR" 2>/dev/null)" ]; then
+    rmdir "$VERSION_DIR" 2>/dev/null || true
+  fi
+fi
 
 echo ""
 echo "==> 卸载完成 ✅"

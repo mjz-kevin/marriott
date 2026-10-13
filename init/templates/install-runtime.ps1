@@ -14,6 +14,28 @@ $PkgDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 Write-Host "==> AI SDLC 运行时初始化器 (Windows)"
 Write-Host "    目标：C:\AI-SDLC\runtime"
 
+# ---- 版本信息：本包版本 vs 已安装运行时版本（记录在 ~\.cursor\ai-sdlc-installed\runtime.json）----
+$CursorHome = if ($env:CURSOR_HOME) { $env:CURSOR_HOME } else { Join-Path $env:USERPROFILE ".cursor" }
+$versionDir = Join-Path $CursorHome "ai-sdlc-installed"
+$runtimeRecord = Join-Path $versionDir "runtime.json"
+$manifest = $null
+$newVer = ""
+$manifestPath = Join-Path $PkgDir "manifest.json"
+if (Test-Path $manifestPath) {
+    try { $manifest = Get-Content $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json; $newVer = $manifest.version } catch { }
+}
+$oldVer = ""
+if (Test-Path $runtimeRecord) {
+    try { $oldVer = (Get-Content $runtimeRecord -Raw -Encoding UTF8 | ConvertFrom-Json).version } catch { }
+}
+if (-not $oldVer) {
+    Write-Host "    版本：$newVer（首次安装或旧安装未留版本记录）"
+} elseif ($oldVer -eq $newVer) {
+    Write-Host "    版本：$newVer（与已安装版本相同）"
+} else {
+    Write-Host "    版本：$oldVer → $newVer"
+}
+
 $runtimeZip = Join-Path $PkgDir "AI-SDLC-windows.zip"
 $runtimeRoot = "C:\AI-SDLC\runtime"
 
@@ -149,6 +171,21 @@ if (Test-Path $toolsSrc) {
     Write-Host "    离线工具包处理完成（mermaid-cli + md-to-pdf + Chromium）"
 } else {
     Write-Host "--> 本包未带离线工具包（tools\），跳过（mermaid 渲染将回退 npx 联网 + 系统 Chrome）。"
+}
+
+# ---- 写版本记录：本包 manifest + installed_at → ~\.cursor\ai-sdlc-installed\runtime.json ----
+# 注意：运行时分组件幂等，已就位的组件不会被重铺，因此该版本表示「最近一次运行的运行时包版本」。
+if ($manifest) {
+    try {
+        New-Item -ItemType Directory -Force -Path $versionDir | Out-Null
+        $record = [ordered]@{ installed_at = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ") }
+        foreach ($p in $manifest.PSObject.Properties) { $record[$p.Name] = $p.Value }
+        $recordJson = [pscustomobject]$record | ConvertTo-Json -Depth 10
+        [System.IO.File]::WriteAllText($runtimeRecord, $recordJson, (New-Object System.Text.UTF8Encoding($false)))
+        Write-Host "--> 已记录运行时版本：$newVer（$runtimeRecord）"
+    } catch {
+        Write-Warning "写入运行时版本记录失败（不影响使用）：$($_.Exception.Message)"
+    }
 }
 
 

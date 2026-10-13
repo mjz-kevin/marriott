@@ -13,12 +13,50 @@ $CursorHome = if ($env:CURSOR_HOME) { $env:CURSOR_HOME } else { Join-Path $env:U
 
 Write-Host "==> AI SDLC 安装器 (Windows)"
 
+# ---- 版本信息：本包版本 vs 已安装版本（记录在 ~\.cursor\ai-sdlc-installed\role-<角色>.json）----
+# 纯数字点分版本比较：$a -lt $b 返回 $true；任一方含非数字（如时间戳版本）返回 $null（不可比）
+function Compare-VerLt($a, $b) {
+    if (-not $a -or -not $b) { return $null }
+    if ($a -notmatch '^[0-9.]+$' -or $b -notmatch '^[0-9.]+$') { return $null }
+    $x = $a.Split('.'); $y = $b.Split('.')
+    $n = [Math]::Max($x.Count, $y.Count)
+    for ($i = 0; $i -lt $n; $i++) {
+        $p = if ($i -lt $x.Count -and $x[$i]) { [long]$x[$i] } else { 0 }
+        $q = if ($i -lt $y.Count -and $y[$i]) { [long]$y[$i] } else { 0 }
+        if ($p -lt $q) { return $true }
+        if ($p -gt $q) { return $false }
+    }
+    return $false
+}
+
+$versionDir = Join-Path $CursorHome "ai-sdlc-installed"
+$role = ""
+$newVer = ""
+$manifest = $null
 $manifestPath = Join-Path $PkgDir "manifest.json"
 if (Test-Path $manifestPath) {
     try {
-        $role = (Get-Content $manifestPath -Raw | ConvertFrom-Json).role
+        $manifest = Get-Content $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        $role = $manifest.role
+        $newVer = $manifest.version
         Write-Host "    角色：$role"
     } catch { }
+}
+$roleName = if ($role) { $role } else { "unknown" }
+$roleRecord = Join-Path $versionDir "role-$roleName.json"
+$oldVer = ""
+if (Test-Path $roleRecord) {
+    try { $oldVer = (Get-Content $roleRecord -Raw -Encoding UTF8 | ConvertFrom-Json).version } catch { }
+}
+if (-not $oldVer) {
+    Write-Host "    版本：$newVer（首次安装或旧安装未留版本记录）"
+} elseif ($oldVer -eq $newVer) {
+    Write-Host "    版本：$newVer（与已安装版本相同，重装覆盖）"
+} else {
+    Write-Host "    版本：$oldVer → $newVer"
+    if ((Compare-VerLt $newVer $oldVer) -eq $true) {
+        Write-Warning "本包版本低于已安装版本，这是一次【降级安装】；如非有意，请改用最新角色包。"
+    }
 }
 Write-Host "    目标：$CursorHome"
 
@@ -159,11 +197,27 @@ if (Test-Path $mcpTemplate) {
     Write-Warning "未找到 $mcpTemplate，跳过 mcp.json 生成。"
 }
 
+# ---- 写版本记录：本包 manifest + installed_at → ~\.cursor\ai-sdlc-installed\role-<角色>.json ----
+# 每个角色单独一个文件，多角色叠装互不覆盖；ai-sdlc-info skill 读取这里回答「当前装的是什么版本」。
+if ($manifest -and $role) {
+    try {
+        New-Item -ItemType Directory -Force -Path $versionDir | Out-Null
+        $record = [ordered]@{ installed_at = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ") }
+        foreach ($p in $manifest.PSObject.Properties) { $record[$p.Name] = $p.Value }
+        $recordJson = [pscustomobject]$record | ConvertTo-Json -Depth 10
+        # 无 BOM 的 UTF-8，与 macOS 记录格式一致，便于 python 读取
+        [System.IO.File]::WriteAllText($roleRecord, $recordJson, (New-Object System.Text.UTF8Encoding($false)))
+        Write-Host "--> 已记录安装版本：$role $newVer（$roleRecord）"
+    } catch {
+        Write-Warning "写入版本记录失败（不影响使用）：$($_.Exception.Message)"
+    }
+}
+
 # 清理垃圾文件
 Get-ChildItem -Path (Join-Path $CursorHome "agents"),(Join-Path $CursorHome "skills") -Recurse -Force -Filter ".DS_Store" -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
 
 Write-Host ""
-Write-Host "==> 安装完成 ✅"
+Write-Host "==> 安装完成 ✅（$roleName $newVer）"
 Write-Host "后续步骤："
 Write-Host "  1) 打开 $CursorHome\mcp.json，填入 Atlassian / Figma / GitHub / Harness 凭证（敏感信息需手动填）"
 Write-Host "     - Confluence/Jira: email + api_token  https://id.atlassian.com/manage-profile/security/api-tokens"
@@ -172,3 +226,5 @@ Write-Host "     - GitHub: GITHUB_TOKEN                https://git.marriott.com/
 Write-Host "     - Harness: HARNESS_ACCOUNT_ID + HARNESS_API_KEY  marriott.harness.io → 头像 → Account Settings / My API Keys（新建 Personal Access Token）"
 Write-Host "  2) 在 Cursor 的 MCP 设置里确认 Atlassian / figma / marriott-github / harness 四个 server 已连接"
 Write-Host "     （agents / skills 已放入 ~/.cursor/，Cursor 会自动识别，无需重启）"
+Write-Host "  3) 之后想查看当前安装的版本：在 Cursor 对话里问「当前 AI SDLC 是什么版本」，"
+Write-Host "     或运行 python $CursorHome\skills\ai-sdlc-info\scripts\version.py"
