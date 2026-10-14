@@ -8,7 +8,7 @@ description: >-
   user asks to split Stories, write User Stories, draft ACs, or prepare Jira tickets from a PRD;
   triggers: user story authoring / 拆 Story / 写 User Story / 用户故事 / 拆分需求 / 写 AC.
 metadata:
-  agent: UserStory Agent
+  agent: [Eval Agent, UserStory Agent]
 ---
 
 # User Story Authoring — writing User Stories
