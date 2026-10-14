@@ -12,6 +12,22 @@
 
 ## [Unreleased]
 
+### 变更
+- memory 页（`test-script-memory` / `test-case-memory`，位于 DBU4「Test Memory For AI」folder）会随使用增长变大，故给**所有读取 memory 的 skill 与 test-agent** 补充「**先关键词匹配、再定向取用**」约束：读回单个 YAML 代码块后，不再整表全量应用，而是先由本次用例/步骤/页面/异常/平台推导关键词，匹配各条目的 `scope` / `step_pattern` / `category` / 关键字字段，只应用命中的少数条目（匹配不到则回退通用默认），以控制 context 规模。落点：`test-case-to-script`、`test-case-authoring`、`test-debug-script`、`test-run-report-bug`、`jira-to-test-case` 各自的读 memory 步骤，以及 `test-agent.md` 的「检查 memory 通用规则」使用原则（统管全局）。（`test-page-elements` 不整页读 memory，未改。）
+- app 功能用例模板 `references/app-case-template.md` 的用例表新增 **`Domain` 列**（放在 Priority 与 User type 之间）：取值固定枚举 **Commerce / Loyalty / Trips / Platform**（与 Jira bug `Domain` / `mcp.jira.labels.business_domain` 同源），由 AI 按用例功能性质自动识别并默认填写；新增 §5 判定规则（按核心价值判域、优先继承需求 Epic/Story 的 business_domain 标签、跨域取核心值并在 Notes 说明）。同步更新示例表头/示例行/取值说明，以及 `jira-to-test-case/SKILL.md` 的字段助记列表。
+- 测试线**页面元素知识库**（app 的 page_doc + iOS 导航页；cms 的 cms_doc/cms_page + CMS 导航页）、**两个 memory 页**、**运行报告**全部从测试线个人空间（`~712020…`）迁至 **DBU4** 空间，个人空间引用在工具链内彻底清零：
+  - app 知识库根新增顶层容器 **`app_doc`（`4260299195`，DBU4）**，内含 `page_doc`（`4280157634`）+ iOS Page Map 导航页（`4280157316`）；cms 知识库根 `cms_doc`（`4281205569`）含 `cms_page`（`4281827573`）+ CMS Module Map 导航页（`4280551711`）。各子 folder / 导航页 ID 不变，仅所在 space 由个人空间改为 DBU4。
+  - 两个 memory 页换成新页并同名：`test-script-memory` `4363157606`→`4364992536`、`test-case-memory` `4362600710`→`4364632091`（标题、内容保持；旧页已删）。
+  - **运行报告**落点从个人空间固定 `test_report` folder 改为 DBU4 的 **`Automation Report`（`4192207633`）根** + 运行时二级夹结构：`test-run-report-bug` 运行前主动询问用户**平台（iOS/Android/All/Custom）+ app 版本号**，在报告根下找/建二级夹 **`<iOS|Android> <版本号>`**（如 `iOS 26.8` / `Android 11.15`，Atlassian MCP 幂等建夹），报告页落入该二级夹；`--space` 用 `test.space`(DBU4)、`--parent` 用二级夹 folderId。
+  - 4 个 profile 的 `mcp.confluence.test`：`space`/`space_id` 由个人空间改为 `DBU4`/`329154959`；`folders` 新增 `app_doc` 与 `report_root`（`4192207633`），删除旧 `test_report` 及临时的 `report_space`/`report_space_id`；`memory_pages.test_script`/`test_case` 换新 pageId。
+  - 6 个测试线 skill + test-agent 中知识库/导航页/报告落点/space 的"当前值参考"文字与参考 URL 的 space 段，由 `~712020…`/`4005003910`/`test_report` 全部改为 DBU4 新结构。
+- 功能用例（`jira-to-test-case`）的 Confluence 落点统一从测试线个人空间（`~712020…`）下的固定 folder（`test_case` / `cms_case`，parent 模式）改为**走需求/方案线同一套 folder 模式**：在 `root → {initiative} → {epic}` 下自动建 `{epic}-TestCase` 夹（与 `{epic}-PRD` / `{epic}-Tech Solution` 平级）。落点随环境区分：**test 环境 app/cms 共用同一棵树**（DBU4 `4205314140`「AI SDLC Poilt Test」）；**prod 环境 app/cms 各自独立**（app=CMI `4191912061`「Mobile Team Requirement Materials - for AI SDLC Test」，cms=CMI `4175954245`「CMS Team Requirement Materials」）。相应地：
+  - `confluence-publish` 发布脚本 `upload_confluence_v2.py` 的 folder 模式新增 `--kind test_case`（叶子夹后缀 `{epic}-TestCase`），与既有 `prd` / `tech_solution` 并列；`--parent` 示例注释去掉已废弃的 `test_case` / `cms_case`。
+  - 4 个 profile 的 `mcp.confluence.folder_layout` 新增 `level4_test_case: "{epic}-TestCase"`；从 `mcp.confluence.test.folders` 删除 `test_case` 与 `cms_case`（page_doc / test_report / cms_doc / cms_page 仍留在个人空间）。命名风格 `iOS Test Case - <JIRA_KEY> <短名>` / `CMS Test Case - <JIRA_KEY> <短名>` 不变。
+  - 真实 root/space 校正：`app-prod` 的 root 由 `4198957209` 改为 `4191912061`（CMI）；`cms-test` 的 root 保持与 app-test 共用的 DBU4 `4205314140`（space=DBU4）；app-test（DBU4 `4205314140`）、cms-prod（CMI `4175954245`）本已正确未动。
+  - `jira-to-test-case/SKILL.md`、`test-agent.md`、`app-case-template.md`、`cms-case-template.md` 中所有指向旧 `test_case`（ID `4261314672`）/ `cms_case`（ID `4282613845`）folder 的说明（链接、`--parent` 命令、落点描述）已删除/改写为 folder 模式与 `{epic}-TestCase`；原指向个人空间示例页 `CMS 测试用例 - GCD-326`（`4288971388`）的排版参考链接也一并去掉，改为指向仓库内模板文件 `references/*-case-template.md`。
+- 测试线 6 个 Skill（`jira-to-test-case`、`test-page-elements`、`test-run-report-bug`、`test-debug-script`、`test-case-authoring`、`test-case-to-script`）中硬编码的 Confluence 发布路径 / space / spaceId / cloudId、导航页 pageId、以及 Jira Bug 配置，统一改为「从当前 profile 读取」：Confluence 走 `mcp.confluence.test.folders.*` / `nav_pages.*` / `space` / `space_id` / `cloud_id`，Jira Bug 走 `mcp.jira.bug.*`。旧值保留为「当前值参考」，脚本命令形态（`--parent <id> --space <key>`）不变。（配套的 4 个 profile 已先行新增这两段配置。）符合 AGENTS.md「团队常量一律放 profile」约定。
+
 ---
 
 ## [0.3.1] - 2026-10-14

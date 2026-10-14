@@ -22,22 +22,22 @@ jira-to-test-case / test-run-report-bug 等发布类 skill 均调用本脚本，
   - 全程 UTF-8
 
 两种落点模式（发布时二选一，互斥）：
-  A) 文件夹模式（需求线：PRD / 技术方案 / Story）——按 Jira 层级自适应建容器夹
+  A) 文件夹模式（需求线：PRD / 技术方案 / Story；测试线：app 功能用例）——按 Jira 层级自适应建容器夹
      --root/--epic/--kind：查询 epic 的 Jira 父项自适应分层，有父项为
-     root → {initiative} → {epic} → {epic}-PRD | {epic}-Tech Solution（四级），
+     root → {initiative} → {epic} → {epic}-PRD | {epic}-Tech Solution | {epic}-TestCase（四级），
      无父项省略 {initiative} 层（三级）；缺失文件夹自动建容器页。--initiative 可覆盖。
      initiative 与 epic 文件夹标题拼为「Jira key-摘要」（如 PORT-1301-会员权益重构），
      容器夹的幂等查重按 Jira key 前缀匹配，避免摘要文案变动导致重复建夹。
-  B) 父级模式（测试线：用例 / 运行报告）——直接落到固定文件夹，不做层级推导
-     --parent <folderId>：如 test_case / cms_case / test_report 文件夹 ID。
+  B) 父级模式（测试线：运行报告 / cms 用例）——直接落到固定文件夹，不做层级推导
+     --parent <folderId>：如 test_report / cms_page 文件夹 ID。
 
 用法:
-  # A) 文件夹模式：在 root 下自适应建 {initiative} → {epic} → {epic}-PRD|Tech Solution 并发布
+  # A) 文件夹模式：在 root 下自适应建 {initiative} → {epic} → {epic}-PRD|Tech Solution|TestCase 并发布
   python upload_confluence_v2.py --md <md> --space <spaceKey> --root <根页ID> \
       --epic <Jira Epic key，如 CNAPP-5661> --kind prd --title <标题前缀>
   #   --initiative 可覆盖 epic 之上的归档层：给定 key（如 PORT-1301）→ 四级；
   #   省略则查询 Jira 取直接父项；值为 none 时强制三级（省略 {initiative} 层）
-  # B) 父级模式：直接落到指定文件夹（测试用例 / 运行报告）
+  # B) 父级模式：直接落到指定文件夹（cms 用例 / 运行报告）
   python upload_confluence_v2.py --md <md> --space <spaceKey> --parent <folderId> \
       --title <标题前缀> [--title-key <Jira key，用于追加摘要尾巴>]
   # 通用可选:
@@ -1082,7 +1082,7 @@ def _find_child_by_key_prefix(base_url, auth, parent, key):
 
 
 def resolve_parent(base_url, auth, space, root, epic, kind, initiative=None):
-    """解析目标父页 ID：root →（可选 {initiative}）→ {epic} → {epic}-{PRD|Tech Solution}。
+    """解析目标父页 ID：root →（可选 {initiative}）→ {epic} → {epic}-{PRD|Tech Solution|TestCase}。
 
     层级随 epic 父项自适应（有父项四级 / 无父项三级）：
       root（一级根目录页 ID）
@@ -1090,13 +1090,14 @@ def resolve_parent(base_url, auth, space, root, epic, kind, initiative=None):
           {epic}                    标题为「epic key-摘要」
             {epic}-PRD              kind=prd
             {epic}-Tech Solution    kind=tech_solution
+            {epic}-TestCase         kind=test_case
     initiative 为已解析的父项 key，None 表示无父项、退回三级。initiative 与 epic 容器夹
     的标题拼上 Jira 摘要，幂等查重按 key 前缀匹配。叶子夹后缀挂在 epic key 之后。
     缺失的各级文件夹自动创建。返回 (parent_id, ensured)。
     """
-    kind_suffix = {"prd": "PRD", "tech_solution": "Tech Solution"}
+    kind_suffix = {"prd": "PRD", "tech_solution": "Tech Solution", "test_case": "TestCase"}
     if kind not in kind_suffix:
-        raise SystemExit(f"--kind 仅支持 prd / tech_solution，收到：{kind}")
+        raise SystemExit(f"--kind 仅支持 prd / tech_solution / test_case，收到：{kind}")
     ensured = []
     container = root
     level = 2
@@ -1543,8 +1544,8 @@ def main():
     ap.add_argument("--md", default=None)
     ap.add_argument("--space", default=None)
     ap.add_argument("--parent", default=None,
-                    help="父级模式：直接指定父页 / 文件夹 ID（如固定的 test_case / cms_case / "
-                         "test_report 文件夹），跳过 initiative/epic 层级推导。"
+                    help="父级模式：直接指定父页 / 文件夹 ID（如固定的 test_report / cms_page "
+                         "文件夹），跳过 initiative/epic 层级推导。"
                          "与 --root/--epic/--kind（文件夹模式）二选一。")
     ap.add_argument("--root", default=None,
                     help="文件夹模式：根目录页 ID（profile 的 parent_pages.root）。与 --epic/--kind 配套。")
@@ -1553,8 +1554,8 @@ def main():
                     help="Initiative（Epic 父项）key，作为 epic 之上一级的归档文件夹（如 PORT-1301），"
                          "文件夹标题自动拼为「key-Jira 摘要」。省略时查询 Jira 取直接父项；"
                          "值为 none 时强制无父项，退回三级结构。")
-    ap.add_argument("--kind", default=None, choices=["prd", "tech_solution"],
-                    help="文件夹模式：决定叶子文件夹后缀：prd→{epic}-PRD，tech_solution→{epic}-Tech Solution。")
+    ap.add_argument("--kind", default=None, choices=["prd", "tech_solution", "test_case"],
+                    help="文件夹模式：决定叶子文件夹后缀：prd→{epic}-PRD，tech_solution→{epic}-Tech Solution，test_case→{epic}-TestCase。")
     ap.add_argument("--title", default=None,
                     help="标题前缀（唯一键），取 profile 的 naming 模板替换 key 后的值，"
                          "如 APP-PRD-CNAPP-5661。脚本按此前缀查重，并自动追加「-Jira 摘要」"

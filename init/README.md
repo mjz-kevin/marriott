@@ -56,11 +56,11 @@ init/
 | **PO** | eval-agent, userstory-agent | 需求澄清 + PRD + User Story |
 | **TL** | tech-solution-agent, dev-agent, code-review-agent, cicd-agent | 技术方案（含 `tech-solution-prd`）+ 开发 / 验证 + Code Review + `create-pr` + `harness-invoke` |
 | **Dev** | tech-solution-agent, dev-agent, code-review-agent, cicd-agent | 与 TL 相同，但**不含** `tech-solution-prd` |
-| **QA** | ai-test-agent, cicd-agent | 测试类 Skill（用例设计 → 伪代码 → 脚本 → 调试 → 报告 / 提 Bug）+ `harness-invoke` |
+| **QA** | test-agent, cicd-agent | 测试类 Skill（用例设计 → 伪代码 → 脚本 → 调试 → 报告 / 提 Bug）+ `harness-invoke` |
 
 > 公共 Skill（全部角色都装）见 `roles.json` 的 `common.skills`。
 > `create-pr` **不是**公共 Skill，只随 TL / Dev 分发；测试类 Skill 只随 QA 分发。
-> 公共资产：4 份团队 profile（`app-test` / `app-prod` / `cms-test` / `cms-prod`）+ 2 份测试记忆 profile（`test_case_memory.yaml` / `test_script_memory.yaml`）+ `setup.json`、两份 `mcp.example.*.json`。
+> 公共资产：4 份团队 profile（`app-test` / `app-prod` / `cms-test` / `cms-prod`）+ `setup.json`、两份 `mcp.example.*.json`。
 > `init/allowlist_*.txt` 不随包分发。
 
 ## 构建
@@ -174,7 +174,7 @@ python init/build.py --runtime mac-intel
 
 > 同时装多个角色（比如 TL 和 QA 两个包都装）可以直接依次覆盖安装，共用的 skill 会按后装的那个版本来。
 > 角色包卸载**不会**删除 `~/.cursor/mcp.json`（凭证保留），也不碰运行时，所以"先卸载再安装"之后不用重填凭证。
-> ⚠️ 测试记忆 profile（`test_case_memory.yaml` / `test_script_memory.yaml`）也会在安装时被覆盖。如果你在 `~/.cursor/profiles/` 下本地改过这两个文件，重装前请先备份。
+> ⚠️ 测试记忆已迁出本地 profile：`test_case_memory` / `test_script_memory` 现以 Confluence 页为权威源（DBU4 空间 folder `4363354130` 下的 `test-case-memory` / `test-script-memory` 页，由各 profile 的 `confluence.test.memory_pages` 登记），不再随角色包分发，也不会在安装时被覆盖。
 
 ### 运行时包
 
