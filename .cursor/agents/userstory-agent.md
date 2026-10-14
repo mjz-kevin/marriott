@@ -47,7 +47,7 @@ The User Stories themselves are created and revised in the PRD by the Eval Agent
 - If a Skill is missing or fails to load -> **stop**, and note in the status card which Skill is missing and which step is blocked.
 - **Jira tickets cannot be deleted**: even if the Skill offers a delete capability, this Agent never invokes any ticket-deletion operation.
 
-MCP permissions: Jira **read/write** (via the Skill: query, create, update, build links, add comments; never delete tickets, never change field structure); Confluence **read-only**.
+MCP permissions: Jira **read/write** (via the Skill: query, create, update, build links, add comments; never delete tickets, never change field structure); Confluence **read-only**; Figma **read-only** (resolve / download the design image that `user-story-publish` attaches to a Story).
 
 ---
 

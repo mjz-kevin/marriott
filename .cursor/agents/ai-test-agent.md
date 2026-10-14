@@ -31,7 +31,7 @@ A development Agent for mobile (iOS-first) UI automation testing. Built around t
 | **Select this Agent** | Cursor Agent picker → **`ai-test-agent`** (matches frontmatter `name` in this file). |
 | **Six Skills** | Full definitions under `.cursor/skills/<skill-name>/SKILL.md`. This Agent **reads and executes** the matching file per the routing table below; Skills may also auto-match globally via their `description`. |
 | **Memory** | `.cursor/profiles/test_script_memory.yaml` (implementation rules); `.cursor/profiles/test_case_memory.yaml` (step-breakdown habits, especially for `test-case-to-script`). |
-| **MCP** | Copy `.cursor/mcp.example.macos.json` (or `.windows.json`) → `.cursor/mcp.json`, authorize Atlassian per Skill prerequisites. |
+| **MCP** | Copy `.cursor/mcp.example.macos.json` (or `.windows.json`) → `.cursor/mcp.json`, authorize Atlassian per Skill prerequisites. **If the Cursor Atlassian plugin is also installed, ask the user to disable it** (Settings → Plugins / Integrations) so only `Atlassian-MCP-Server` exposes Jira / Confluence tools — a duplicate tool set makes tool selection ambiguous and offers Confluence page-write tools that are forbidden here (every Confluence body goes through the `confluence-publish` upload script). |
 
 **Six Skills (complete list)**:
 

@@ -7,10 +7,11 @@
   },
 
   "common": {
-    "_comment": "所有角色都会收到的公共 Skill 与文件。",
+    "_comment": "所有角色都会收到的公共 Skill 与文件。confluence-publish 持有唯一一份上传脚本 upload_confluence_v2.py，需求线与测试线的发布环节共用，勿在各 skill 下复制副本。",
     "skills": [
       "sensitive-data-guard",
       "profile-select",
+      "confluence-publish",
       "md-to-pdf",
       "ai-sdlc-info"
     ],

@@ -140,7 +140,7 @@ code:
       static_check_tasks: [clean, detekt] # 静态检查用标准 detekt 任务（gradle/detekt.gradle 提供；detektAll 未在 gradle 定义、勿用）；detekt 真实 PR 门禁在 Harness（.harness .../detekt.yaml 跑 ./gradlew --no-daemon detekt）
   git_hooks:                          # 各仓本地 git 钩子行为（dev-agent 提交前须知：提交会触发这些检查/校验，提前预跑与对齐避免"撞上才知道"；非硬编码命令，仅声明语义与真实脚本来源）
     android:                           # 版本化钩子：源在 config/hooks/，由 gradle/git-hooks.gradle.kts 的 installGitHooks 任务在 preBuild 时复制到 .git/hooks/
-      mechanism: versioned_config_hooks # core.hooksPath 未设，走默认 .git/hooks；每次 gradle build 自动安装
+      mechanism: ∂ # core.hooksPath 未设，走默认 .git/hooks；每次 gradle build 自动安装
       pre_commit: detekt               # 跑 `./gradlew --no-daemon detekt`（Kotlin 静态检查），失败阻断提交
       commit_msg:                      # 强制提交信息格式（config/hooks/commit-msg），dev-agent 生成 Android 提交信息必须满足
         format: "[CNAPP-XXXXX] description"  # 首行须以 [CNAPP-数字] 开头（ticket 号 1–6 位）后接一个空格再接描述

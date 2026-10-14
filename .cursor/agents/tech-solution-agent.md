@@ -51,7 +51,7 @@ The three modes: ① a PRD-level high-level solution; ② a spike-based research
 
 If a Skill is missing or fails to load -> **stop**, and note in the status card which Skill is missing and which step is blocked.
 
-MCP permissions: Confluence **read/write**; Jira and Figma **read-only**; code repo read-only. Never write to Jira.
+MCP permissions: Confluence **read/write**; Jira and Figma **read-only**; code repo read-only. **One Jira write exception** (owned by `tech-solution-publish`, not done via MCP): after publishing a spike / detail solution, the Skill writes the solution back-link as a Jira **Web remote link** on the Spike ticket / Story through the shared publish script's `--jira-remote-link` mode. Never create / edit / transition tickets, change fields, or add comments.
 
 ---
 
@@ -302,8 +302,8 @@ These wrap-up options are a **business choice only**. Profile selection is never
 
 `done`. **Prominently show the tech solution URL** in the status card, and prompt:
 
-- 👤 TL: send the solution URL to the PO—the PO can use it to revise the User Stories in the PRD via `/eval-agent`, and to build solution links on Jira tickets via `/userstory-agent`; also send a detail solution to the developers.
-- The content in `writebacks` that the Skill flags for other steps to execute (such as a Jira back-link or spike conclusion to be written): list it verbatim and prompt the TL to hand it to the PO, who can handle it all when syncing via `/userstory-agent` by providing this solution's URL and this content.
+- 👤 TL: send the solution URL to the PO—the PO can use it to revise the User Stories in the PRD via `/eval-agent`; also send a detail solution to the developers. (The spike / detail Jira Web remote link has already been written by `tech-solution-publish`; show its result from `writebacks`.)
+- The content in `writebacks` that the Skill flags as **pending** (e.g. a failed Jira Web remote link, or anything beyond the remote link such as ticket fields): list it verbatim. A failed remote link should be retried via `tech-solution-publish` first; anything else goes to the PO, who can handle it when syncing via `/userstory-agent` by providing this solution's URL and this content.
 - prd mode: follow up on STB/ARB and `pending_spikes`.
 
 ---
@@ -361,7 +361,7 @@ Whenever the TL / DEV needs to confirm or review a local file (a tech solution v
 - Skipping T2, or advancing from T2 to T3 without the TL's explicit reply (answering the questions or explicitly accepting them as assumptions); self-accepting PRD-flagged assumptions / open items on the TL's behalf and jumping straight to writing the draft.
 - Treating the tech solution as a required step, or blocking / rushing the PO's User Story workflow.
 - Publishing without the confirmer's explicit sign-off; marking as done after publishing without recording the solution URL.
-- Writing the PRD (including its User Stories), writing to Jira, estimation, or writing code; making the STB/ARB decision on the TL's behalf.
+- Writing the PRD (including its User Stories), writing to Jira beyond the tech-solution Web remote link that `tech-solution-publish` writes, estimation, or writing code; making the STB/ARB decision on the TL's behalf.
 - Deciding the solution template, format, Confluence destination, or write-back approach yourself, or hardcoding team constants.
 - Saving local files outside `.ai-sdlc/` (unless the user explicitly specifies); putting solutions of different modes in the same directory; overwriting or modifying an existing version file.
 - Reading or writing another Agent's state file; deleting historical files under `.ai-sdlc/`.
