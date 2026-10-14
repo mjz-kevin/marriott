@@ -54,9 +54,9 @@ init/
 | 角色 | Agents | 专属 Skills（摘要） |
 | --- | --- | --- |
 | **PO** | eval-agent, userstory-agent | 需求澄清 + PRD + User Story |
-| **TL** | tech-solution-agent, dev-agent, code-review-agent, cicd-agent | 技术方案（含 `tech-solution-prd`）+ 开发 / 验证 + Code Review + `create-pr` + `harness-invoke` |
+| **TL** | tech-solution-agent, dev-agent, code-review-agent, cicd-agent | 技术方案（含 `tech-solution-prd`）+ 开发 / 验证 + Code Review + `create-pr` + `harness-invoke`（仅低环境 dev / test） |
 | **Dev** | tech-solution-agent, dev-agent, code-review-agent, cicd-agent | 与 TL 相同，但**不含** `tech-solution-prd` |
-| **QA** | test-agent, cicd-agent | 测试类 Skill（用例设计 → 伪代码 → 脚本 → 调试 → 报告 / 提 Bug）+ `harness-invoke` |
+| **QA** | test-agent, cicd-agent | 测试类 Skill（用例设计 → 伪代码 → 脚本 → 调试 → 报告 / 提 Bug）+ `harness-invoke`（仅低环境 dev / test） |
 
 > 公共 Skill（全部角色都装）见 `roles.json` 的 `common.skills`。
 > `create-pr` **不是**公共 Skill，只随 TL / Dev 分发；测试类 Skill 只随 QA 分发。

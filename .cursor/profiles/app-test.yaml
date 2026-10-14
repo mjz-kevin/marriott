@@ -130,28 +130,31 @@ mcp:
     # account_id 与 API 凭据不写在此处：二者均从 MCP 配置（mcp.json → harness 服务的 env）读取，
     # 保持单一事实来源，也避免凭据与账号标识随 profile 进入版本库。
     #
-    # 本节只记录「人的决策」：哪条流水线属于本团队交付路径、哪个环境算高风险、哪条禁止 agent 触发。
+    # 本节只记录「人的决策」：哪条流水线属于本团队交付路径、哪些环境在范围内、哪条禁止 agent 触发。
     # 不记录可从 Harness 查到的事实（入参规格与默认值、取值域、input set、stage 结构）——
     # 那些一律由 harness-invoke 在触发前运行时读取，以 Harness 为唯一权威来源。
-    pipelines:                         # 交付流水线清单；APP 按 platform + env(+usage) 唯一定位。
-                                       # 未登记 = 不可触发（skill 遇无匹配即停止，不猜），故 detekt / 安全扫描 /
-                                       # 各类 *_Test / *_Sandbox 共 13 条无需在此列出。
+    #
+    # 范围收口：本工具链的 CI/CD 环节只发布低环境（dev / test）。高环境（staging / prod）一律不触发，
+    # 既不登记为可触发流水线，也没有「人工确认后放行」的通道——高环境发布由人在 Harness UI 操作。
+    pipelines:                         # 可触发的低环境流水线清单；APP 按 platform + env(+usage) 唯一定位。
+                                       # 未登记 = 不可触发（skill 遇无匹配即停止，不猜）：故 detekt / 安全扫描 /
+                                       # 各类 *_Test / *_Sandbox 共 13 条，以及全部高环境流水线
+                                       # （iOS_Dragon_App_Testflight_Prod / Android_Gold_Build /
+                                       # Mobile_s3_upload_Prod）都刻意不列在此处。
       - { id: iOS_Dragon_App_Testflight_Dev,  platform: ios,     env: dev,  usage: testflight, repo: ios-dragon-app }
-      - { id: iOS_Dragon_App_Testflight_Prod, platform: ios,     env: prod, usage: testflight, repo: ios-dragon-app }
-      - { id: Android_Gold_Build,             platform: android, env: prod, usage: gold,       repo: android-dragon-app }
       - { id: Android_Adhoc_Build,            platform: android, env: test, usage: adhoc,      repo: android-dragon-app }
+                                       # ↑ 注意：该流水线的 flavor 输入才决定包连哪套后端
+                                       # （Harness 取值域 Tst/Tst2/Uat2/Stg/Perf/Prod，默认 Tst），
+                                       # 取 Uat2/Stg/Perf/Prod 会构建指向高环境后端的包并经 Appcircle 分发给测试者；
+                                       # 这类「取值点名高环境」的入参由 harness-invoke 统一拦截，无需在此登记取值表。
       - { id: Android_Regression_Builds,      platform: android, env: test, usage: regression, repo: android-dragon-app }
       - { id: Mobile_s3_upload,               platform: both,    env: dev,  usage: config-upload, repo: mobile-config-upload-dev }
-      - { id: Mobile_s3_upload_Prod,          platform: both,    env: prod, usage: config-upload, repo: mobile-config-upload-prod }
-    env_dimension_overrides:           # 某些流水线的真实环境维度不是 env 标签，而是一个运行时输入。
-                                       # 这是「哪个输入才算环境」的团队判断，Harness 无从表达，故必须登记：
-                                       # 否则 Adhoc 的 env 标签是 test，而 flavor=Prod 会构建指向生产后端的包
-                                       # 并经 Appcircle 对外分发，高风险门禁将被完全绕过。
-      Android_Adhoc_Build:
-        input: flavor                  # 该输入的值才是实际目标环境
-        high_risk_values: [Prod]       # 取这些值时按高风险处理，无论 env 标签为何
-    high_risk_envs: [staging, prod]    # 高风险环境：触发前必须人工确认；低环境（test/dev）可直接触发。
-                                       # staging 在本项目无流水线命中，属无害死条目。
+    allowed_envs: [dev, test]          # 允许触发的环境白名单（低环境）。本队流水线均为纯 CI（无 CD stage、无
+                                       # environmentRef），cnmobile 项目里也没有 dev/test 这种 Harness environment，
+                                       # 故这里比对的是上面 pipelines 的 env 标签（团队自定的选流水线维度）。
+                                       # 另外，若某个运行时入参的取值点名了高环境（如 flavor=Prod、网关 URL 指向 stg/prf），
+                                       # harness-invoke 同样按超范围停止——判定依据始终是「这次实际打向哪里」，不是标签。
+                                       # 不在白名单内 → skill 直接停止并提示去 Harness UI，没有人工确认放行通道。
     allow_stage_execution_fallback: false  # 本项目流水线均为单环境、无晋级链，不需要 stage 子集限定
     poll:                              # 触发后等待执行状态的口径
       mode: server_wait                # 优先用 MCP 的服务端阻塞等待（wait=true），而非 LLM 轮询循环

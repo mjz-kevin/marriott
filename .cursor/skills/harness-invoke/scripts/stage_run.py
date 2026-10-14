@@ -20,17 +20,35 @@ This wraps the one REST endpoint the MCP is missing:
 Safety is structural, not a matter of being careful:
   * Credentials and the account id come from the Harness MCP config only.
     They are never accepted as arguments, written anywhere, or printed.
-  * The stage subset is read from the profile's `env_stages[env]`, which is
-    populated from real execution history. It cannot be passed in, so this
-    cannot run a stage combination the team has never run.
+  * The target environment must be in the profile's `allowed_envs` (the
+    toolchain publishes low environments only). There is deliberately no
+    flag to override it: staging / prod deploys are run by a human in the
+    Harness UI, outside this toolchain.
+  * The stage subset is recovered from the pipeline's own execution history
+    (a past execution that targeted this environment), so this cannot run a
+    stage combination the team has never run.
   * Dry run is the default; sending requires --execute.
-  * A high-risk environment additionally requires naming it explicitly via
-    --i-understand-this-deploys-to <env>.
 
 --wait keeps the terminal-state wait on the trigger call, the way the MCP's
 own run action does it with `wait=true`. Without it the caller has to poll
 from the outside, which on a 20-minute pipeline means dozens of round trips
 that an interruption anywhere silently discards.
+
+Three features exist so that a result cannot be produced without reaching
+the caller, because `--wait` alone does not guarantee that:
+
+  * `expected_duration_s` is printed at trigger time, derived from this
+    subset's own execution history. A caller that runs this script through a
+    bounded foreground shell needs it to size that budget; guessing a budget
+    smaller than the pipeline's runtime is what pushes the wait into the
+    background in the first place.
+  * `TERMINAL:` is printed as a single machine-greppable line the moment the
+    verdict exists, so a caller watching stdout can be woken by it instead of
+    having to remember to come back.
+  * `--result-json` persists the handle at trigger time and the verdict at
+    terminal time. If the process is detached, interrupted, or its output is
+    never read, the result is still on disk and any later reader gets it in
+    one file read rather than by re-deriving it from Harness.
 
 Usage (run from the repo whose profile selection applies):
   python3 scripts/stage_run.py --check
@@ -43,12 +61,14 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import os
 import re
 import sys
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -72,7 +92,10 @@ def _load_sibling(module_name: str):
 platform_paths = _load_sibling("platform_paths")
 
 TIMEOUT_SECONDS = 60
-PRODUCTION_STAGE_HINTS = ("prod", "production")
+# Stage-name tripwire: a stage subset whose identifier names a high
+# environment is refused outright, whatever --env said. Only low environments
+# are in scope, so a false positive here fails safe (nothing is triggered).
+HIGH_ENV_STAGE_HINTS = ("prod", "production", "staging", "stg", "uat")
 
 # Harness execution statuses, grouped by what they mean for the caller.
 # Anything absent from every group below is treated as NOT terminal, so an
@@ -95,6 +118,26 @@ EXIT_ERROR = 1
 EXIT_PIPELINE_FAILED = 2
 EXIT_PIPELINE_ABORTED = 3
 EXIT_WAIT_TIMED_OUT = 4
+
+# The verdict vocabulary the caller records. Deliberately the same strings the
+# CI/CD agent writes to `execution.terminal`, so nothing has to be translated
+# between this script, the skill's report, and the agent's state file — a
+# translation step is where `IgnoreFailed` gets flattened into "failed".
+VERDICT_SUCCESS = "success"
+VERDICT_SUCCESS_WITH_IGNORED = "success_with_ignored"
+VERDICT_FAILURE = "failure"
+VERDICT_ABORTED = "aborted"
+VERDICT_TIMED_OUT = "timed_out"
+
+# Printed as one line, on its own, the instant a verdict exists. A caller
+# watching stdout (e.g. a shell-output notification rule) can match
+# `^TERMINAL:` and be woken by it, instead of relying on remembering to come
+# back for a result that already exists.
+TERMINAL_LINE_PREFIX = "TERMINAL:"
+
+# This pipeline's recent executions, fetched at most once per run (see
+# fetch_execution_history).
+_HISTORY_CACHE: dict[str, list[dict[str, Any]]] = {}
 
 
 # --------------------------------------------------------------------- profile
@@ -185,8 +228,15 @@ def load_pipeline(profile_path: Path, app: str) -> tuple[dict[str, Any], dict[st
     """Extract the harness scope and one pipeline entry from a profile YAML.
 
     Hand-rolled rather than requiring PyYAML: skill scripts must run on a bare
-    interpreter (same constraint as profile-select). The profile now holds only
-    flat inline entries plus a deny list, so this stays small.
+    interpreter (same constraint as profile-select). The profile holds flat
+    inline entries plus an optional deny list, so this stays small.
+
+    `deny_list` is parsed even though no profile currently defines one: a
+    pipeline that must never be triggered is simply left out of `pipelines`
+    (unlisted = not triggerable). Keeping the parsing means that if someone
+    re-adds the key, it takes effect — dropping it would silently ignore a
+    field written specifically to forbid something, which is worse than not
+    supporting it at all.
     """
     scope: dict[str, Any] = {}
     entries: list[dict[str, Any]] = []
@@ -212,7 +262,7 @@ def load_pipeline(profile_path: Path, app: str) -> tuple[dict[str, Any], dict[st
         if indent == 4 and not text.startswith("- "):
             key, _, value = text.partition(":")
             key = key.strip()
-            if key in ("base_url", "org_id", "project_id", "high_risk_envs"):
+            if key in ("base_url", "org_id", "project_id", "allowed_envs"):
                 scope[key] = _parse_scalar(value)
             scope.setdefault("_list", None)
             section = f"harness/{key}" if not value.strip() else "harness"
@@ -271,19 +321,21 @@ def load_pipeline(profile_path: Path, app: str) -> tuple[dict[str, Any], dict[st
 # --------------------------------------------------------------------- request
 
 
-def fetch_stage_subset(
+def fetch_execution_history(
     conn: dict,
     scope: dict[str, Any],
     pipeline_id: str,
-    target_env: str,
-) -> list[str]:
-    """Recover an environment's stage subset from the pipeline's own history.
+) -> list[dict[str, Any]]:
+    """Read this pipeline's recent executions once, and cache them.
 
-    The authoritative answer is what the team has actually run, not the stage
-    names: a past execution that targeted this environment reports exactly the
-    subset in `stagesExecuted`. Requiring two agreeing executions guards
-    against adopting a one-off manual run.
+    Two separate questions are answered from the same history — which stage
+    subset an environment uses, and how long that subset normally takes — so
+    this is fetched once per run rather than once per question.
     """
+    cached = _HISTORY_CACHE.get(pipeline_id)
+    if cached is not None:
+        return cached
+
     query = urllib.parse.urlencode(
         {
             "accountIdentifier": conn["account_id"],
@@ -309,18 +361,69 @@ def fetch_stage_subset(
     except urllib.error.URLError as exc:
         sys.exit(f"error: could not reach Harness: {exc.reason}")
 
+    content = ((body.get("data") or {}).get("content")) or []
+    _HISTORY_CACHE[pipeline_id] = content
+    return content
+
+
+def _targets_env(item: dict[str, Any], target_env: str) -> bool:
+    """Whether a past execution deployed to this environment.
+
+    Falls back to the stage names when an execution reports no CD module info
+    (e.g. it failed before any deploy stage started).
+    """
+    stages = item.get("stagesExecuted") or []
+    if not stages:
+        return False
+    envs = (((item.get("moduleInfo") or {}).get("cd") or {}).get("envIdentifiers")) or []
+    return target_env in envs or any(f"_{target_env}".lower() in s.lower() for s in stages)
+
+
+def expected_duration_seconds(
+    conn: dict,
+    scope: dict[str, Any],
+    pipeline_id: str,
+    target_env: str,
+) -> int | None:
+    """How long this environment's runs normally take, from history.
+
+    A caller that runs this script through a bounded foreground shell has to
+    size that budget, and a budget shorter than the pipeline's runtime is what
+    detaches the wait and loses the result. Reporting the figure the history
+    already contains removes the guess. The high-water mark is used rather
+    than the mean, because a budget set to the average is under-sized half the
+    time by construction.
+    """
+    durations: list[int] = []
+    for item in fetch_execution_history(conn, scope, pipeline_id):
+        if not _targets_env(item, target_env):
+            continue
+        start, end = item.get("startTs"), item.get("endTs")
+        if isinstance(start, int) and isinstance(end, int) and end > start:
+            durations.append(int((end - start) / 1000))
+    if not durations:
+        return None
+    return max(sorted(durations)[: max(1, len(durations) - 1)] or durations)
+
+
+def fetch_stage_subset(
+    conn: dict,
+    scope: dict[str, Any],
+    pipeline_id: str,
+    target_env: str,
+) -> list[str]:
+    """Recover an environment's stage subset from the pipeline's own history.
+
+    The authoritative answer is what the team has actually run, not the stage
+    names: a past execution that targeted this environment reports exactly the
+    subset in `stagesExecuted`. Requiring two agreeing executions guards
+    against adopting a one-off manual run.
+    """
     # Group the stage subsets of executions that deployed to this environment.
     matches: list[list[str]] = []
-    for item in ((body.get("data") or {}).get("content") or []):
-        stages = item.get("stagesExecuted") or []
-        if not stages:
-            continue
-        envs = (((item.get("moduleInfo") or {}).get("cd") or {}).get("envIdentifiers")) or []
-        # Fall back to the stage names when an execution reports no CD module
-        # info (e.g. it failed before any deploy stage started).
-        hit = target_env in envs or any(f"_{target_env}".lower() in s.lower() for s in stages)
-        if hit:
-            matches.append(stages)
+    for item in fetch_execution_history(conn, scope, pipeline_id):
+        if _targets_env(item, target_env):
+            matches.append(item.get("stagesExecuted") or [])
 
     if not matches:
         sys.exit(
@@ -605,6 +708,55 @@ def summarize_failed_stages(summary: dict[str, Any]) -> list[str]:
     return out
 
 
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
+
+
+def write_result_file(path: Path | None, payload: dict[str, Any]) -> None:
+    """Persist the handle (at trigger) and the verdict (at terminal state).
+
+    This is the copy that survives the caller: if the process is detached,
+    the session is interrupted, or stdout is simply never read, the result is
+    still here and a later reader gets it in one file read instead of
+    re-deriving it from Harness. Written atomically, and merged into whatever
+    an earlier write left, so a crash mid-wait cannot leave a half file or
+    discard the handle.
+    """
+    if path is None:
+        return
+    merged: dict[str, Any] = {}
+    try:
+        merged = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(merged, dict):
+            merged = {}
+    except (OSError, json.JSONDecodeError):
+        merged = {}
+    merged.update(payload)
+    merged["updated_at"] = _now_iso()
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        tmp.write_text(json.dumps(merged, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        os.replace(tmp, path)
+    except OSError as exc:
+        # A result file that cannot be written must not sink a run whose
+        # deploy already happened; stdout still carries the verdict.
+        print(f"warning: could not write {path}: {exc}", flush=True)
+
+
+def announce_terminal(verdict: str, harness_status: str | None, execution_id: str) -> None:
+    """Print the one-line, greppable verdict the moment it exists.
+
+    Separate from the human-readable block below it: a caller matching
+    `^TERMINAL:` on stdout gets woken by this line, which is why it carries
+    the verdict, the raw Harness status, and the handle on its own.
+    """
+    print(
+        f"\n{TERMINAL_LINE_PREFIX} {verdict} status={harness_status or 'unknown'} execution={execution_id}",
+        flush=True,
+    )
+
+
 def wait_for_terminal(
     conn: dict[str, str],
     scope: dict[str, Any],
@@ -653,7 +805,7 @@ def main() -> None:
     parser.add_argument("--check", action="store_true", help="verify the Harness MCP config is readable, then exit")
     parser.add_argument("--profile", help="profile name; defaults to the repo's remembered selection")
     parser.add_argument("--app", help="the pipeline's app tag, e.g. cncms")
-    parser.add_argument("--env", help="target environment, e.g. test")
+    parser.add_argument("--env", help="target environment; must be in the profile's allowed_envs, e.g. test")
     parser.add_argument("--branch", help="codebase branch to build")
     parser.add_argument("--tag", help="image tag, replacing the input set's placeholder")
     parser.add_argument("--pipeline-branch", help="git branch to load the pipeline YAML from")
@@ -680,11 +832,17 @@ def main() -> None:
         help="status check interval for --wait; defaults to the profile's mcp.harness.poll.interval_seconds",
     )
     parser.add_argument(
-        "--i-understand-this-deploys-to",
-        metavar="ENV",
-        help="required for a high-risk environment; must name that environment",
+        "--result-json",
+        metavar="PATH",
+        help=(
+            "write the execution handle at trigger time and the verdict at terminal time to this JSON "
+            "file. Pass it whenever the wait might outlive the caller's attention: the file is the copy "
+            "that survives a detached process or an unread stdout"
+        ),
     )
     args = parser.parse_args()
+
+    result_path = Path(args.result_json).expanduser().resolve() if args.result_json else None
 
     try:
         conn = platform_paths.load_harness_connection()
@@ -708,11 +866,21 @@ def main() -> None:
     scope, entry = load_pipeline(profile_path, args.app)
     pipeline_id = entry["id"]
 
-    high_risk = scope.get("high_risk_envs") or []
-    if args.env in high_risk and args.i_understand_this_deploys_to != args.env:
+    # Low environments only. The toolchain's CI/CD step publishes dev/test;
+    # a staging/prod deploy is run by a human in the Harness UI. There is no
+    # override flag on purpose — an escape hatch here would make the scope
+    # advisory rather than enforced.
+    allowed = [str(e).strip().lower() for e in (scope.get("allowed_envs") or []) if str(e).strip()]
+    if not allowed:
         sys.exit(
-            f"error: {args.env!r} is a high-risk environment. A human must authorize this specific trigger: "
-            f"re-run with --i-understand-this-deploys-to {args.env}"
+            f"error: {profile_path.name} has no mcp.harness.allowed_envs, so no environment is in scope. "
+            "A missing allowlist is not permission — add the low environments a human approved."
+        )
+    if args.env.strip().lower() not in allowed:
+        sys.exit(
+            f"error: {args.env!r} is out of scope. This step only publishes low environments "
+            f"({', '.join(allowed)}); deploying {args.env!r} is done by a human in the Harness UI. "
+            "There is no flag to override this."
         )
 
     # Everything below is read from Harness, not from config: the profile
@@ -721,6 +889,16 @@ def main() -> None:
     stages = [s.strip() for s in stages if s.strip()]
     if not stages:
         sys.exit("error: resolved an empty stage subset")
+
+    # Second tripwire, independent of --env: a subset must not carry a stage
+    # that names a high environment. --stages is caller-supplied, and history
+    # matching is heuristic, so neither alone guarantees where this lands.
+    suspect = [s for s in stages if any(hint in s.lower() for hint in HIGH_ENV_STAGE_HINTS)]
+    if suspect:
+        sys.exit(
+            f"error: the resolved stage subset names a high environment ({', '.join(suspect)}), which is "
+            f"out of scope for {args.env!r}. Have a human run that deploy in the Harness UI."
+        )
 
     input_set_id = args.input_set or fetch_input_set_id(conn, scope, pipeline_id, args.env)
 
@@ -744,9 +922,15 @@ def main() -> None:
 
     print(f"Pipeline   : {pipeline_id}")
     print(f"Profile    : {profile_path.stem}  ·  {scope['org_id']}/{scope['project_id']}")
-    print(f"Environment: {args.env}" + ("  [HIGH RISK]" if args.env in high_risk else ""))
+    print(f"Environment: {args.env}  (low environment, in allowed_envs)")
     print(f"Stages     : {', '.join(stages)}" + ("  (from --stages)" if args.stages else "  (from execution history)"))
     print(f"Input set  : {input_set_id or '(none)'}")
+    expected_s = expected_duration_seconds(conn, scope, pipeline_id, args.env)
+    if expected_s:
+        # Printed before the trigger so a caller sizing a foreground budget
+        # sees it even in a dry run. A budget below this figure is what
+        # detaches the wait and loses the result.
+        print(f"Expected   : ~{expected_s}s for this subset (expected_duration_s={expected_s}, from history)")
     if args.branch:
         print(f"Branch     : {args.branch}")
     if args.tag:
@@ -793,6 +977,30 @@ def main() -> None:
     )
     print(f"  open         : {execution_url}")
 
+    # Persist the handle before anything else can interrupt: a trigger whose
+    # handle was never recorded is the one case that tempts a caller into
+    # re-triggering, which would deploy twice.
+    write_result_file(
+        result_path,
+        {
+            "pipeline_id": pipeline_id,
+            "profile": profile_path.stem,
+            "app": args.app,
+            "env": args.env,
+            "branch": args.branch,
+            "tag": args.tag,
+            "stages": stages,
+            "input_set": input_set_id,
+            "execution_id": execution_id,
+            "url": execution_url,
+            "triggered_at": _now_iso(),
+            "expected_duration_s": expected_s,
+            "terminal": None,
+            "harness_status": data.get("status"),
+            "exit_code": None,
+        },
+    )
+
     if not args.wait:
         print(
             "\nNot waiting (--wait not passed). Poll to a terminal state with the Harness MCP: "
@@ -808,22 +1016,45 @@ def main() -> None:
     terminal, summary = wait_for_terminal(
         conn, scope, execution_id, timeout_seconds, interval_seconds
     )
+    stages_note = summarize_failed_stages(summary)
+
+    def _finish(verdict: str, exit_code: int) -> None:
+        """Announce, persist, then exit — in that order, always all three.
+
+        Every terminal path goes through here so none of them can report to
+        stdout without also leaving the verdict on disk.
+        """
+        announce_terminal(verdict, terminal, execution_id)
+        write_result_file(
+            result_path,
+            {
+                "execution_id": execution_id,
+                "url": execution_url,
+                "terminal": verdict,
+                "harness_status": terminal,
+                "failed_stages": stages_note,
+                "terminal_at": _now_iso(),
+                "exit_code": exit_code,
+            },
+        )
 
     if terminal is None:
+        _finish(VERDICT_TIMED_OUT, EXIT_WAIT_TIMED_OUT)
         print(
             f"\n⏳ TIMED OUT after {timeout_seconds}s — the execution is STILL RUNNING.\n"
             f"   This is not a failure and not a success. Have someone watch it: {execution_url}"
         )
         sys.exit(EXIT_WAIT_TIMED_OUT)
 
-    stages_note = summarize_failed_stages(summary)
     if terminal in SUCCESS_STATES:
+        _finish(VERDICT_SUCCESS, EXIT_SUCCESS)
         print("\n✅ Success.")
         return
     if terminal in IGNORED_FAILURE_STATES:
         # Terminal and the deploy proceeded: a non-blocking step failed and the
         # pipeline's failure strategy ignored it. Name those steps so a human
         # can judge them, but do not call this a failed deploy.
+        _finish(VERDICT_SUCCESS_WITH_IGNORED, EXIT_SUCCESS)
         print(
             f"\n✅ Terminal: {terminal} — the pipeline completed with one or more "
             "non-blocking steps failed and ignored by its failure strategy."
@@ -833,12 +1064,14 @@ def main() -> None:
         print(f"   Review which steps were ignored before treating this as a clean deploy:\n   {execution_url}")
         return
     if terminal in FAILURE_STATES:
+        _finish(VERDICT_FAILURE, EXIT_PIPELINE_FAILED)
         print(f"\n❌ Failed: {terminal}")
         if stages_note:
             print("   Stages: " + "; ".join(stages_note))
         print(f"   {execution_url}")
         sys.exit(EXIT_PIPELINE_FAILED)
 
+    _finish(VERDICT_ABORTED, EXIT_PIPELINE_ABORTED)
     print(f"\n⛔ {terminal}")
     if stages_note:
         print("   Stages: " + "; ".join(stages_note))

@@ -61,7 +61,7 @@ AGENT_DISPLAY_NAMES = {
     "Dev Agent": "dev-agent",
     "Code Review Agent": "code-review-agent",
     "CI/CD Agent": "cicd-agent",
-    "Test Agent": "ai-test-agent",
+    "Test Agent": "test-agent",
 }
 ROLES = ("PO", "TL", "Dev", "QA")
 

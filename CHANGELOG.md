@@ -13,6 +13,18 @@
 ## [Unreleased]
 
 ### 变更
+- **CI/CD 首轮提问不再空转**：实测「部署cms」这类信息不全的请求，Agent 先读完 700 行 Agent/Skill 正文、解析 profile、扫描其它 run、写 24KB `state.md`（约 20 分钟、13 轮工具调用），**产出只是一句「9 个 CMS app 指哪个？」**——而这个判断只需看一眼用户原话。根因是节点顺序矛盾：`C0` 要求用目标拼 run_id 可读 slug，但「目标是否齐备」的校验排在其后的 `C1`，只能先用 `cms-pending` 占位名兜。`cicd-agent` 新增前置节点 `C-pre`（Pre-flight: is the request actionable yet?）：全新请求进来先只对照 C1 前置条件（能唯一定位流水线的目标选择 + 分支/tag）检查原话，缺了立刻问并返回，**不读 profile、不建目录、不写状态**；同时要求首轮把已知会用到的信息（环境、分支、以及「如果流水线需要镜像 tag 就一并给」）一次问全，少一个往返。只有可枚举的选项清单（有哪些 app / 端）才读那一处配置。注意仍不得把推测性提问的答案当权威入参——真实入参规格依旧按 `harness-invoke` S3 在触发时从 Harness 读。resume 一律跳过 `C-pre`。
+- **CI/CD 触发结果「不丢、即时送达」**：实测发现一次 `cncms` test 部署已终态 10 分钟，`state.md` 仍停在 `polling`、无人播报。根因不在脚本（`--wait` 工作正常，滞后 < 1 个轮询间隔），而在「脚本已知结果 → Agent 播报」的交接：等待被放进一个前台预算 150s 的 shell（该流水线实测 `expected_duration_s=1545`），必然被转后台；输出又只重定向进文件（`> log`），既无人观察也无法触发输出通知；Agent 随后查了等待工具的用法却没真正调用就返回了。按「等待」与「交付结果」是两件事来收口：
+  - `harness-invoke/scripts/stage_run.py`：新增 `--result-json PATH`（触发时落执行句柄、终态时落判决，原子写 + 合并旧内容，写不动只告警不影响已发生的部署）；终态瞬间打印单行可 grep 的 `TERMINAL: {verdict} status={harness_status} execution={id}`；触发前（含 dry run）打印 `expected_duration_s`（取该 stage 子集历史耗时的高水位，供调用方据此设前台预算）。判决词表与 Agent 的 `execution.terminal` 完全一致（`success` / `success_with_ignored` / `failure` / `aborted` / `timed_out`），避免翻译时把 `IgnoreFailed` 压成失败。执行历史改为每次运行只拉一次并缓存，stage 子集与耗时估算共用。
+  - `harness-invoke` S5 新增「Deliver the result — `--wait` is not enough on its own」四条：前台预算必须覆盖 `expected_duration_s`；用 `| tee` 流式输出而非 `> log`；注册 `^TERMINAL:` 输出通知；**万一仍被转后台，必须 await 到底或读 `--result-json` 后才能汇报**，不得以「正在后台跑」收尾。Rules / Quality gates / Troubleshooting 同步补条目。
+  - `cicd-agent`：`state.md` 新增 `wait_handle`（`result_json` / `log` / `expected_duration_s` / `detached`）与新章节 §3.4；§5 resume 规则改为**每次进来先读 `result_json`，再谈查 Harness**（它是触发自身观察到的判决，也是唯一能跨越「shell 被转后台」的副本）；C3 触发前登记 wait handle，C4 要求收齐判决才算完成；§2 与禁止项明确「判决未收齐不得返回」。
+- **CI/CD 收口为「只发布低环境」**：`cicd-agent` / `harness-invoke` / 4 份 profile 一起改，高环境（staging / stg / uat / prod）不再属于工具链范围，也**不再有「人工确认后放行」的通道**，一律由人在 Harness UI 操作。
+  - profile `mcp.harness`：新增 `allowed_envs: [dev, test]`（环境白名单），删除 `high_risk_envs`；APP 删除整个 `env_dimension_overrides` 段（含原 `high_risk_values`）——「哪个入参取值算高环境」改由 skill 按取值本身判定，不再在 profile 里手抄每条流水线的取值表（抄了会过期，过期即误放行）；APP 的 `pipelines` 移除 3 条高环境流水线（`iOS_Dragon_App_Testflight_Prod` / `Android_Gold_Build` / `Mobile_s3_upload_Prod`），未登记即不可触发。
+  - `harness-invoke`：S2 由「高风险环境人工确认门禁」改为「低环境范围校验」，目标环境从三处综合判定（流水线 env / environmentRef、**本次要传的入参取值**、晋级链 stage 子集），任一处点名高环境（prod / stg / staging / uat / perf）即超范围停止并指向 Harness UI；典型案例是 `Android_Adhoc_Build` 标签为 `test` 但 `flavor=Prod` 会打指向生产后端的包。`allowed_envs` 缺失 / 环境判不出 / 取值含义不明 → 同样停止（缺白名单 ≠ 放行）；新增 out-of-scope 的输出模板。
+  - `deny_list` 从 4 份 profile 移除：`pipelines` 本就是正向白名单（未登记即不可触发），「不写」与「写了但标禁」行为相同，故不再占一个功能键；`utility`（`action=delete` 走 K8sDelete，且其审批仅在 `env.type == Production` 生效，低环境跑 delete 毫无门禁）、`HARNESS_STO_REMEDIATION_PLACEHOLDER`（`allowDynamicExecutions`，运行时 YAML 可被完全覆盖）这类「名字看不出危险」的知识改写进 `pipelines` 上方注释，与 APP 侧 13 条未登记流水线的做法统一。skill 与 `stage_run.py` 仍保留该键的解析与强制拦截，以免将来有人重新填写时被静默忽略。
+  - `harness-invoke/scripts/stage_run.py`：去掉 `--i-understand-this-deploys-to` 旗标（高环境已无放行路径），改为按 `allowed_envs` 拒绝越界的 `--env`，并新增 stage 名称兜底（stage 子集里出现 prod / staging / stg / uat 字样即拒绝触发）。
+  - `cicd-agent`：节点 C2 由「高环境确认门禁」改为「低环境范围校验」，`state.md` 的 `confirmation` 块换成 `scope_check` + `target.resolved_env` / `target.in_scope`，新增 `out_of_scope` 状态；明确「用户说确认也不放行」，触发前再校验一次范围。
+  - 文档同步：`AGENTS.md` §2 / §7、`doc/AI-Toolchain-Design.md` §1.2 / §2.1 / §3 / §4 / §6.1 / §6.2、`doc/maintenance/profiles.md`、`doc/maintenance/testing.md`、`doc/maintenance/change-checklist.md`、`init/README.md` 角色表。
 - memory 页（`test-script-memory` / `test-case-memory`，位于 DBU4「Test Memory For AI」folder）会随使用增长变大，故给**所有读取 memory 的 skill 与 test-agent** 补充「**先关键词匹配、再定向取用**」约束：读回单个 YAML 代码块后，不再整表全量应用，而是先由本次用例/步骤/页面/异常/平台推导关键词，匹配各条目的 `scope` / `step_pattern` / `category` / 关键字字段，只应用命中的少数条目（匹配不到则回退通用默认），以控制 context 规模。落点：`test-case-to-script`、`test-case-authoring`、`test-debug-script`、`test-run-report-bug`、`jira-to-test-case` 各自的读 memory 步骤，以及 `test-agent.md` 的「检查 memory 通用规则」使用原则（统管全局）。（`test-page-elements` 不整页读 memory，未改。）
 - app 功能用例模板 `references/app-case-template.md` 的用例表新增 **`Domain` 列**（放在 Priority 与 User type 之间）：取值固定枚举 **Commerce / Loyalty / Trips / Platform**（与 Jira bug `Domain` / `mcp.jira.labels.business_domain` 同源），由 AI 按用例功能性质自动识别并默认填写；新增 §5 判定规则（按核心价值判域、优先继承需求 Epic/Story 的 business_domain 标签、跨域取核心值并在 Notes 说明）。同步更新示例表头/示例行/取值说明，以及 `jira-to-test-case/SKILL.md` 的字段助记列表。
 - 测试线**页面元素知识库**（app 的 page_doc + iOS 导航页；cms 的 cms_doc/cms_page + CMS 导航页）、**两个 memory 页**、**运行报告**全部从测试线个人空间（`~712020…`）迁至 **DBU4** 空间，个人空间引用在工具链内彻底清零：
@@ -27,6 +39,10 @@
   - 真实 root/space 校正：`app-prod` 的 root 由 `4198957209` 改为 `4191912061`（CMI）；`cms-test` 的 root 保持与 app-test 共用的 DBU4 `4205314140`（space=DBU4）；app-test（DBU4 `4205314140`）、cms-prod（CMI `4175954245`）本已正确未动。
   - `jira-to-test-case/SKILL.md`、`test-agent.md`、`app-case-template.md`、`cms-case-template.md` 中所有指向旧 `test_case`（ID `4261314672`）/ `cms_case`（ID `4282613845`）folder 的说明（链接、`--parent` 命令、落点描述）已删除/改写为 folder 模式与 `{epic}-TestCase`；原指向个人空间示例页 `CMS 测试用例 - GCD-326`（`4288971388`）的排版参考链接也一并去掉，改为指向仓库内模板文件 `references/*-case-template.md`。
 - 测试线 6 个 Skill（`jira-to-test-case`、`test-page-elements`、`test-run-report-bug`、`test-debug-script`、`test-case-authoring`、`test-case-to-script`）中硬编码的 Confluence 发布路径 / space / spaceId / cloudId、导航页 pageId、以及 Jira Bug 配置，统一改为「从当前 profile 读取」：Confluence 走 `mcp.confluence.test.folders.*` / `nav_pages.*` / `space` / `space_id` / `cloud_id`，Jira Bug 走 `mcp.jira.bug.*`。旧值保留为「当前值参考」，脚本命令形态（`--parent <id> --space <key>`）不变。（配套的 4 个 profile 已先行新增这两段配置。）符合 AGENTS.md「团队常量一律放 profile」约定。
+- `ai-test-agent` 更名为 `test-agent` 后，`init/check.py` 的展示名映射与设计文档 §2.1 一并改齐，避免 `role-matrix` 校验仍去对已不存在的旧文件名。
+
+### 升级方式
+直接覆盖（重跑角色包 `install`）。profile 字段有删除（`high_risk_envs` / `high_risk_values`），但 profile 随角色包覆盖安装，无需卸载。
 
 ---
 
