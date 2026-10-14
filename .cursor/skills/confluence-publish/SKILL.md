@@ -11,8 +11,11 @@ description: >-
   included: write a link back into a target page's appendix item, attach an external URL as a
   Jira issue Web link, and upload local images as issue attachments inlined into the description.
   Any step that needs to write a Markdown body to a Confluence page, or write back a Jira link
-  or attachment image, calls this skill's script - never write your own publishing script or
-  hand-roll a REST call.
+  or attachment image, calls this skill's script - never an Atlassian MCP page-write tool
+  (createConfluencePage / updateConfluencePage / createConfluenceContent /
+  updateConfluenceContent, including the Cursor Atlassian plugin's equivalents), never your own
+  publishing script, and never a hand-rolled REST call. Also covers disabling the duplicate
+  Cursor Atlassian plugin MCP.
   Triggers: upload confluence / publish to confluence / 上传 Confluence / 发布到 Confluence /
   同步到 Confluence / 回写链接 / jira remote link / 工单配图.
 ---
@@ -37,9 +40,51 @@ hard-coded.
 | Fidelity | Pixel column widths, `<ac:image>` attachment inlining, and high-resolution mermaid images are storage details that need script-level control |
 | Availability | The Confluence page-write tools (create / update page) may be disabled; this path does not depend on them |
 
-> A small local change (edit a few rows, backfill a column) can still use the Confluence
-> granular-edit capability — the payload is tiny and lands in one write. This script owns
-> **first publication and full-body updates**.
+> ⛔ **MCP page writes are forbidden — "it's only a small change" is not an exception (hard
+> constraint)**: **every** Confluence page write goes through this script, including backfilling
+> one cell or appending one table row. **Never** call an Atlassian MCP page-write tool
+> (`createConfluencePage` / `updateConfluencePage` / `createConfluenceContent` /
+> `updateConfluenceContent`, or any other plugin-provided equivalent), and never hand-roll a REST
+> call. For a small local change, republish the complete body with the **same `--title` prefix and
+> the same `--parent`** — the script dedupes onto the existing page and updates it in place.
+> MCP **read-only** queries (locating a page, listing a folder, reading back for verification) are
+> unaffected and remain the right tool.
+
+## Duplicate Atlassian MCP — disable the Cursor Atlassian plugin
+
+Some machines have the **Cursor Atlassian plugin** installed alongside this toolchain's own
+`Atlassian-MCP-Server` (configured in `~/.cursor/mcp.json`). The plugin ships a *second* Jira /
+Confluence MCP whose tool set includes page-write tools (`createConfluenceContent` /
+`updateConfluenceContent`), which (a) tempts the agent into an MCP page write that truncates
+bodies and corrupts storage, and (b) makes tool selection ambiguous because two near-identical
+Jira / Confluence tool sets are visible at once.
+
+**Recommended: disable the Atlassian plugin, keep only `Atlassian-MCP-Server`.**
+
+1. Cursor Settings → **Plugins / Integrations** (the MCP & integrations list) → find the
+   **Atlassian** plugin → turn it off (or uninstall it).
+2. Re-check the tool list: only `Atlassian-MCP-Server` should expose Jira / Confluence tools, with
+   no second `*atlassian*` namespace left.
+3. Until it is disabled, treat every page-write tool it exposes as **forbidden**: Confluence
+   bodies always go through this script; Jira reads/writes go through `Atlassian-MCP-Server`.
+
+## Updating a page that already exists (including a one-line change)
+
+1. Get the current body as Markdown: reuse the local source `.md` if it still exists, otherwise
+   re-read the page with MCP `getConfluencePage` (`contentFormat: markdown`) and save it under
+   `.ai-sdlc/`. A read-back escapes some characters (`-\>` for `->`, stray `\[`), so normalize
+   those before republishing or they land literally on the page.
+2. Edit that Markdown locally (change the cell, append the row, update the count).
+3. Rerun the script with the **same `--parent`** (or the same folder-mode trio) and the **same
+   `--title`** prefix, plus `--version-msg "<what changed>"`.
+4. The returned `action` must be `update`. An `action: create` means the prefix or the parent
+   drifted — stop and fix it rather than leaving a duplicate page behind. Then read the page back
+   and confirm `status=current`, `parentId`, and the bumped `version`.
+
+> **Macro note**: because the body is rendered from Markdown, a macro added by hand in the browser
+> (panel / smart link) comes back as its Markdown equivalent (e.g. a blockquote note) after a
+> republish. That is expected: every page this toolchain owns is **Markdown-sourced**, and the
+> Markdown is the single source of truth — don't hand-edit such a page in the Confluence editor.
 
 ## Path and invocation
 
@@ -191,7 +236,7 @@ python ~/.cursor/skills/confluence-publish/scripts/upload_confluence_v2.py --jir
 
 | Rule | Detail |
 | --- | --- |
-| Single implementation | Always call this script to write Confluence. **Never** author another publishing script, write a temporary HTML body file and POST it, or hard-code an email / API token for a hand-rolled REST call |
+| Single implementation | Always call this script to write Confluence. **Never** call an MCP page-write tool (`createConfluencePage` / `updateConfluencePage` / `createConfluenceContent` / `updateConfluenceContent`), author another publishing script, write a temporary HTML body file and POST it, or hard-code an email / API token for a hand-rolled REST call |
 | Scan first | Always clear the body through the sensitive-information screening step (secrets, tokens, personally sensitive data) before it is written out; test data must be synthetic or mocked |
 | Idempotency first | One page per unique key. **Never** produce duplicate pages with a `(2)` or `(copy)` suffix; when dedup hits, update it — do not create |
 | Read back after publishing | Once `create` / `update` returns, confirm `url`, `version`, and the parent. If the flow is interrupted, **check whether the page already landed** before deciding to retry — never blindly rerun |
@@ -220,6 +265,8 @@ python ~/.cursor/skills/confluence-publish/scripts/upload_confluence_v2.py --jir
 | Image not inlined, body shows a placeholder | Check each `image_pending` entry's `reason`: `file not found` -> fix the path; `unsupported ext` -> convert the format; `upload failed` -> check attachment permissions |
 | Two pages created for one document | Usually the `--title` prefix differed between runs (a date, version, or summary tail crept in). The prefix must be a stable unique key; existing duplicates need manual consolidation |
 | Write-back reports "appendix item not found" | The target page has no item with that label, or the label is spelled differently. Pass the real label via `--item-label`, or record it as a manual follow-up |
+| Two Jira / Confluence tool sets visible, or a tool list contains `createConfluenceContent` | The Cursor **Atlassian plugin** is installed alongside `Atlassian-MCP-Server`. Disable the plugin (see "Duplicate Atlassian MCP"); until then never call its page-write tools |
+| Tempted to "just use MCP for this one-line change" | Not allowed. Edit the local Markdown and rerun the script with the same `--title` / `--parent`; see "Updating a page that already exists" |
 | Jira attachment reports `ATTACHMENT_VALIDATION_ERROR` | ADF needs the media UUID rather than the attachment id; the script resolves this automatically, so a persistent failure means the 302 returned no `Location` — check the site's proxy settings |
 
 ## Output

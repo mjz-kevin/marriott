@@ -91,9 +91,13 @@ ai-sdlc/
 ### Python 脚本
 - 仅用标准库（`pyproject.toml` 无依赖），需同时兼容 **macOS 与 Windows**（路径处理参考各 skill 下的 `platform_paths.py`）。
 - **上传 Confluence 一律走公共 skill `confluence-publish`**：`upload_confluence_v2.py` 在仓库内只有
-  这一份（`.cursor/skills/confluence-publish/scripts/`），需求线（PRD / 技术方案 / Story）与测试线
-  （用例 / 运行报告）的发布环节共用。**不要在其它 skill 下复制副本**，也不要另写发布脚本或自拼 REST 调用。
-  脚本靠自身位置向上三级定位 `mcp.json`，改动目录深度会导致凭证解析失效。
+ 这一份（`.cursor/skills/confluence-publish/scripts/`），需求线（PRD / 技术方案 / Story）与测试线
+ （用例 / 运行报告 / page_doc 页面元素文档 / 导航页）的发布环节共用。**不要在其它 skill 下复制副本**，也不要另写发布脚本或自拼 REST 调用。
+ **也禁止用 MCP 写页**（`createConfluencePage` / `updateConfluencePage` / `createConfluenceContent` /
+ `updateConfluenceContent`，含 Cursor Atlassian 插件自带的同类工具）：新建和更新（哪怕只改一个单元格）
+ 都走脚本——改本地 Markdown 后用相同 `--title` 前缀 + 相同 `--parent` 重跑即原地更新；MCP 只读（查页、列目录、回读校验）不受限。
+ 若用户同时装了 Cursor 的 Atlassian 插件，会出现两套重复的 Jira / Confluence MCP，应提示其禁用插件，只保留 `Atlassian-MCP-Server`。
+ 脚本靠自身位置向上三级定位 `mcp.json`，改动目录深度会导致凭证解析失效。
 - 多个 Skill 各自带一份 `platform_paths.py`，**它们是独立副本且当前内容不完全一致**，改动时逐个确认，不要假设同步。
 
 ## 6. 构建与验证
