@@ -8,6 +8,12 @@
 
 > 设计依据：[`doc/AI-Toolchain-Design.md`](doc/AI-Toolchain-Design.md)（三层职责、Agent × Skill × MCP 装配、安全护栏、分发方式）。
 > 分发细节：[`init/README.md`](init/README.md)。
+> **维护 / KT**：[`doc/maintenance/`](doc/maintenance/README.md)（变更同步清单、发版、profile、测试、排障）；版本变更见 [`CHANGELOG.md`](CHANGELOG.md)。
+
+**代码是 source of truth**：本文件及所有文档里的清单（Agent / Skill / 角色映射 / profile 字段等）只是索引，
+与代码冲突时以代码为准（`.cursor/agents|skills/`、`init/roles.json`、`.cursor/profiles/*.yaml` 注释、`init/build.py`、`init/templates/`），
+并在同一次改动里修正文档。权威来源对照表见 [`doc/maintenance/README.md` §0](doc/maintenance/README.md#0-第一原则代码是-source-of-truth)；
+`python init/check.py` 会机器校验其中大部分一致性。
 
 ---
 
@@ -16,9 +22,11 @@
 ```
 ai-sdlc/
 ├── AGENTS.md                 # 本文件（README.md 指向这里）
+├── CHANGELOG.md              # 版本变更记录 + 每版升级方式（发版时更新）
 ├── pyproject.toml            # 项目元数据：name=ai-sdlc，version 与发版 tag 对齐，Python >= 3.13，无三方依赖
 ├── doc/
 │   ├── AI-Toolchain-Design.md    # 工具链总体设计（英文）
+│   ├── maintenance/              # 维护手册（KT 入口、变更清单、发版、profile、测试、排障）
 │   └── 万豪敏捷流程.drawio        # 敏捷流程图
 ├── .cursor/
 │   ├── agents/               # 7 个 Agent 定义（<name>.md，YAML frontmatter: name / description）
@@ -26,13 +34,11 @@ ai-sdlc/
 │   ├── profiles/             # 团队 profile 与公共配置（随角色包分发到 ~/.cursor/profiles/）
 │   ├── mcp.example.macos.json    # MCP 配置示例（无凭证）
 │   └── mcp.example.windows.json
-├── init/                     # 按角色打包分发（详见 init/README.md）
+├── init/                     # 按角色打包分发（完整结构见 init/README.md「目录结构」）
 │   ├── roles.json            # 角色 → agents / skills / 公共资产映射（唯一数据源）
-│   ├── build.py              # 构建脚本（纯标准库）
-│   ├── templates/            # install / uninstall（角色包 + 运行时包，.sh / .ps1 各一份）
-│   ├── allowlist_command.txt # 内部命令白名单参考（不分发）
-│   ├── allowlist_mcp.txt     # 内部 MCP 工具白名单参考（不分发）
-│   ├── res/                  # 离线运行时 / MCP / 工具载荷（大文件，zip 走 Git LFS）
+│   ├── build.py / check.py   # 构建脚本 / 仓库一致性检查（纯标准库）
+│   ├── templates/            # install / uninstall（.sh / .ps1 成对）
+│   ├── res/                  # 离线运行时 / MCP / 工具载荷（zip 走 Git LFS）
 │   └── dist/                 # 构建产物（git 忽略）
 └── .ai-sdlc/                 # Agent 运行时状态（会话、草稿、计划、扫描日志等，git 忽略，勿提交）
 ```
@@ -45,7 +51,7 @@ ai-sdlc/
 | `userstory-agent` | PO | 把 PRD 中的 User Story 同步到 Jira（同步计划 → 确认 → 建单 / 更新） |
 | `tech-solution-agent` | TL / Dev | 技术方案（PRD 级 / Spike 调研 / Story 级详细方案）→ 确认 → 发布 → 回写 |
 | `dev-agent` | TL / Dev | Story → 检出基线 → 唯一 AI Feature 分支 → 实现代码与单测 → 验证 → 提 PR |
-| `code-review-agent` | TL / Dev | 拉 PR diff → 按规范与安全基线逐条审核 → 结构化评论 → 合并门禁 |
+| `code-review-agent` | TL / Dev | 拉 PR diff → 按规范与安全基线逐条审核 → 汇总为一条 PR review → 合并门禁（不自动 approve / 合并，人工拍板） |
 | `cicd-agent` | TL / Dev / QA | 选定并触发现有 Harness 流水线，高环境（Staging / Prod）需人工确认 |
 | `ai-test-agent` | QA | 需求 / Jira 用例 → 伪代码 → pytest + pytest-bdd + Appium 可执行脚本 → 运行报告 / 提 Bug |
 
@@ -61,15 +67,14 @@ ai-sdlc/
 | CI/CD | `harness-invoke` |
 | 测试（仅 QA） | `jira-to-test-case`、`test-case-authoring`、`test-case-to-script`、`test-debug-script`、`test-page-elements`、`test-run-report-bug` |
 
-角色与资产的权威对应关系以 [`init/roles.json`](init/roles.json) 为准。
+角色与资产的权威对应关系以 [`init/roles.json`](init/roles.json) 为准（上表只是索引）。
+
+> `kb-query`（知识库检索）是**规划中、尚未实现**的公共 Skill：多个 Agent 已预留调用位置，设计见 `doc/AI-Toolchain-Design.md` §4.1 / §9。它登记在 `init/check.py` 的 `PLANNED_SKILLS` 里，落地时建目录、登记 `roles.json` 并从 `PLANNED_SKILLS` 移除。
 
 ## 4. Profiles（`.cursor/profiles/`）
 
-- `app-test.yaml` / `app-prod.yaml` / `cms-test.yaml` / `cms-prod.yaml`：团队 profile，承载两队全部差异（Jira 项目 / 工作流 / 字段、Confluence 空间与目录、代码仓库、构建 / 单测命令、Harness 流水线等）。
-- `test_case_memory.yaml` / `test_script_memory.yaml`：测试类 Skill 沉淀的通用规则记忆（仅经用户确认后写入）。
-- `setup.json`：node / python / npm / npx 可执行路径（按固定运行时布局写死，留空回退系统 PATH）。
-
-运行时 profile 安装在 `~/.cursor/profiles/`，当前选中哪个 profile 由 `profile-select` 记在本地（按仓库），不入库。
+- `<team>-<env>.yaml`（`app-test` / `app-prod` / `cms-test` / `cms-prod`）承载两队全部差异；另有测试记忆 `test_*_memory.yaml`（仅经用户确认后写入）与运行时路径 `setup.json`。
+- 字段含义以 yaml 行内注释为准；当前选中哪个 profile 由 `profile-select` 记在本地（按仓库），不入库。结构规则与改动流程见 [`doc/maintenance/profiles.md`](doc/maintenance/profiles.md)。
 
 ## 5. 编写约定
 
@@ -84,9 +89,10 @@ ai-sdlc/
 
 ### Agent / Skill 文件格式
 - Agent：`.cursor/agents/<name>.md`，frontmatter 含 `name`、`description`（`>-` 多行，写清使用角色、主流程与触发场景）。
-- Skill：`.cursor/skills/<name>/SKILL.md`，frontmatter 含 `name`、`description`（写清用途与 `triggers:` 中英文触发词）；参考资料放 `references/`，脚本放 `scripts/`。
-- Agent / Skill / 设计文档正文用**英文**；profile 注释、`init/` 文档和 commit message 目前用中文。
+- Skill：`.cursor/skills/<name>/SKILL.md`，frontmatter 含 `name`（与目录名一致）、`description`（**必须用 `>-` 折叠块**，单行值含「: 」会解析失败；写清用途与 `triggers:` 中英文触发词）；参考资料放 `references/`，脚本放 `scripts/`。
+- Agent / Skill / 设计文档正文用**英文**；profile 注释、`init/` 文档、`doc/maintenance/`、`CHANGELOG.md` 和 commit message 目前用中文。
 - 新增 / 重命名 / 删除 Agent 或 Skill 时，**同步修改 `init/roles.json`**（否则不会被打包，卸载清单也不完整），并视情况更新 `doc/AI-Toolchain-Design.md` 第 2、4、5、6 章与 `init/README.md` 的对照表。
+ 改了 X 还要同步哪里的完整清单见 [`doc/maintenance/change-checklist.md`](doc/maintenance/change-checklist.md)；删除 / 改名属于破坏性变更，须在 `CHANGELOG.md` 标注「先卸载再安装」。
 
 ### Python 脚本
 - 仅用标准库（`pyproject.toml` 无依赖），需同时兼容 **macOS 与 Windows**（路径处理参考各 skill 下的 `platform_paths.py`）。
@@ -103,22 +109,23 @@ ai-sdlc/
 ## 6. 构建与验证
 
 ```bash
-# 构建全部角色包（交互确认版本号；HEAD 在 tag 上时默认用 tag）
-python init/build.py
-# 指定角色与版本 / 非交互 / 只出目录不打 zip
-python init/build.py PO QA --version 1.1.0
-python init/build.py --yes
-python init/build.py --no-zip
-# 构建运行时包（单平台）
-python init/build.py --runtime mac-silicon   # 或 mac-intel / win
-
-# sensitive-data-guard 自动化测试
-python .cursor/skills/sensitive-data-guard/tests/run_tests.py
+python init/check.py                    # 仓库一致性检查（每次提交前；发版前加 --strict）
+python init/build.py --no-zip --yes     # 确认能正常组装（只出目录不打 zip）
+python .cursor/skills/sensitive-data-guard/tests/run_tests.py   # 改安全规则时
 ```
 
-- 修改 Agent / Skill / profile / `roles.json` 后，至少跑一次 `python init/build.py --no-zip` 确认能正常组装。
+完整构建参数（指定角色 / 版本、运行时包）见 [`init/README.md`「构建」](init/README.md#构建) 或 `python init/build.py --help`；发版构建见 [`doc/maintenance/release.md`](doc/maintenance/release.md)。
+
+- 修改 Agent / Skill / profile / `roles.json` 后，至少跑一次上面前两条命令。
+- **AI 维护者每次改动的收尾流程**（不可省略）：
+ 1. 按改动类型打开 [`doc/maintenance/change-checklist.md`](doc/maintenance/change-checklist.md) 对应小节，逐项处理「必须」与「文档」项；
+ 2. 改名 / 删除 / 改职责时，`rg -n '<旧名或旧说法>' .cursor init doc AGENTS.md CHANGELOG.md` 找全引用一起改；
+ 3. 改了 Agent 行为（调用的 Skill、MCP 权限、人工确认点）时，同步对应 Skill 正文与设计文档 §2 / §5 / §6，三处说法要一致——冲突时以 **Skill 的实际流程**为准；
+ 4. 跑 `python init/check.py`，ERROR 必须为 0；
+ 5. 在 `CHANGELOG.md` 的 `Unreleased` 下记一条，在回复里说明改了哪些文档、哪些没改及原因。
 - 改动 `init/templates/` 的安装 / 卸载脚本时，`.sh` 与 `.ps1` 需**成对修改**，卸载脚本可先用 `--dry-run` / `-DryRun` 验证。
-- 升级 node / python 运行时版本时，`init/res/` 载荷、`.cursor/profiles/setup.json`、`.cursor/mcp.example.*.json` 三处路径需同步。
+- 升级 node / python 运行时版本时需多处同步，见 [`doc/maintenance/change-checklist.md` §8](doc/maintenance/change-checklist.md#8-升级运行时--离线载荷initres)（`check.py` 校验版本号一致）。
+- 本机实测、跨平台验证方法见 [`doc/maintenance/testing.md`](doc/maintenance/testing.md)；常见问题见 [`doc/maintenance/troubleshooting.md`](doc/maintenance/troubleshooting.md)。
 
 ## 7. 安全红线
 
@@ -129,6 +136,6 @@ python .cursor/skills/sensitive-data-guard/tests/run_tests.py
 
 ## 8. Git 与版本
 
-- 采用 git flow：日常在 `develop`，发版走 `release/<ver>` → 合入 `main` 并打 tag（如 `0.2.4`），tag 回合 `develop`。
-- 发版时同步更新 `pyproject.toml` 的 `version`，与 tag 及角色包版本号保持一致。
+- 采用 git flow（`develop` 日常 → `release/<ver>` → `main` + tag，tag 无 `v` 前缀）；发版时 `pyproject.toml` 的 `version`、tag、角色包版本号三者一致，并把 `CHANGELOG.md` 的 `Unreleased` 定稿（含「升级方式」）。完整步骤、hotfix 与回滚见 [`doc/maintenance/release.md`](doc/maintenance/release.md)。
+- 日常改动在 `CHANGELOG.md` 的 `Unreleased` 下随手记一条。
 - `*.zip` 走 Git LFS（见 `.gitattributes`）；`init/dist/`、`__pycache__/`、`.idea`、`.DS_Store` 不提交。

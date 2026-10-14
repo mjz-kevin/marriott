@@ -21,6 +21,7 @@
 init/
 ├── roles.json            # 角色 → agents/skills 映射（唯一数据源，改这里）
 ├── build.py              # 构建脚本：读 roles.json，产出角色包 / 运行时包（纯标准库）
+├── check.py              # 仓库一致性检查（维护者用，不随包分发；见 doc/maintenance/）
 ├── templates/
 │   ├── install.sh / install.ps1                     # 角色包安装器：落资产 + 复用运行时生成 mcp.json
 │   ├── uninstall.sh / uninstall.ps1                 # 角色包卸载器（删所有角色资产，清单由 build.py 注入）
@@ -29,7 +30,7 @@ init/
 ├── placeholders/         # （可选）尚未落地的 Agent 占位；当前所有 Agent 均已落地，目录可不存在
 ├── allowlist_command.txt # 内部命令白名单参考（不随包分发）
 ├── allowlist_mcp.txt     # 内部 MCP 工具白名单参考（不随包分发）
-├── res/                  # 离线载荷（体积大，git 忽略，另行准备放入），仅运行时包使用
+├── res/                  # 离线载荷（体积大，zip 走 Git LFS，克隆后需 git lfs pull），仅运行时包使用
 │   ├── AI-SDLC-windows.zip             # Windows 运行时 → 解压到 C:\
 │   ├── AI-SDLC-macOS-Silicon.zip       # macOS Apple Silicon(M 系列) 运行时
 │   ├── AI-SDLC-macOS-Intel.zip         # macOS Intel 运行时
@@ -48,14 +49,16 @@ init/
 
 ## 角色 → 资产对照
 
-| 角色 | Agents | 专属 Skills |
+> 完整清单以 [`roles.json`](./roles.json) 为准，下表只是摘要。
+
+| 角色 | Agents | 专属 Skills（摘要） |
 | --- | --- | --- |
-| **PO** | eval-agent, userstory-agent | requirement-clarify, prd-authoring, prd-publish, user-story-authoring, user-story-publish |
+| **PO** | eval-agent, userstory-agent | 需求澄清 + PRD + User Story |
 | **TL** | tech-solution-agent, dev-agent, code-review-agent, cicd-agent | 技术方案（含 `tech-solution-prd`）+ 开发 / 验证 + Code Review + `create-pr` + `harness-invoke` |
 | **Dev** | tech-solution-agent, dev-agent, code-review-agent, cicd-agent | 与 TL 相同，但**不含** `tech-solution-prd` |
-| **QA** | ai-test-agent, cicd-agent | jira-to-test-case, test-case-authoring, test-case-to-script, test-debug-script, test-page-elements, test-run-report-bug, harness-invoke |
+| **QA** | ai-test-agent, cicd-agent | 测试类 Skill（用例设计 → 伪代码 → 脚本 → 调试 → 报告 / 提 Bug）+ `harness-invoke` |
 
-> 公共 Skill（全部角色都装）：`sensitive-data-guard`、`profile-select`、`md-to-pdf`、`ai-sdlc-info`。
+> 公共 Skill（全部角色都装）见 `roles.json` 的 `common.skills`。
 > `create-pr` **不是**公共 Skill，只随 TL / Dev 分发；测试类 Skill 只随 QA 分发。
 > 公共资产：4 份团队 profile（`app-test` / `app-prod` / `cms-test` / `cms-prod`）+ 2 份测试记忆 profile（`test_case_memory.yaml` / `test_script_memory.yaml`）+ `setup.json`、两份 `mcp.example.*.json`。
 > `init/allowlist_*.txt` 不随包分发。
@@ -163,7 +166,7 @@ python init/build.py --runtime mac-intel
 
 | 场景 | 为什么直接覆盖不行 |
 | --- | --- |
-| 新版本**删除或改名**了某个 Agent / Skill | 旧的 agent 或 skill 会留在 `~/.cursor/`，和新的同时生效，可能被误触发 |
+| 新版本**删除或改名**了某个 Agent / Skill | 旧的 agent 或 skill 会留在 `~/.cursor/`，和新的同时生效，可能被误触发。⚠️ 卸载清单由构建时的 `roles.json` 生成，**新包的 `uninstall` 已不认识旧名**：要用**旧版本包**的 `uninstall`，或按 `CHANGELOG.md` 提示手动删除 `~/.cursor/skills/<旧名>/` / `~/.cursor/agents/<旧名>.md` |
 | 新版本删除了某个 Skill 里的文件（`references/` / `scripts/` 等） | 覆盖只会更新同名文件，删掉的旧文件会一直留着 |
 | **换角色**（比如 Dev 改成 QA），或者想只保留单一角色 | 上一个角色的 agents / skills 不会被清掉 |
 | 运行时版本升级，`setup.json` 里的路径需要更新 | 安装时如果 `setup.json` 已存在，会保留原文件不覆盖；卸载会把它删掉，重装后拿到新路径 |
@@ -236,7 +239,7 @@ python init/build.py --runtime mac-intel
 
 ## 离线载荷准备（放入 `res/`）
 
-二进制体积大、已被 git 忽略，需**另行准备后放入 `init/res/`**，`build.py --runtime <平台>` 构建时打入运行时包：
+二进制体积大，通过 **Git LFS** 入库（`.gitattributes`：`*.zip filter=lfs`），克隆后需 `git lfs install && git lfs pull`；升级载荷时替换 `init/res/` 下对应文件，`build.py --runtime <平台>` 构建时打入运行时包：
 
 | 平台 | 运行时载荷（放到 `init/res/`） | 版本要求 | 安装脚本落地位置 |
 | --- | --- | --- | --- |
@@ -245,7 +248,7 @@ python init/build.py --runtime mac-intel
 | macOS (Intel) | `AI-SDLC-macOS-Intel.zip`（内含 `AI-SDLC/runtime/node-v26.9.0-darwin-x64/` + `python-3.13.15-darwin-x64/`） | node 26.9.0 / python 3.13.15 | `~/.cursor/AI-SDLC/runtime/` |
 
 - macOS 的 node 用官方发行名（`node-v26.9.0-darwin-arm64` / `-x64`）；python 用 [python-build-standalone](https://github.com/astral-sh/python-build-standalone) 的 install_only 独立构建（CPython 3.13.15 对应 release tag `20260807`），解压后**须把顶层 `python/` 目录改名为 `python-3.13.15-darwin-arm64` / `python-3.13.15-darwin-x64`**（与 node 的 `-darwin-<arch>` 命名对齐，安装脚本据此按架构挑选）。各自打成上表的 zip，顶层为 `AI-SDLC/`，与 `AI-SDLC-windows.zip` 一致。
-- 运行时版本须与 `.cursor/profiles/setup.json`、`.cursor/mcp.example.*.json` 中写死的路径一致；升级 node / python 时三处同步修改。
+- 运行时版本须与 `.cursor/profiles/setup.json`、`.cursor/mcp.example.*.json` 中写死的路径一致；升级时要同步的位置见 [`doc/maintenance/change-checklist.md` §8](../doc/maintenance/change-checklist.md#8-升级运行时--离线载荷initres)。
 - 离线 MCP 包（`res/mcp-offline/`）：每个 zip 内为 `node_modules/...`（`npm install <pkg>` 后打包），安装后入口分别为
   `figma/node_modules/figma-developer-mcp/dist/bin.js`、`github/node_modules/github-mcp-server-js/dist/cli.js`、`harness/node_modules/harness-mcp-v2/build/index.js`。
 - 离线工具包（`res/tools/`）：`mermaid-cli-*.zip` / `md-to-pdf-*.zip` 同样为 `node_modules/...`；`chromium-*.zip` 内为 `chrome/<平台>-<ver>/...`（puppeteer browsers 缓存结构）。同类多个版本时取文件名排序最大者。
