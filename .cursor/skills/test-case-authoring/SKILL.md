@@ -1,6 +1,10 @@
 ---
 name: test-case-authoring
-description: Pull test cases via the Jira MCP (Atlassian-MCP-Server) and generate BDD/Gherkin scenarios + pseudocode (`test-case-authoring`). When fetching a case, if the user did not provide a case link / Jira Issue Key, proactively ask. Use when the user provides a Jira Issue Key (e.g. CNAPP-611), a case link, or asks to generate pseudocode/feature from Jira.
+description: >-
+  Pull test cases via the Jira MCP (Atlassian-MCP-Server) and generate BDD/Gherkin scenarios +
+  pseudocode (`test-case-authoring`). When fetching a case, if the user did not provide a case link /
+  Jira Issue Key, proactively ask. Use when the user provides a Jira Issue Key (e.g. CNAPP-611), a
+  case link, or asks to generate pseudocode/feature from Jira.
 ---
 
 # test-case-authoring: Jira case -> pseudocode

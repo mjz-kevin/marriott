@@ -1,6 +1,15 @@
 ---
 name: test-run-report-bug
-description: First proactively ask the user to run iOS / Android / All / Custom (give choices), then automatically run all features of the chosen platform (run the corresponding plan/debug.py), publish the pytest run-result report to the Confluence test_report folder (https://marriottcloud.atlassian.net/wiki/spaces/~712020dbd6441f05734e4da1386119f88cfbe0/folder/4261085398/test_report), analyze the failure/error root causes in the report and put the error cause at the very top of the doc, and after the report is generated and root-cause analysis is complete, file corresponding Bugs on Jira for the failed cases (`test-run-report-bug`). Use when the user says "run the cases and produce a report / run all iOS or Android features and generate a run report / send the run results to test_report / run report + error analysis / file Jira bugs for failed cases".
+description: >-
+  First proactively ask the user to run iOS / Android / All / Custom (give choices), then
+  automatically run all features of the chosen platform (run the corresponding plan/debug.py), publish
+  the pytest run-result report to the Confluence test_report folder
+  (https://marriottcloud.atlassian.net/wiki/spaces/~712020dbd6441f05734e4da1386119f88cfbe0/folder/4261085398/test_report),
+  analyze the failure/error root causes in the report and put the error cause at the very top of the
+  doc, and after the report is generated and root-cause analysis is complete, file corresponding Bugs
+  on Jira for the failed cases (`test-run-report-bug`). Use when the user says "run the cases and
+  produce a report / run all iOS or Android features and generate a run report / send the run results
+  to test_report / run report + error analysis / file Jira bugs for failed cases".
 ---
 
 # test-run-report-bug: pick platform -> run all features -> generate run report -> publish to Confluence (error cause on top) -> file Jira Bugs for failed cases

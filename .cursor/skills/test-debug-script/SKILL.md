@@ -1,6 +1,13 @@
 ---
 name: test-debug-script
-description: An assistant for debugging/running features/automation cases (`test-debug-script`). Use when the user says "debug/run <feature>.feature / run the case / a case error, take a look / a step stuck/failing/stuck on a page for a long time". Systematically locate the failing step, fix the locators and wait/assert logic in pages/steps/features or conftest under tests/mobile/ios/; and throughout debugging, record the user's useful feedback, abstract it into general-rule drafts, and only distill them into .cursor/profiles/test_script_memory.yaml after user confirmation, iterating continuously.
+description: >-
+  An assistant for debugging/running features/automation cases (`test-debug-script`). Use when the
+  user says "debug/run <feature>.feature / run the case / a case error, take a look / a step
+  stuck/failing/stuck on a page for a long time". Systematically locate the failing step, fix the
+  locators and wait/assert logic in pages/steps/features or conftest under tests/mobile/ios/; and
+  throughout debugging, record the user's useful feedback, abstract it into general-rule drafts, and
+  only distill them into .cursor/profiles/test_script_memory.yaml after user confirmation, iterating
+  continuously.
 ---
 
 # test-debug-script: debug/run feature (locate -> fix -> record feedback -> user confirms -> distill experience)
