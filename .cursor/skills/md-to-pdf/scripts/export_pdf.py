@@ -230,40 +230,105 @@ def nodejs_install_hint():
 _MMDC_UNAVAILABLE = False
 
 
-def render_mermaid_mmdc(code, out_path, scale=3):
-    """用 mermaid-cli 把 mermaid 源码渲染为 PNG。成功返回 True，不可用/失败返回 False。
+def _mmdc_base_cmd():
+    """解析 mmdc 的调用前缀。返回 base_cmd 列表，不可用返回 None（并置全局不可用标记）。
 
     渲染引擎优先级：
       1) 离线包：绿色 node 直跑 runtime/tools/mermaid-cli 的 cli.js（无需联网，推荐）；
       2) 回退：npx -y @mermaid-js/mermaid-cli（首次需联网拉取）。
     两者都需要系统上有可用的 Chromium/Chrome（离线包不含浏览器）。
-    -s 提高分辨率，保证 PDF 缩放后文字清晰。
     """
     global _MMDC_UNAVAILABLE
     if _MMDC_UNAVAILABLE:
-        return False
-    # 优先离线：node + 本地 cli.js
+        return None
     node = _scan_runtime_node()
     cli = _offline_mmdc_cli()
     if node and cli:
-        base_cmd = [node, cli]
-    else:
-        npx = _resolve_npx() if _npx_available() else None
-        if not npx:
-            _MMDC_UNAVAILABLE = True
-            return False
-        base_cmd = [npx, "-y", "@mermaid-js/mermaid-cli"]
+        return [node, cli]
+    npx = _resolve_npx() if _npx_available() else None
+    if not npx:
+        _MMDC_UNAVAILABLE = True
+        return None
+    return [npx, "-y", "@mermaid-js/mermaid-cli"]
+
+
+def _puppeteer_cfg(path):
+    """写 puppeteer 配置文件（无沙箱 + 离线 Chromium）。返回配置文件路径。"""
+    pp = {"args": ["--no-sandbox", "--disable-setuid-sandbox"]}
+    chromium = _offline_chromium()
+    if chromium:
+        pp["executablePath"] = chromium  # 用离线 Chromium，不依赖系统是否装 Chrome
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(pp, f)
+    return path
+
+
+def render_mermaid_batch(codes, assets_dir, scale=2):
+    """一次 mmdc 调用渲染全部 mermaid 图（批处理，省掉每图一次进程冷启动）。
+
+    做法：把所有 mermaid 块拼成一个临时 markdown 交给 mmdc 的 markdown 模式，
+    mmdc 会按出现顺序输出 <basename>-1.png ... <basename>-N.png。
+    单次 npx/node + Chromium 冷启动即可出全部图，图越多收益越大。
+
+    注意 mmdc 的 markdown 模式是"全有或全无"：任何一张图语法错误都会整体
+    失败且不产出任何文件。故本函数只在"全部成功"时返回 {序号: png 路径}，
+    否则返回 None，由调用方回退到逐图渲染以定位具体的坏图。
+    """
+    if not codes:
+        return {}
+    base_cmd = _mmdc_base_cmd()
+    if base_cmd is None:
+        return None
+    batch_dir = os.path.join(assets_dir, "_batch")
+    os.makedirs(batch_dir, exist_ok=True)
+    src = os.path.join(batch_dir, "all.md")
+    out_md = os.path.join(batch_dir, "out.md")
+    cfg = os.path.join(batch_dir, "pp.json")
+    try:
+        with open(src, "w", encoding="utf-8") as f:
+            for code in codes:
+                f.write("```mermaid\n" + code.strip("\n") + "\n```\n\n")
+        _puppeteer_cfg(cfg)
+        cmd = base_cmd + ["-i", src, "-o", out_md,
+                          "-b", "white", "-p", cfg, "-s", str(scale), "-e", "png"]
+        # 批处理是一次调用渲染 N 张图，超时按图数放宽，给大文档留足余量。
+        timeout = min(900, 180 + 30 * len(codes))
+        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                              timeout=timeout)
+        if proc.returncode != 0:
+            return None
+        # mmdc 输出 out-1.png ... out-N.png，必须每张都在且非空才算整体成功
+        rendered = {}
+        stem = os.path.splitext(out_md)[0]
+        for idx in range(1, len(codes) + 1):
+            png = f"{stem}-{idx}.png"
+            if not (os.path.isfile(png) and os.path.getsize(png) > 200):
+                return None
+            rendered[idx] = png
+        return rendered
+    except FileNotFoundError:
+        global _MMDC_UNAVAILABLE
+        _MMDC_UNAVAILABLE = True
+        return None
+    except Exception:
+        return None
+
+
+def render_mermaid_mmdc(code, out_path, scale=3):
+    """用 mermaid-cli 把单张 mermaid 源码渲染为 PNG。成功返回 True，不可用/失败返回 False。
+
+    批处理失败后的逐图回退路径：用于定位具体哪张图语法有问题。
+    -s 提高分辨率，保证 PDF 缩放后文字清晰。
+    """
+    base_cmd = _mmdc_base_cmd()
+    if base_cmd is None:
+        return False
     src = out_path + ".mmd"
     cfg = out_path + ".mmdc.json"
     try:
         with open(src, "w", encoding="utf-8") as f:
             f.write(code)
-        pp = {"args": ["--no-sandbox", "--disable-setuid-sandbox"]}
-        chromium = _offline_chromium()
-        if chromium:
-            pp["executablePath"] = chromium  # 用离线 Chromium，不依赖系统是否装 Chrome
-        with open(cfg, "w", encoding="utf-8") as f:
-            json.dump(pp, f)
+        _puppeteer_cfg(cfg)
         cmd = base_cmd + ["-i", src, "-o", out_path,
                           "-b", "white", "-p", cfg, "-s", str(scale)]
         proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=180)
@@ -271,6 +336,7 @@ def render_mermaid_mmdc(code, out_path, scale=3):
             return True
         return False
     except FileNotFoundError:
+        global _MMDC_UNAVAILABLE
         _MMDC_UNAVAILABLE = True
         return False
     except Exception:
@@ -369,15 +435,23 @@ def preprocess(md_text, md_dir, assets_dir, allow_missing_images):
       - mermaid 代码块 → mmdc 渲成 PNG，以 base64 data URI 内联为图片引用；
       - 本地图片（相对或绝对路径）→ 读为 base64 data URI 内联；网络图片(http/https)与已内联 data: 保留原样。
     统一内联可绕开无头 Chromium 对 file:// 本地资源的加载限制。
+
+    mermaid 渲染采用"先收集全部、再一次批量渲染、最后回填"的三趟结构：
+    整篇只付一次 mmdc 进程 + Chromium 冷启动的代价（原先是每图一次），图越多收益越大。
+    批处理整体失败时（mmdc 的 markdown 模式对单图语法错误即整体失败且无产物）
+    自动回退逐图渲染，以定位具体的坏图并让它单独退化为代码块。
+
     返回 (new_md, stats, missing_images, mermaid_pending)。
     """
     lines = md_text.split("\n")
-    out = []
+    out = []            # 元素为 str（原样行）或 int（mermaid 占位：图号）
     i, n = 0, len(lines)
     mermaid_total = 0
+    mermaid_blocks = {}  # 图号 -> (indent, block_lines)
     mermaid_pending = []  # 渲染失败的 mermaid（图号，从 1 起）
     os.makedirs(assets_dir, exist_ok=True)
 
+    # --- 第 1 趟：扫描正文，摘出 mermaid 块，原位留占位 ---
     while i < n:
         m = _FENCE_RE.match(lines[i])
         if m and m.group(3).lower() == "mermaid":
@@ -389,20 +463,11 @@ def preprocess(md_text, md_dir, assets_dir, allow_missing_images):
                 i += 1
             i += 1  # 跳过收尾 ```
             mermaid_total += 1
-            code = "\n".join(block)
-            png = os.path.join(assets_dir, f"mermaid_{mermaid_total}.png")
-            if render_mermaid_mmdc(code, png, scale=2):
-                out.append(f'{indent}<img class="mermaid-img" alt="mermaid-{mermaid_total}" src="{_data_uri(png)}" />')
-            else:
-                mermaid_pending.append(mermaid_total)
-                # 渲染失败：退化为代码块，保留源码，不静默丢图
-                out.append(f"{indent}```mermaid")
-                out.extend(block)
-                out.append(f"{indent}```")
+            mermaid_blocks[mermaid_total] = (indent, block)
+            out.append(mermaid_total)
             continue
         # 跳过非 mermaid 的代码块（原样保留，内部不改写图片语法）
         if m:
-            fence_indent, lang = m.group(1), m.group(3)
             out.append(lines[i])
             i += 1
             while i < n and not re.match(r"^[ \t]*```[ \t]*$", lines[i]):
@@ -415,7 +480,40 @@ def preprocess(md_text, md_dir, assets_dir, allow_missing_images):
         out.append(lines[i])
         i += 1
 
-    new_md = "\n".join(out)
+    # --- 第 2 趟：批量渲染（失败则逐图回退） ---
+    rendered = {}  # 图号 -> png 路径
+    if mermaid_total:
+        order = sorted(mermaid_blocks)
+        codes = ["\n".join(mermaid_blocks[k][1]) for k in order]
+        batch = render_mermaid_batch(codes, assets_dir, scale=2)
+        if batch:
+            rendered = {order[idx - 1]: png for idx, png in batch.items()}
+        else:
+            # 批处理不可用或整体失败 → 逐图渲染，定位具体坏图
+            for k in order:
+                png = os.path.join(assets_dir, f"mermaid_{k}.png")
+                if render_mermaid_mmdc("\n".join(mermaid_blocks[k][1]), png, scale=2):
+                    rendered[k] = png
+
+    # --- 第 3 趟：回填占位，渲染成功的内联为图片，失败的退化为代码块 ---
+    filled = []
+    for item in out:
+        if isinstance(item, int):
+            indent, block = mermaid_blocks[item]
+            png = rendered.get(item)
+            if png:
+                filled.append(
+                    f'{indent}<img class="mermaid-img" alt="mermaid-{item}" src="{_data_uri(png)}" />')
+            else:
+                mermaid_pending.append(item)
+                # 渲染失败：退化为代码块，保留源码，不静默丢图
+                filled.append(f"{indent}```mermaid")
+                filled.extend(block)
+                filled.append(f"{indent}```")
+        else:
+            filled.append(item)
+
+    new_md = "\n".join(filled)
 
     # 图片相对路径 → 绝对路径（跳过已是绝对/网络/data/file 的）
     missing = []
