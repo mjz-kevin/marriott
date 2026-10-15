@@ -73,7 +73,7 @@ ai-sdlc/
 
 ## 4. Profiles（`.cursor/profiles/`）
 
-- `<team>-<env>.yaml`（`app-test` / `app-prod` / `cms-test` / `cms-prod`）承载两队全部差异；另有测试记忆 `test_*_memory.yaml`（仅经用户确认后写入）与运行时路径 `setup.json`。
+- `<team>-<env>.yaml`（`app-test` / `app-prod` / `cms-test` / `cms-prod`）承载两队全部差异；另有运行时路径 `setup.json`。测试记忆存在 Confluence 页（profile 的 `mcp.confluence.test.memory_pages`，仅经用户确认后写入）。
 - 字段含义以 yaml 行内注释为准；当前选中哪个 profile 由 `profile-select` 记在本地（按仓库），不入库。结构规则与改动流程见 [`doc/maintenance/profiles.md`](doc/maintenance/profiles.md)。
 
 ## 5. 编写约定

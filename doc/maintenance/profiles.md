@@ -8,11 +8,9 @@
 | --- | --- | --- |
 | `app-test.yaml` / `app-prod.yaml` | APP 团队（iOS / Android）的全部差异 | 维护者 |
 | `cms-test.yaml` / `cms-prod.yaml` | CMS 团队（cncms / 前端 monorepo）的全部差异 | 维护者 |
-| `test_case_memory.yaml` | 测试类 Skill 的「步骤拆解」规则记忆（理解层） | 测试 Skill，**经用户确认后**写入 |
-| `test_script_memory.yaml` | 测试类 Skill 的「脚本跑通」规则记忆（实现层） | 测试 Skill，**经用户确认后**写入 |
 | `setup.json` | node / python / npm / npx 可执行路径（按运行时布局写死，留空回退系统 PATH） | 维护者（随运行时版本） |
 
-全部文件都在 `init/roles.json` 的 `common.profiles` 中登记，随**每个**角色包安装到 `~/.cursor/profiles/`。团队 profile 与两份 memory 每次安装都会覆盖，`setup.json` 已存在则保留；对升级的影响见 [`init/README.md`「升级与重装」](../../init/README.md#升级与重装直接覆盖-vs-先卸载)。
+全部文件都在 `init/roles.json` 的 `common.profiles` 中登记，随**每个**角色包安装到 `~/.cursor/profiles/`。团队 profile 每次安装都会覆盖，`setup.json` 已存在则保留；对升级的影响见 [`init/README.md`「升级与重装」](../../init/README.md#升级与重装直接覆盖-vs-先卸载)。
 
 当前选中哪个 profile 由 `profile-select` 记在用户本机（按仓库根路径），不入库：
 
@@ -81,8 +79,8 @@ python .cursor/skills/profile-select/scripts/profile.py resolve   # 当前 profi
 3. `profile.py list` 能看到新 profile；跑 `check.py` 与构建。
 4. 设计文档 §1.2（两队差异处理）补充说明。
 
-## 5. 测试记忆 profile
+## 5. 测试记忆（Confluence 页）
 
-- 两份 memory 的分工写在各自文件头注释里：`test_case_memory.yaml` 解决「把不完善的 scenario 拆对」，`test_script_memory.yaml` 解决「脚本稳定跑通」。
+- 自 0.3.2 起，测试记忆不再是本地 yaml（`test_case_memory.yaml` / `test_script_memory.yaml` 已删除），改为 DBU4 空间的两个 Confluence 页：`test-case-memory`（「把不完善的 scenario 拆对」）与 `test-script-memory`（「脚本稳定跑通」）。pageId 登记在 profile 的 `mcp.confluence.test.memory_pages`。
 - 只能由测试类 Skill 在**用户确认后**写入；维护者手动修改时同样需要测试负责人确认。
-- 用户本地的 memory 在重装角色包时会被覆盖。若仓库里的 memory 有更新，CHANGELOG 里提醒用户先备份本地版本；有价值的本地规则应回收进仓库。
+- 记忆页在 Confluence 上全员共享，重装角色包不会影响其内容。

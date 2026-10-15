@@ -41,9 +41,19 @@
   - `jira-to-test-case/SKILL.md`、`test-agent.md`、`app-case-template.md`、`cms-case-template.md` 中所有指向旧 `test_case`（ID `4261314672`）/ `cms_case`（ID `4282613845`）folder 的说明（链接、`--parent` 命令、落点描述）已删除/改写为 folder 模式与 `{epic}-TestCase`；原指向个人空间示例页 `CMS 测试用例 - GCD-326`（`4288971388`）的排版参考链接也一并去掉，改为指向仓库内模板文件 `references/*-case-template.md`。
 - 测试线 6 个 Skill（`jira-to-test-case`、`test-page-elements`、`test-run-report-bug`、`test-debug-script`、`test-case-authoring`、`test-case-to-script`）中硬编码的 Confluence 发布路径 / space / spaceId / cloudId、导航页 pageId、以及 Jira Bug 配置，统一改为「从当前 profile 读取」：Confluence 走 `mcp.confluence.test.folders.*` / `nav_pages.*` / `space` / `space_id` / `cloud_id`，Jira Bug 走 `mcp.jira.bug.*`。旧值保留为「当前值参考」，脚本命令形态（`--parent <id> --space <key>`）不变。（配套的 4 个 profile 已先行新增这两段配置。）符合 AGENTS.md「团队常量一律放 profile」约定。
 - `ai-test-agent` 更名为 `test-agent` 后，`init/check.py` 的展示名映射与设计文档 §2.1 一并改齐，避免 `role-matrix` 校验仍去对已不存在的旧文件名。
+- 测试线新增模板：`jira-to-test-case/references/`（`app-case-template.md` / `app-page-template.md` / `cms-case-template.md` / `cms-page-template.md`）、`test-run-report-bug/references/`（`app-bug-template.md` 手动 / 自动建 APP Bug 模板、`app_report_template.md` 运行报告模板）。
+- 文档同步：`AGENTS.md` §4、`doc/maintenance/profiles.md` §1 / §5、`doc/maintenance/troubleshooting.md` 中本地 memory yaml 的说法改为 Confluence 记忆页。
+
+### 删除 / 改名
+- **QA Agent 改名**：`ai-test-agent` → `test-agent`（`init/roles.json` QA 角色同步）。
+- **删除本地测试记忆 profile**：`test_case_memory.yaml`、`test_script_memory.yaml` 不再随包分发（从 `common.profiles` 移除），记忆改存 DBU4 的 Confluence 记忆页（见上文 memory 页条目）。
 
 ### 升级方式
-直接覆盖（重跑角色包 `install`）。profile 字段有删除（`high_risk_envs` / `high_risk_values`），但 profile 随角色包覆盖安装，无需卸载。
+- **先卸载再安装**，且**卸载要用旧版（0.3.1 及以前）包里的 `uninstall`**——新包的卸载清单已不含旧文件名，用新包卸载删不掉它们。
+- 手头没有旧包时，先手动删除下列残留，再装新包：
+  - `~/.cursor/agents/ai-test-agent.md`（Windows：`%USERPROFILE%\.cursor\agents\ai-test-agent.md`）——不删会和 `test-agent` 同时出现；
+  - `~/.cursor/profiles/test_case_memory.yaml`、`~/.cursor/profiles/test_script_memory.yaml`——已不再被读取；本地有自己沉淀的规则时，先迁到对应 Confluence 记忆页再删。
+- profile 字段也有删除（`high_risk_envs` / `high_risk_values` / `deny_list` / `env_dimension_overrides`），随角色包覆盖安装即可，无需额外操作。
 
 ---
 
