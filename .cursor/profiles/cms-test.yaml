@@ -22,17 +22,28 @@ mcp:
       mode: embed                    # embed=建单时导出 Figma 节点为 PNG、上传为 Jira 附件、以 ADF media 内嵌进描述（经 Jira REST，MCP-only 的受控例外）；link=退回仅链接
       png_scale: 2                   # 导出 PNG 的缩放倍数（download_figma_images 的 pngScale）；越大越清晰、文件越大
       heading: "UI Design"           # 内嵌图片前插入的描述标题段文字
+    bug:                             # test-run-report-bug 建 Bug 配置（自动化失败建单 / 手动建单共用）
+      project_key: CNAPP             # Bug 所在项目（与顶层 project_key 一致，显式留存便于演进）
+      issue_type: "缺陷"             # Bug issue type（id 10007）
+      domain_values: [Commerce, Loyalty, Trips, Platform]   # Domain 自定义字段取值；与 labels.business_domain.values 同源，勿两处漂移
+      severity_default: "3-Medium"   # customfield_10136 默认档，可按严重度上下调
+      environments: "Test"           # customfield_10042（建单必填），自动化属测试环境
+      replication_steps_field: customfield_10086   # Replication Steps 字段
+      severity_field: customfield_10136
+      environments_field: customfield_10042
+      regression_story: CNAPP-7206   # 每个 Bug 用 Blocks 链到的回归缺陷收集 Story
+      link_type: Blocks              # 链接类型（Bug Blocks -> regression_story）
 
   confluence:
     base_url: https://marriottcloud.atlassian.net/wiki
     space: DBU4
     parent_pages:
-      # 文件夹模式（当前）：一级根目录页 ID（folder 类型，与 app-test 一致）。
-      # 发布脚本在此根下自动建/找 {initiative} → {epic} → {epic}-PRD / {epic}-Tech Solution。
+      # 文件夹模式（当前）：一级根目录「AI SDLC Poilt Test」folder 页 ID（DBU4 空间；test 环境 app/cms 共用同一棵树）。
+      # 发布脚本在此根下自动建/找 {initiative} → {epic} → {epic}-PRD / {epic}-Tech Solution / {epic}-TestCase。
       # {initiative} 取 Epic 的父级 Jira key（Initiative/计划，如 GCD-359）；{epic} 取 Jira Epic key（如 CNAPP-5661）。
       # {initiative} 与 {epic} 夹标题由脚本查 Jira 摘要拼为「key-摘要」（如 GCD-359-内容中台重构），
       # 幂等查重按 Jira key 前缀匹配，摘要文案变动不会重复建夹。
-      root: "4205314140"             # 一级根目录页 ID（AI SDLC Poilt Test，test/DBU4，folder 类型，与 app-test 一致）
+      root: "4205314140"             # 一级根目录页 ID（AI SDLC Poilt Test，test/DBU4，folder 类型；test 环境 app/cms 共用）
       # 旧模式回退（直接父页，仅当未走文件夹模式时使用）：
       prd: "4147151138"
       tech_solution: "4198531132"
@@ -42,12 +53,34 @@ mcp:
       level3: "{epic}"                              # 三级：Epic 夹，标题「key-摘要」，如 CNAPP-5661-会员权益重构
       level4_prd: "{epic}-PRD"                      # 四级：PRD 归档夹
       level4_tech_solution: "{epic}-Tech Solution"  # 四级：技术方案归档夹
+      level4_test_case: "{epic}-TestCase"           # 四级：cms 功能用例归档夹（与 PRD / Tech Solution 平级，jira-to-test-case 的 cms 目标用，--kind test_case）
     naming:                            # 标题前缀（唯一键=前缀+Jira key）；脚本自动追加「-Jira 摘要」为可读尾巴，日期/版本不进标题
       prd: CMS-PRD-{epic}
       tech_solution_prd: CMS-TS-Prd-{epic}
       tech_solution_spike: CMS-TS-Spike-{spike_key}
       tech_solution_detail: CMS-TS-Detail-{story_key}
     content_format: markdown
+    test:                              # 测试线各 Confluence 落点（test-page-elements / test-run-report-bug 用；功能用例已改走 folder 模式见上）
+      # 知识库（app_doc / page_doc / cms_doc / cms_page + 两个导航页）、memory 页、运行报告根均已在 DBU4 空间；
+      # 本节 space 即 DBU4。
+      # cms 功能用例不落本节——它改走需求/方案线 folder 模式（见上方 confluence.parent_pages.root + folder_layout.level4_test_case），
+      # 与 {epic}-Tech Solution 平级落在 {epic}-TestCase 夹（space=DBU4，test 环境 app/cms 共用）。
+      space: "DBU4"                    # 测试线知识库 / memory / 运行报告所在 space（DBU4）
+      space_id: "329154959"            # DBU4 space 的数字 ID
+      cloud_id: "627b9bb1-1899-4ff6-bc6e-066cf136a066"
+      folders:                         # 发布脚本 --parent 的目标 folderId
+        app_doc:     "4260299195"      # app 页面元素知识库根 folder（内含 page_doc + iOS 导航页；对称于 cms_doc）
+        page_doc:    "4280157634"      # app 页面元素文档（iOS Page Elements - ...），在 app_doc 下
+        cms_doc:     "4281205569"      # cms README + 导航页所在 folder（cms 知识库根）
+        cms_page:    "4281827573"      # cms 模块文档 folder，在 cms_doc 下
+        report_root: "4192207633"      # 运行报告根 folder「Automation Report」(DBU4)；运行时先问用户平台+版本号，在其下找/建二级夹「<iOS|Android> <版本号>」(如 iOS 26.8 / Android 11.15)，报告页落入该二级夹
+      nav_pages:                       # 活数据导航页（运行时读写，非发布 folder）；均在 DBU4
+        app_page_map:   "4280157316"   # iOS Page Map & Inventory 导航页（在 app_doc 下）
+        cms_module_map: "4280551711"   # CMS Module Map & Inventory 导航页（在 cms_doc 下）
+      memory_pages:                    # 两个记忆库 Confluence 页（DBU4 空间 folder 4363354130），skill 从这里读/写
+        folder: "4363354130"
+        test_case:   "4364632091"      # test-case-memory 页（步骤拆解案例库）
+        test_script: "4364992536"      # test-script-memory 页（通用技术规则库）
 
   github:                              # GitHub（自建 GHES）连接 scope；开发/验证类 skill 的 MCP 读写落点
     host: git.marriott.com             # 自建 GHES 域名
@@ -64,13 +97,29 @@ mcp:
     # account_id 与 API 凭据不写在此处：二者均从 MCP 配置（mcp.json → harness 服务的 env）读取，
     # 保持单一事实来源，也避免凭据与账号标识随 profile 进入版本库。
     #
-    # 本节只记录「人的决策」：哪条流水线属于本团队交付路径、哪个环境算高风险、哪条禁止 agent 触发。
+    # 本节只记录「人的决策」：哪条流水线属于本团队交付路径、哪些环境在范围内、哪条禁止 agent 触发。
     # 不记录可从 Harness 查到的事实（入参规格与默认值、取值域、input set、stage 结构、
     # 环境→stage 子集、service/infra 取值）——那些一律由 harness-invoke 在触发前运行时读取，
     # 以 Harness 为唯一权威来源。手抄这些会产生两份真相：配置一旦滞后，skill 会拿过期规格
     # 去跟使用者确认参数，比没有规格更危险。
+    #
+    # 范围收口：本工具链的 CI/CD 环节只发布低环境（dev / test）。高环境（stg / prod，以及 uat 等
+    # 其它非低环境）一律不触发，也没有「人工确认后放行」的通道——由人在 Harness UI 操作。
+    # CMS 的流水线多为晋级链（一条定义里 test → stg → prod 串行），目标环境由「跑哪些 stage」决定，
+    # 故这里仍登记整条流水线，范围由 allowed_envs + stage 子集共同收口。
     pipelines:                         # 交付流水线清单；CMS 按 app 唯一定位。
                                        # 未登记 = 不可触发（skill 遇无匹配即停止，不猜），故检查/沙箱类无需在此列出。
+                                       #
+                                       # ⚠️ 以下两条刻意不登记，**新增条目时不要把它们加进来**（危险性从名称完全看不出）：
+                                       #   · utility —— environmentRef / serviceRef 均为无默认值、无取值域的自由输入
+                                       #     （可填 prod），且 action=delete 会执行 K8sDelete 删除集群资源；
+                                       #     其审批步骤条件是 env.type == Production，故低环境跑 delete 毫无门禁。
+                                       #     即「发到低环境」也不能让它安全——它的风险在能做什么，不在发到哪。
+                                       #   · HARNESS_STO_REMEDIATION_PLACEHOLDER —— STO 动态执行占位壳
+                                       #     （allowDynamicExecutions: true）：本体只有一个 noop 脚本，但运行时 YAML
+                                       #     可被完全覆盖，等同任意流水线执行入口；由 STO 平台驱动，非团队交付路径。
+                                       # 另两条未登记是因为用不到：cncms_cicd_custom（已被 _migration 取代）、
+                                       # cncms_integrity（检查类）。
       - { id: cncms_cicd_custom_migration, app: cncms,            repo: cncms }       # cncms 主部署，团队实际在用
       - { id: DiDiCICDFE,                  app: didi,             repo: monorepo }
       - { id: MBYCICDFE,                   app: mby,              repo: monorepo }
@@ -80,18 +129,12 @@ mcp:
       - { id: legalpagedeploy,             app: legal-page,       repo: monorepo }
       - { id: cncmsossuploadjobdeploy,     app: cncms-oss-upload, repo: cncms }
       - { id: CDONLY,                      app: travelpartner,    repo: null }        # CD-only，无 CI 阶段
-    deny_list:                         # 看起来像可触发的交付流水线，但明令禁止 agent 触发。
-                                       # 其危险性从名称与 API 元数据都看不出来，只能由人写下来。
-      - id: utility
-        reason: >-
-          手动运维/应急工具：environmentRef 与 serviceRef 均为无默认值的自由输入（可指向生产），
-          且 action=delete 会执行 K8sDelete 删除集群资源。名称完全不体现该能力。
-      - id: HARNESS_STO_REMEDIATION_PLACEHOLDER
-        reason: >-
-          Harness STO 动态执行占位壳（allowDynamicExecutions: true）：本体只有一个 noop 脚本，
-          但运行时 YAML 可被完全覆盖，等同任意流水线执行入口。由 STO 平台驱动，非团队交付路径。
-    high_risk_envs: [stg, prod]        # 高风险环境：触发前必须人工确认。用真实 environment identifier（stg，不是 staging）。
-                                       # 判定依据是本次触发解析出的目标环境，不是流水线名称或标签。
+    allowed_envs: [dev, test]          # 允许触发的环境白名单（低环境），用真实 environment identifier
+                                       # （cncms 项目共 5 个：dev / test / stg / perf / prod）。
+                                       # 判定依据是本次触发实际打向哪个环境（晋级链即 stage 子集对应的环境，
+                                       # 或某个入参取值点名的环境），不是流水线名称或标签；
+                                       # 不在白名单内（stg / perf / prod）→ skill 直接停止并提示去 Harness UI，
+                                       # 没有人工确认放行通道。
     allow_stage_execution_fallback: true   # 允许 harness-invoke 在 MCP 无法限定 stage 子集时，改用其随附的
                                        # stage 子集封装触发晋级链流水线（见 skill 文档）。置 false 则一律改由人在 UI 触发。
     poll:                              # 触发后等待执行状态的口径

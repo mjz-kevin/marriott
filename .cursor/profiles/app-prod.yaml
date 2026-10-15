@@ -51,32 +51,65 @@ mcp:
       mode: embed                    # embed=建单时导出 Figma 节点为 PNG、上传为 Jira 附件、以 ADF media 内嵌进描述（经 Jira REST，MCP-only 的受控例外）；link=退回仅链接
       png_scale: 2                   # 导出 PNG 的缩放倍数（download_figma_images 的 pngScale）；越大越清晰、文件越大
       heading: "UI Design"           # 内嵌图片前插入的描述标题段文字
+    bug:                             # test-run-report-bug 建 Bug 配置（自动化失败建单 / 手动建单共用）
+      project_key: CNAPP             # Bug 所在项目（与顶层 project_key 一致，显式留存便于演进）
+      issue_type: "缺陷"             # Bug issue type（id 10007）
+      domain_values: [Commerce, Loyalty, Trips, Platform]   # Domain 自定义字段取值；与 labels.business_domain.values 同源，勿两处漂移
+      severity_default: "3-Medium"   # customfield_10136 默认档，可按严重度上下调
+      environments: "Test"           # customfield_10042（建单必填），自动化属测试环境
+      replication_steps_field: customfield_10086   # Replication Steps 字段
+      severity_field: customfield_10136
+      environments_field: customfield_10042
+      regression_story: CNAPP-7206   # 每个 Bug 用 Blocks 链到的回归缺陷收集 Story
+      link_type: Blocks              # 链接类型（Bug Blocks -> regression_story）
 
   confluence:
     base_url: https://marriottcloud.atlassian.net/wiki
     space: CMI
     parent_pages:
-      # 文件夹模式（当前）：一级根目录「Mobile Team Requirement Materials」folder 页 ID。
-      # 发布脚本在此根下自动建/找 {initiative} → {epic} → {epic}-PRD / {epic}-Tech Solution。
+      # 文件夹模式（当前）：一级根目录「Mobile Team Requirement Materials - for AI SDLC Test」folder 页 ID（CMI 空间，app prod 根）。
+      # 发布脚本在此根下自动建/找 {initiative} → {epic} → {epic}-PRD / {epic}-Tech Solution / {epic}-TestCase。
       # {initiative} 取 Epic 的父级 Jira key（Initiative/计划，如 PORT-1301）；{epic} 取 Jira Epic key（如 CNAPP-5661）。
       # {initiative} 与 {epic} 夹标题由脚本查 Jira 摘要拼为「key-摘要」（如 CNAPP-5661-会员权益重构），
       # 幂等查重按 Jira key 前缀匹配，摘要文案变动不会重复建夹。
-      root: "4198957209"             # 一级根目录页 ID（Mobile Team Requirement Materials，prod/CMI，folder 类型）
+      root: "4191912061"             # 一级根目录页 ID（Mobile Team Requirement Materials - for AI SDLC Test，prod/CMI，folder 类型）
       # 旧模式回退（直接父页，仅当未走文件夹模式时使用）：
       prd: "4191912061"
       tech_solution: "4192731190"
     folder_layout:                   # 文件夹层级约定（供 skill 说明用；实际由脚本 --root/--initiative/--epic/--kind 落地）
-      level1: "Mobile Team Requirement Materials"   # 一级：固定根目录（即 parent_pages.root）
+      level1: "Mobile Team Requirement Materials - for AI SDLC Test"   # 一级：固定根目录（即 parent_pages.root）
       level2: "{initiative}"                        # 二级：Initiative（Epic 父级）夹，标题「key-摘要」，无父项时省略
       level3: "{epic}"                              # 三级：Epic 夹，标题「key-摘要」，如 CNAPP-5661-会员权益重构
       level4_prd: "{epic}-PRD"                      # 四级：PRD 归档夹
       level4_tech_solution: "{epic}-Tech Solution"  # 四级：技术方案归档夹
+      level4_test_case: "{epic}-TestCase"           # 四级：app 功能用例归档夹（与 PRD / Tech Solution 平级，jira-to-test-case 的 app 目标用，--kind test_case）
     naming:                            # 标题前缀（唯一键=前缀+Jira key）；脚本自动追加「-Jira 摘要」为可读尾巴，日期/版本不进标题
       prd: "APP-PRD-{epic}"
       tech_solution_prd: "APP-TS-Prd-{epic}"
       tech_solution_spike: "APP-TS-Spike-{spike_key}"
       tech_solution_detail: "APP-TS-Detail-{story_key}"
     content_format: markdown
+    test:                              # 测试线各 Confluence 落点（jira-to-test-case / test-page-elements / test-run-report-bug 用）
+      # 知识库（app_doc / page_doc / cms_doc / cms_page + 两个导航页）、memory 页、运行报告根均在 DBU4 空间（test/prod 共用同一套知识库）；
+      # 本节 space 即 DBU4。
+      # app 功能用例不落本节——它改走需求/方案线 folder 模式（见上方 confluence.parent_pages.root + folder_layout.level4_test_case），
+      # 与 {epic}-Tech Solution 平级落在 {epic}-TestCase 夹（prod 需求线 space=CMI）。
+      space: "DBU4"                    # 测试线知识库 / memory / 运行报告所在 space（DBU4）
+      space_id: "329154959"            # DBU4 space 的数字 ID
+      cloud_id: "627b9bb1-1899-4ff6-bc6e-066cf136a066"
+      folders:                         # 发布脚本 --parent 的目标 folderId
+        app_doc:     "4260299195"      # app 页面元素知识库根 folder（内含 page_doc + iOS 导航页；对称于 cms_doc）
+        page_doc:    "4280157634"      # app 页面元素文档（iOS Page Elements - ...），在 app_doc 下
+        cms_doc:     "4281205569"      # cms README + 导航页所在 folder（cms 知识库根）
+        cms_page:    "4281827573"      # cms 模块文档 folder，在 cms_doc 下
+        report_root: "4192207633"      # 运行报告根 folder「Automation Report」(DBU4)；运行时先问用户平台+版本号，在其下找/建二级夹「<iOS|Android> <版本号>」(如 iOS 26.8 / Android 11.15)，报告页落入该二级夹
+      nav_pages:                       # 活数据导航页（运行时读写，非发布 folder）；均在 DBU4
+        app_page_map:   "4280157316"   # iOS Page Map & Inventory 导航页（在 app_doc 下）
+        cms_module_map: "4280551711"   # CMS Module Map & Inventory 导航页（在 cms_doc 下）
+      memory_pages:                    # 两个记忆库 Confluence 页（DBU4 空间 folder 4363354130），skill 从这里读/写
+        folder: "4363354130"
+        test_case:   "4364632091"      # test-case-memory 页（步骤拆解案例库）
+        test_script: "4364992536"      # test-script-memory 页（通用技术规则库）
 
   github:                              # GitHub（自建 GHES）连接 scope；开发/验证类 skill 的 MCP 读写落点
     host: git.marriott.com             # 自建 GHES 域名
@@ -93,28 +126,31 @@ mcp:
     # account_id 与 API 凭据不写在此处：二者均从 MCP 配置（mcp.json → harness 服务的 env）读取，
     # 保持单一事实来源，也避免凭据与账号标识随 profile 进入版本库。
     #
-    # 本节只记录「人的决策」：哪条流水线属于本团队交付路径、哪个环境算高风险、哪条禁止 agent 触发。
+    # 本节只记录「人的决策」：哪条流水线属于本团队交付路径、哪些环境在范围内、哪条禁止 agent 触发。
     # 不记录可从 Harness 查到的事实（入参规格与默认值、取值域、input set、stage 结构）——
     # 那些一律由 harness-invoke 在触发前运行时读取，以 Harness 为唯一权威来源。
-    pipelines:                         # 交付流水线清单；APP 按 platform + env(+usage) 唯一定位。
-                                       # 未登记 = 不可触发（skill 遇无匹配即停止，不猜），故 detekt / 安全扫描 /
-                                       # 各类 *_Test / *_Sandbox 共 13 条无需在此列出。
+    #
+    # 范围收口：本工具链的 CI/CD 环节只发布低环境（dev / test）。高环境（staging / prod）一律不触发，
+    # 既不登记为可触发流水线，也没有「人工确认后放行」的通道——高环境发布由人在 Harness UI 操作。
+    pipelines:                         # 可触发的低环境流水线清单；APP 按 platform + env(+usage) 唯一定位。
+                                       # 未登记 = 不可触发（skill 遇无匹配即停止，不猜）：故 detekt / 安全扫描 /
+                                       # 各类 *_Test / *_Sandbox 共 13 条，以及全部高环境流水线
+                                       # （iOS_Dragon_App_Testflight_Prod / Android_Gold_Build /
+                                       # Mobile_s3_upload_Prod）都刻意不列在此处。
       - { id: iOS_Dragon_App_Testflight_Dev,  platform: ios,     env: dev,  usage: testflight, repo: ios-dragon-app }
-      - { id: iOS_Dragon_App_Testflight_Prod, platform: ios,     env: prod, usage: testflight, repo: ios-dragon-app }
-      - { id: Android_Gold_Build,             platform: android, env: prod, usage: gold,       repo: android-dragon-app }
       - { id: Android_Adhoc_Build,            platform: android, env: test, usage: adhoc,      repo: android-dragon-app }
+                                       # ↑ 注意：该流水线的 flavor 输入才决定包连哪套后端
+                                       # （Harness 取值域 Tst/Tst2/Uat2/Stg/Perf/Prod，默认 Tst），
+                                       # 取 Uat2/Stg/Perf/Prod 会构建指向高环境后端的包并经 Appcircle 分发给测试者；
+                                       # 这类「取值点名高环境」的入参由 harness-invoke 统一拦截，无需在此登记取值表。
       - { id: Android_Regression_Builds,      platform: android, env: test, usage: regression, repo: android-dragon-app }
       - { id: Mobile_s3_upload,               platform: both,    env: dev,  usage: config-upload, repo: mobile-config-upload-dev }
-      - { id: Mobile_s3_upload_Prod,          platform: both,    env: prod, usage: config-upload, repo: mobile-config-upload-prod }
-    env_dimension_overrides:           # 某些流水线的真实环境维度不是 env 标签，而是一个运行时输入。
-                                       # 这是「哪个输入才算环境」的团队判断，Harness 无从表达，故必须登记：
-                                       # 否则 Adhoc 的 env 标签是 test，而 flavor=Prod 会构建指向生产后端的包
-                                       # 并经 Appcircle 对外分发，高风险门禁将被完全绕过。
-      Android_Adhoc_Build:
-        input: flavor                  # 该输入的值才是实际目标环境
-        high_risk_values: [Prod]       # 取这些值时按高风险处理，无论 env 标签为何
-    high_risk_envs: [staging, prod]    # 高风险环境：触发前必须人工确认；低环境（test/dev）可直接触发。
-                                       # staging 在本项目无流水线命中，属无害死条目。
+    allowed_envs: [dev, test]          # 允许触发的环境白名单（低环境）。本队流水线均为纯 CI（无 CD stage、无
+                                       # environmentRef），cnmobile 项目里也没有 dev/test 这种 Harness environment，
+                                       # 故这里比对的是上面 pipelines 的 env 标签（团队自定的选流水线维度）。
+                                       # 另外，若某个运行时入参的取值点名了高环境（如 flavor=Prod、网关 URL 指向 stg/prf），
+                                       # harness-invoke 同样按超范围停止——判定依据始终是「这次实际打向哪里」，不是标签。
+                                       # 不在白名单内 → skill 直接停止并提示去 Harness UI，没有人工确认放行通道。
     allow_stage_execution_fallback: false  # 本项目流水线均为单环境、无晋级链，不需要 stage 子集限定
     poll:                              # 触发后等待执行状态的口径
       mode: server_wait                # 优先用 MCP 的服务端阻塞等待（wait=true），而非 LLM 轮询循环

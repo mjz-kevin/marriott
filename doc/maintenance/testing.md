@@ -71,5 +71,5 @@ cd init/dist/Dev && ./uninstall.sh --dry-run     # 先看会删什么
 ## 5. 外部系统相关验证
 
 - 涉及 Jira / Confluence 写入的流程：用 **test profile**（`app-test` / `cms-test`）跑，落到 test 空间（目前为 DBU4 下的「AI SDLC Poilt Test」目录）。
-- 涉及 Harness 的流程：只触发低环境（profile 中 `high_risk_envs` 以外）流水线；高环境必须走人工确认，不要为了测试绕过。
+- 涉及 Harness 的流程：只能触发 profile 中 `mcp.harness.allowed_envs`（dev / test）内的低环境流水线；高环境已不在工具链范围，skill / `stage_run.py` 会直接拒绝，**不要为了测试把高环境加进白名单**，需要验证高环境就在 Harness UI 里手动做。
 - 涉及 GitHub 写入（建分支 / push / PR / review）：在个人 fork 或约定的测试仓库上验证。

@@ -24,7 +24,7 @@
 | frontmatter `description` / 触发词 | 跑 `check.py`；若职责变化，同步 `AGENTS.md` §2 / §3 的一句话描述 |
 | Skill 读取了新的 profile 字段 | 4 份团队 profile 全部补上该字段（见 [profiles.md](profiles.md)），并处理字段缺失的情况 |
 | Skill 新增 / 删除了 `scripts/` 下的文件 | 删除文件属于破坏性变更：CHANGELOG 标注「先卸载再安装」（原因见 [`init/README.md`「升级与重装」](../../init/README.md#升级与重装直接覆盖-vs-先卸载)） |
-| Agent 调用顺序 / 人工确认点 | 设计文档 §5（装配）是否仍成立；涉及高环境 / 外部写入的确认点不得删除（`AGENTS.md` §7） |
+| Agent 调用顺序 / 人工确认点 | 设计文档 §5（装配）是否仍成立；涉及外部写入的确认点不得删除（`AGENTS.md` §7）；CI/CD 的低环境范围收口（`allowed_envs`）属安全边界，不得改成「人工确认后放行」 |
 | Agent 的 MCP 权限 / 外部写入范围 | 先对照被调用 Skill 的实际流程（Skill 为准），再同步 Agent 的 `MCP permissions` 行、禁止项与设计文档 §3 / §6.1 |
 | Agent 调用了尚未实现的 Skill | 登记到 `init/check.py` 的 `PLANNED_SKILLS`（否则 `[agent-refs]` ERROR）；落地后移除并登记 `roles.json` |
 | 安全相关（`sensitive-data-guard` 规则、白名单） | 跑 `python .cursor/skills/sensitive-data-guard/tests/run_tests.py`，和改动前的基线对比；新规则补用例到 `tests/cases.json`（入库）+ `tests/fixtures/`（**不入库**，见 [testing.md](testing.md) §2） |

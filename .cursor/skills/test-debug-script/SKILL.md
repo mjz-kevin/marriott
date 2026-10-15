@@ -6,15 +6,17 @@ description: >-
   stuck/failing/stuck on a page for a long time". Systematically locate the failing step, fix the
   locators and wait/assert logic in pages/steps/features or conftest under tests/mobile/ios/; and
   throughout debugging, record the user's useful feedback, abstract it into general-rule drafts, and
-  only distill them into .cursor/profiles/test_script_memory.yaml after user confirmation, iterating
+  only distill them into the test-script-memory Confluence page after user confirmation, iterating
   continuously.
 ---
 
 # test-debug-script: debug/run feature (locate -> fix -> record feedback -> user confirms -> distill experience)
 
-Last segment of the main line (after `test-case-to-script` generates code). When the user debugs a case on a real device, this Skill helps **systematically locate the failure root cause, fix the problem, and verify a pass**, and throughout debugging **records the user's useful feedback**; after debugging passes, these feedback items are **abstracted into general-rule drafts, confirmed by the user**, and then distilled back into `.cursor/profiles/test_script_memory.yaml`, iterating that file continuously.
+Last segment of the main line (after `test-case-to-script` generates code). When the user debugs a case on a real device, this Skill helps **systematically locate the failure root cause, fix the problem, and verify a pass**, and throughout debugging **records the user's useful feedback**; after debugging passes, these feedback items are **abstracted into general-rule drafts, confirmed by the user**, and then distilled back into the **test-script-memory** Confluence page, iterating that page continuously.
 
-> ⛔ **Confluence content language constraint (hard, cannot be skipped)**: when this Skill needs to create/update a page element doc under the [page_doc folder](https://marriottcloud.atlassian.net/wiki/spaces/~712020dbd6441f05734e4da1386119f88cfbe0/folder/4280157634/page_doc) for debugging, or register a page in the [Page Map & Inventory navigation page](https://marriottcloud.atlassian.net/wiki/spaces/~712020dbd6441f05734e4da1386119f88cfbe0/pages/4280157316), **all content written by this Skill must be in English** (page title always `iOS Page Elements - <Page Name> (<slug>)`, section titles, table headers, descriptive text). The only exception: the **raw element values** dumped from the real-device App (`name`/`label`/`value`, etc., the actual strings shown on controls, which may contain Chinese) are **kept verbatim, not translated** - they are real locators/screen text, and translating them breaks locating.
+> **Confluence IDs come from the current profile (not hard-coded here)**: wherever this Skill reads the Confluence page element knowledge base or the two memory libraries below, the ids come from the current team profile (resolve its path via `profile-select`'s `profile.py resolve`): the iOS Page Map & Inventory navigation page from `mcp.confluence.test.nav_pages.app_page_map` (current value `4280157316`), the page_doc folder from `mcp.confluence.test.folders.page_doc` (current value `4280157634`), the space key from `mcp.confluence.test.space` (current value `DBU4`), and the **test-script-memory** page from `mcp.confluence.test.memory_pages.test_script` (current value `4364992536`, folder from `mcp.confluence.test.memory_pages.folder`, current value `4363354130`). This Skill reads these docs on demand; the literal ids in the links below are only the current reference values.
+
+> ⛔ **Confluence content language constraint (hard, cannot be skipped)**: when this Skill needs to create/update a page element doc under the [page_doc folder](https://marriottcloud.atlassian.net/wiki/spaces/DBU4/folder/4280157634/page_doc) for debugging, or register a page in the [Page Map & Inventory navigation page](https://marriottcloud.atlassian.net/wiki/spaces/DBU4/pages/4280157316), **all content written by this Skill must be in English** (page title always `iOS Page Elements - <Page Name> (<slug>)`, section titles, table headers, descriptive text). The only exception: the **raw element values** dumped from the real-device App (`name`/`label`/`value`, etc., the actual strings shown on controls, which may contain Chinese) are **kept verbatim, not translated** - they are real locators/screen text, and translating them breaks locating.
 
 ## Trigger entries
 
@@ -27,7 +29,7 @@ Enter this Skill when the user has one of these intents:
 
 ## Pre-work must-dos (order cannot be swapped)
 
-1. **Read `.cursor/agents/ai-test-agent.md` + `.cursor/profiles/test_script_memory.yaml`**: apply all rules matching `scope`; many failures are actually rule violations, so self-check with existing rules first.
+1. **Read `.cursor/agents/test-agent.md` + the test-script-memory Confluence page** (read-only via `Atlassian-MCP-Server`'s `getConfluencePage`, pageId from profile `mcp.confluence.test.memory_pages.test_script`, current value `4364992536`; its body is a single `yaml` code block - take out the code-block content and parse it as YAML): ⚠️ **keyword-match first, then apply the few hits — this page grows over time and can get large**: derive this run's keywords (platform `scope`, the failing step / page / control, the rule `category` relevant to the failure: wait/locate/assert/stability) and **match them against each entry's `scope` / `category` / keyword fields, applying only the matched rules**; ignore the rest. Many failures are actually rule violations, so self-check against the matched rules first.
 2. **Confirm the run environment**: Appium Server `/status` online, real device connected (`xcrun devicectl list devices`), `config/env/.env.ios.lle`'s `DEVICE_ID` / `BUNDLE_ID` / account ready. If the environment is not met, prompt the user first, do not blindly run.
 
    > 📌 **Fixed run conventions (iOS - this project, copy as-is, do not keep re-trying commands/paths)**:
@@ -44,7 +46,7 @@ Enter this Skill when the user has one of these intents:
    > - **Run all registered cases**: just drop `--include-features` (`.venv/bin/python -m pytest tests/mobile/ios/plan/debug.py --app-platform ios`).
    > - **Reuse Appium if already running**: if the plugin detects `127.0.0.1:4723`'s `/status` online, it reuses it directly without re-launching; it only auto-starts when not online.
 3. **Get failure evidence**: read the most recent run output (terminal file / `allure_report/` (`allure open`) / raw results in `allure-results/` / failure screenshots `screenshots/`), and clarify **which step failed and what exception**.
-4. **Know where to look at page structure**: when you need to see a page's real structure on the real device, **first read the [Page Map & Inventory navigation page](https://marriottcloud.atlassian.net/wiki/spaces/~712020dbd6441f05734e4da1386119f88cfbe0/pages/4280157316) to locate the needed page in the inventory/relationship map, then enter the [page_doc folder](https://marriottcloud.atlassian.net/wiki/spaces/~712020dbd6441f05734e4da1386119f88cfbe0/folder/4280157634/page_doc) (use `Atlassian-MCP-Server`'s Confluence tool to read the corresponding `iOS Page Elements - <Page Name> (<slug>)` doc), and read it directly if present**; when page_doc lacks that page, or you need to re-check against the real-device state, go through `test-page-elements` to collect the current page and **write the key interactive element table into the page_doc doc per the [README spec](https://marriottcloud.atlassian.net/wiki/spaces/~712020dbd6441f05734e4da1386119f88cfbe0/pages/4261314561/iOS+Page+Elements+Documentation+Specification+README)** (do not persist png/xml). **Do not improvise a separate dump script.**
+4. **Know where to look at page structure**: when you need to see a page's real structure on the real device, **first read the [Page Map & Inventory navigation page](https://marriottcloud.atlassian.net/wiki/spaces/DBU4/pages/4280157316) to locate the needed page in the inventory/relationship map, then enter the [page_doc folder](https://marriottcloud.atlassian.net/wiki/spaces/DBU4/folder/4280157634/page_doc) (use `Atlassian-MCP-Server`'s Confluence tool to read the corresponding `iOS Page Elements - <Page Name> (<slug>)` doc), and read it directly if present**; when page_doc lacks that page, or you need to re-check against the real-device state, go through `test-page-elements` to collect the current page and **write the key interactive element table into the page_doc doc per the page-doc spec in [`../jira-to-test-case/references/app-page-template.md`](../jira-to-test-case/references/app-page-template.md)** (do not persist png/xml). **Do not improvise a separate dump script.**
 
    > ⛔ **Local-first, no batch pre-read of Confluence (hard constraint, prevents going off track and burning time)**: the first step of debugging is always to **run pytest once to get real failure evidence** (see "Systematic debugging flow" step 3), then fix only the local pages/steps/features/conftest under `tests/mobile/ios/` per the evidence. **Reading Confluence page_doc is a single-page read triggered on demand only "when you really cannot see a page's structure / suspect missing elements"**, not a pre-work step.
    > - **Do not** batch "pre-read" page_doc / Page Map from Confluence for every page the feature involves before you have failure evidence - this triggers many slow MCP calls and was the root cause of this Skill taking extremely long in the past.
@@ -54,23 +56,23 @@ Enter this Skill when the user has one of these intents:
 ## Systematic debugging flow (must follow in order)
 
 ```
-- [ ] 1. Read .cursor/agents/ai-test-agent.md + .cursor/profiles/test_script_memory.yaml, apply general rules and do the first-round self-check
+- [ ] 1. Read .cursor/agents/test-agent.md + the test-script-memory Confluence page (read-only via `getConfluencePage`, pageId from profile `mcp.confluence.test.memory_pages.test_script`, current value `4364992536`; parse the single `yaml` code block in its body), apply general rules and do the first-round self-check
 - [ ] 2. Confirm Appium online + real device connected + config/env/.env.ios.lle ready
 - [ ] 3. Locate the failing step and exception type (AssertionError / TimeoutException / NoSuchElement ...)
-- [ ] 4. If unclear which page you are on: **first read the [Page Map & Inventory navigation page](https://marriottcloud.atlassian.net/wiki/spaces/~712020dbd6441f05734e4da1386119f88cfbe0/pages/4280157316) to locate the needed page, then enter the corresponding `iOS Page Elements - <Page Name> (<slug>)` doc in page_doc to verify the real page and element name/coordinates (RULE_009)**; when page_doc lacks that page or you need to re-check on the real device, go through `test-page-elements` to collect the current page -> write the key interactive element table into the page_doc doc per the README spec (do not persist png/xml); **if a locator is found to mismatch the real-device state (stale/matches multiple/wrong semantics/contains hash), point back to `test-page-elements` Scenario B: list the diff -> second user confirmation -> targeted replacement of the corresponding Page Object locator**
+- [ ] 4. If unclear which page you are on: **first read the [Page Map & Inventory navigation page](https://marriottcloud.atlassian.net/wiki/spaces/DBU4/pages/4280157316) to locate the needed page, then enter the corresponding `iOS Page Elements - <Page Name> (<slug>)` doc in page_doc to verify the real page and element name/coordinates (per the dump-before-guessing-name rule in test-script-memory)**; when page_doc lacks that page or you need to re-check on the real device, go through `test-page-elements` to collect the current page -> write the key interactive element table into the page_doc doc per the README spec (do not persist png/xml); **if a locator is found to mismatch the real-device state (stale/matches multiple/wrong semantics/contains hash), point back to `test-page-elements` Scenario B: list the diff -> second user confirmation -> targeted replacement of the corresponding Page Object locator**
 - [ ] 4.5 **Judge whether this failure is "missing elements" (two criteria; entering the "⛔ Missing-element auto-collection branch" if either hits)**:
       (1) **Upstream-placeholder criterion** - the step throws `NotImplementedError`/is a placeholder, or the Page Object's corresponding locator is `<to be confirmed>`/a placeholder, or the pre_code gap list annotated this page/control as "to collect in debug";
-      (2) **Runtime criterion (check even if authoring marked ready)** - the failure exception is NoSuchElement/cannot wait for the element/matches 0/`is_*_displayed` persistently False (and race RULE_010 and implicit+explicit wait stacking RULE_005 are ruled out), **and** §4's Page Map & Inventory -> page_doc check finds the currently-stopped page has no corresponding doc, or the failing control has no locator in either page_doc or the corresponding Page Object (authoring's "ready" was an empty mark; this page/control was never collected on a real device).
+      (2) **Runtime criterion (check even if authoring marked ready)** - the failure exception is NoSuchElement/cannot wait for the element/matches 0/`is_*_displayed` persistently False (and the result-driven-confirm race rule and the no-mixing-implicit-explicit-wait rule in test-script-memory are ruled out), **and** §4's Page Map & Inventory -> page_doc check finds the currently-stopped page has no corresponding doc, or the failing control has no locator in either page_doc or the corresponding Page Object (authoring's "ready" was an empty mark; this page/control was never collected on a real device).
       Once hit: tell the user the page/control lacks real-device collection, use `AskQuestion` to confirm "collect now on a real device", and after confirmation invoke `test-page-elements` (Scenario A) to collect, backfill/connect the call chain, then rerun (see "⛔ Missing-element auto-collection branch" below)
 - [ ] 5. Locate the root cause by evidence (against the "Common root-cause cheat sheet" below)
 - [ ] 6. Minimal change to pages/steps/features or conftest under tests/mobile/ios/; after the change, run --collect-only for a static self-check
 - [ ] 7. ⚠️ Pause and ask the user to rerun on a real device to verify
 - [ ] 8. Throughout, record the user's useful feedback/corrections/preferences during debugging (verbatim + context) into a "this round's candidate experience" list
 - [ ] 9. Pass -> clean up temporary scripts/diagnostic logs/hard waits produced this round (delete only what was newly added this round, do not touch existing POM methods or other cases' code); run --collect-only to self-check after cleanup
-- [ ] 10. Abstract candidate experience into rule drafts, ⚠️ ask the user to confirm; only write to .cursor/profiles/test_script_memory.yaml after confirmation; fail -> go back to step 4
+- [ ] 10. Abstract candidate experience into rule drafts, ⚠️ ask the user to confirm; only write to the test-script-memory Confluence page after confirmation; fail -> go back to step 4
 ```
 
-**Do not guess when you cannot see the page**: when locating is unclear, **first check whether Confluence "iOS page element docs" ([page_doc folder](https://marriottcloud.atlassian.net/wiki/spaces/~712020dbd6441f05734e4da1386119f88cfbe0/folder/4280157634/page_doc)) already has that page's `iOS Page Elements - <Page Name> (<slug>)` doc, and read it directly if present without re-collecting**; when page_doc lacks that page, use the project's existing collection capability (with `test-page-elements`), leave the real-device App on the target page, attach to the current foreground (noReset + no bundleId, no restart/switch App, reuse connection info from `plan/ios_test_config.py`) to read the current page source, then **extract that page's full key interactive element table per the [README spec](https://marriottcloud.atlassian.net/wiki/spaces/~712020dbd6441f05734e4da1386119f88cfbe0/pages/4261314561/iOS+Page+Elements+Documentation+Specification+README) and write it into a new/updated corresponding `iOS Page Elements - <Page Name> (<slug>)` doc in the page_doc folder** (**do not persist any png screenshot or xml file**). Based on the doc's element table, precisely verify which page you are on and the elements' real name/coordinates (RULE_009). Only when you really must simulate a "mid-state after a multi-step chain" scenario, temporarily write a single-step script (reusing `conftest.py`'s session-building logic / `XCUITestOptions`) to read page source for an instant check, and delete it right after - do not leave it in formal code or persist images/xml.
+**Do not guess when you cannot see the page**: when locating is unclear, **first check whether Confluence "iOS page element docs" ([page_doc folder](https://marriottcloud.atlassian.net/wiki/spaces/DBU4/folder/4280157634/page_doc)) already has that page's `iOS Page Elements - <Page Name> (<slug>)` doc, and read it directly if present without re-collecting**; when page_doc lacks that page, use the project's existing collection capability (with `test-page-elements`), leave the real-device App on the target page, attach to the current foreground (noReset + no bundleId, no restart/switch App, reuse connection info from `plan/ios_test_config.py`) to read the current page source, then **extract that page's full key interactive element table per the page-doc spec in [`../jira-to-test-case/references/app-page-template.md`](../jira-to-test-case/references/app-page-template.md) and write it into a new/updated corresponding `iOS Page Elements - <Page Name> (<slug>)` doc in the page_doc folder** (**do not persist any png screenshot or xml file**). Based on the doc's element table, precisely verify which page you are on and the elements' real name/coordinates (per the dump-before-guessing-name rule in test-script-memory). Only when you really must simulate a "mid-state after a multi-step chain" scenario, temporarily write a single-step script (reusing `conftest.py`'s session-building logic / `XCUITestOptions`) to read page source for an instant check, and delete it right after - do not leave it in formal code or persist images/xml.
 
 ## Record user feedback on the fly during debugging (throughout, do not wait until the end)
 
@@ -81,28 +83,28 @@ During debugging, the user often drops key info in passing; this is often more a
 - **Distinguish one-off vs general**: a specific instruction only for the current element/case is one-off (just do it, do not store); only what generalizes to "all similar cases/pages from now on" is candidate experience.
 - **Keep accumulating even if debugging has not passed**: keep candidate experience in the list, and after debugging passes, abstract/confirm/store them together.
 
-## Common root-cause cheat sheet (against the rules in .cursor/profiles/test_script_memory.yaml)
+## Common root-cause cheat sheet (against the rules in the test-script-memory Confluence page)
 
 | Symptom | Likely root cause | Rule |
 |------|--------------|----------|
-| Stays long on every page / overall very slow | implicit + explicit wait stacking and spinning (`implicitly_wait` + `WebDriverWait`) | RULE_005 |
-| Negative judgment (is_at_xxx returns False) very slow | judgment methods used a long timeout / wait serially for multiple elements | RULE_006 |
-| A dialog/page opens then closes immediately, then NoSuchElement | tapped a control whose semantics were misread (e.g. label=Clear is actually close X) | RULE_007 |
-| Login/navigation clearly succeeded but assertion fails, or a stale frame reports StaleElement | asserted the previous page's control before the transition settled / caught an error-icon stale frame (race) | RULE_010 |
-| Result element locator name guessed wrong (e.g. guestName vs accountName) | did not follow the real-device dump, guessed accessibility_id/name | RULE_009 |
-| Text equality assertion fails but looks identical to the eye | App rendered spaces/format differences (e.g. "Qiao Yuheng" with a space) | RULE_008 |
-| Occasional failure/slowness after a fixed sleep | used time.sleep hard wait | RULE_001 |
-| Locator stale across versions | used a dynamic attribute with hash / deep absolute xpath | RULE_002 / RULE_003 |
-| Filtering by @visible occasionally matches 0 / intermittent | XCUITest's visible is computed in real time and unstable, not fit as the primary locator; use fixed width/name/structural features | RULE_013 |
-| Option/result matches a similar other one (e.g. "member flexible-change rate" mistaken for "flexible-change rate") | used CONTAINS matching the longer; should BEGINSWITH/exact match | RULE_013 |
-| Tapped card/entry did not navigate, or element.click is very slow | the event is not bound on the text/container or dragged down by waiting idle; use coordinate mobile:tap (computed from rect) | RULE_014 |
-| Tap once no response, waits long before the second tap (burns time) | did not verify the result after tapping and relied on a downstream long wait; should verify the result with a short timeout after tapping and retry immediately if ineffective | RULE_010 / RULE_014 |
-| Element not found / wrongly selected a same-name item below | the target is outside the visible area and not scrolled, or one full-screen scroll overshoots into an adjacent isomorphic block; use incremental scroll and stop on hit | RULE_015 |
-| Operation after getting the element reports StaleElement / 'not present in current view' / 404 | the continuously-refreshing page element was rebuilt, reused an old reference; use it as soon as you get it + re-find and retry on stale | RULE_016 |
-| Input box drops characters (test->tet / auto->auo), or becomes placeholder after retry | one-shot send_keys too fast dropping characters, repeated clear reads back the placeholder; use per-character input + normalized check | RULE_017 |
-| List/map page is overall slow on every step | the App keeps refreshing and never idles, Appium waiting for idle slows down; reduce waitForIdleTimeout (e.g. 1), disable quiescence cautiously | RULE_018 |
-| StepDefinitionNotFoundError (a step sentence not found) | the same step sentence uses different keywords in the feature but only @given is registered; register @given/@when/@then together | RULE_019 |
-| A page/step waits long overall but no error | leftover time.sleep hard wait, or consecutive steps repeatedly wait_until_displayed on the same batch of elements of the same page with long waits | RULE_020 |
+| Stays long on every page / overall very slow | implicit + explicit wait stacking and spinning (`implicitly_wait` + `WebDriverWait`) | the no-mixing-implicit-explicit-wait rule |
+| Negative judgment (is_at_xxx returns False) very slow | judgment methods used a long timeout / wait serially for multiple elements | the two-timeout-tier rule |
+| A dialog/page opens then closes immediately, then NoSuchElement | tapped a control whose semantics were misread (e.g. label=Clear is actually close X) | the verify-semantics-on-real-device rule |
+| Login/navigation clearly succeeded but assertion fails, or a stale frame reports StaleElement | asserted the previous page's control before the transition settled / caught an error-icon stale frame (race) | the result-driven-confirm rule |
+| Result element locator name guessed wrong (e.g. guestName vs accountName) | did not follow the real-device dump, guessed accessibility_id/name | the dump-before-guessing-name rule |
+| Text equality assertion fails but looks identical to the eye | App rendered spaces/format differences (e.g. "Qiao Yuheng" with a space) | the text-assertion normalization rule |
+| Occasional failure/slowness after a fixed sleep | used time.sleep hard wait | the no-hard-sleep rule |
+| Locator stale across versions | used a dynamic attribute with hash / deep absolute xpath | the no-hashed-attributes / prefer-stable-semantic-selector rules |
+| Filtering by @visible occasionally matches 0 / intermittent | XCUITest's visible is computed in real time and unstable, not fit as the primary locator; use fixed width/name/structural features | the iOS avoid-@visible / stable-match-criteria rule |
+| Option/result matches a similar other one (e.g. "member flexible-change rate" mistaken for "flexible-change rate") | used CONTAINS matching the longer; should BEGINSWITH/exact match | the iOS BEGINSWITH-over-CONTAINS rule |
+| Tapped card/entry did not navigate, or element.click is very slow | the event is not bound on the text/container or dragged down by waiting idle; use coordinate mobile:tap (computed from rect) | the rect-coordinate mobile:tap rule |
+| Tap once no response, waits long before the second tap (burns time) | did not verify the result after tapping and relied on a downstream long wait; should verify the result with a short timeout after tapping and retry immediately if ineffective | the result-driven-confirm / rect-coordinate mobile:tap rules |
+| Element not found / wrongly selected a same-name item below | the target is outside the visible area and not scrolled, or one full-screen scroll overshoots into an adjacent isomorphic block; use incremental scroll and stop on hit | the incremental-scroll rule |
+| Operation after getting the element reports StaleElement / 'not present in current view' / 404 | the continuously-refreshing page element was rebuilt, reused an old reference; use it as soon as you get it + re-find and retry on stale | the use-reference-immediately / re-find-on-stale rule |
+| Input box drops characters (test->tet / auto->auo), or becomes placeholder after retry | one-shot send_keys too fast dropping characters, repeated clear reads back the placeholder; use per-character input + normalized check | the per-character-input rule |
+| List/map page is overall slow on every step | the App keeps refreshing and never idles, Appium waiting for idle slows down; reduce waitForIdleTimeout (e.g. 1), disable quiescence cautiously | the waitForIdleTimeout tuning rule |
+| StepDefinitionNotFoundError (a step sentence not found) | the same step sentence uses different keywords in the feature but only @given is registered; register @given/@when/@then together | the register-all-step-keywords rule |
+| A page/step waits long overall but no error | leftover time.sleep hard wait, or consecutive steps repeatedly wait_until_displayed on the same batch of elements of the same page with long waits | the remove-redundant-waits rule |
 
 ## ⛔ Missing-element auto-collection branch (works with `test-case-authoring`'s "placeholder first, collect in debug") 🔁
 
@@ -121,8 +123,8 @@ When the user chose "placeholder for now, collect in the debug stage" in `test-c
 
 Even if the gap list marked the page ready and the step has a seemingly-real call chain, **as long as both of the following hold at runtime, judge it "suspected missing elements" and enter this branch's dialog** (rather than grinding on it as an ordinary stale locator/race):
 
-1. **The failure exception is of the "element not found" kind**: `NoSuchElementException` / `TimeoutException` (cannot wait for the element) / matches 0 / `is_*_displayed` persistently False causing the assertion to fail; and pure race (RULE_010) and implicit+explicit wait stacking (RULE_005) and other non-missing-element causes are ruled out;
-2. **The current real-device page has no coverage in the knowledge base**: per "Pre-work must-dos §4", first read the [Page Map & Inventory navigation page](https://marriottcloud.atlassian.net/wiki/spaces/~712020dbd6441f05734e4da1386119f88cfbe0/pages/4280157316) -> page_doc and **find the currently-stopped page has no corresponding `iOS Page Elements - <Page Name> (<slug>)` doc**, or page_doc has the page but this failure's control has no corresponding locator in either the doc or the corresponding Page Object (i.e. authoring's "ready" was actually an empty mark; this page/control was never collected on a real device).
+1. **The failure exception is of the "element not found" kind**: `NoSuchElementException` / `TimeoutException` (cannot wait for the element) / matches 0 / `is_*_displayed` persistently False causing the assertion to fail; and pure race (the result-driven-confirm rule) and implicit+explicit wait stacking (the no-mixing-implicit-explicit-wait rule) and other non-missing-element causes are ruled out;
+2. **The current real-device page has no coverage in the knowledge base**: per "Pre-work must-dos §4", first read the [Page Map & Inventory navigation page](https://marriottcloud.atlassian.net/wiki/spaces/DBU4/pages/4280157316) -> page_doc and **find the currently-stopped page has no corresponding `iOS Page Elements - <Page Name> (<slug>)` doc**, or page_doc has the page but this failure's control has no corresponding locator in either the doc or the corresponding Page Object (i.e. authoring's "ready" was actually an empty mark; this page/control was never collected on a real device).
 
 > ⚠️ **Typical scenario**: intermediate pages in the login flow like the "login dialog / login form page" - authoring often marks them ready just because `LoginPage` happens to have a same-name method, but that page's actual controls were never collected and page_doc has no such page - so at runtime it hits NoSuchElement as soon as it reaches that page. Here **do not** keep trying on the old locators in the existing `LoginPage`; instead, after a dialog confirmation per criterion B, collect this page.
 > Distinction: if the page **is covered** in page_doc / the Page Object and only a locator mismatches the real-device state (matches 0/multiple/wrong semantics/contains hash) -> go to `test-page-elements` **Scenario B** (targeted verification/replacement), not this branch. This branch (Scenario A collection) targets "this page/control was never collected on a real device".
@@ -148,15 +150,15 @@ Even if the gap list marked the page ready and the step has a seemingly-real cal
 - [ ] 5. More missing-element pages/controls -> switch to the next page and repeat steps 1-4; after gaps are cleared, continue normal debugging
 ```
 
-- After collection/backfill/replacement, still go through this Skill's "⚠️ Verification gate" to ask the user to rerun; if general experience is distilled, go through the "experience distillation" flow to write back to `.cursor/profiles/test_script_memory.yaml`.
+- After collection/backfill/replacement, still go through this Skill's "⚠️ Verification gate" to ask the user to rerun; if general experience is distilled, go through the "experience distillation" flow to write back to the **test-script-memory** Confluence page.
 - If what you found during debugging is "an existing locator mismatches the real-device state" (not a placeholder), go through `test-page-elements` **Scenario B** (diff list -> second confirmation -> targeted replacement), not this branch; this branch is specifically for filling placeholders/missing elements left from the authoring stage (Scenario A).
 
 ## Modification principles
 
 - **Minimal changes**: prefer changing locators, wait strategy, assertion normalization; do not refactor unrelated code.
 - **Locator-staleness goes through targeted verification**: when the root cause is a Page Object locator being changed/stale/imprecise/semantically wrong, prefer pointing back to `test-page-elements` Scenario B (real-device state vs existing Page Object -> diff list -> second user confirmation -> replace only confirmed items), do not overwrite the Page Object wholesale on your own.
-- **Align with the memory**: after fixing, ensure the code conforms to all rules in `.cursor/profiles/test_script_memory.yaml` (especially wait/locate/assert).
-- **Keep the style**: POM pattern, Page Objects extend `BasePages`, tuple locators, explicit waits, consistent with the existing style of `tests/mobile/ios/pages/login_page.py` (RULE_001).
+- **Align with the memory**: after fixing, ensure the code conforms to all rules in the **test-script-memory** Confluence page (especially wait/locate/assert).
+- **Keep the style**: POM pattern, Page Objects extend `BasePages`, tuple locators, explicit waits, consistent with the existing style of `tests/mobile/ios/pages/login_page.py` (per the no-hard-sleep rule).
 
 ## ⚠️ Verification gate (cannot be skipped - must pop a three-choice dialog)
 
@@ -179,7 +181,7 @@ After debugging passes, first **clean up the temporary/extra code produced in th
 **Cleanup scope (only clean what this debugging round itself produced):**
 - **Temporary probe/dump scripts**: single-step scripts written during debugging to "see a page's structure / reproduce a mid-state / dump an element's coordinates" (often placed under `plan/`, named with a `_` prefix, with a header stating "temporary/for debugging") - delete them all, echoing "temporary scripts are deleted right after, not left in formal code, no png/xml persisted".
 - **Temporary diagnostic logs**: `logger.info("[xxx diag] ...")` / `print(...)` diagnostic output added temporarily to locate this issue (especially those that send extra WDA requests every call to read rect/hittable/window) - remove after the issue is resolved to avoid slowing runs and polluting logs.
-- **Debugging-time hard waits/temporary fallbacks**: `time.sleep` / commented-out old implementations / repeated speculative locators stuffed in just to "get it running" - clean up or switch to explicit waits per RULE_001/RULE_020.
+- **Debugging-time hard waits/temporary fallbacks**: `time.sleep` / commented-out old implementations / repeated speculative locators stuffed in just to "get it running" - clean up or switch to explicit waits per the no-hard-sleep / remove-redundant-waits rules.
 
 **Cleanup red lines (avoid overstepping; better not delete than mis-delete):**
 - **Only delete "newly added this round"**: judge ownership by `git status` / file creation time / file header statement. **What was not produced this round** (e.g. a script left by the previous case, an earlier self-check tool) **is not touched** - whether to clean it is a separate matter, do not delete others' stuff in passing.
@@ -191,42 +193,43 @@ After debugging passes, first **clean up the temporary/extra code produced in th
 
 ## Experience distillation (this Skill's core artifact)
 
-After debugging passes, **abstract into rule drafts -> ask the user to confirm -> write only after confirmation** the items worth generalizing from the "this round's candidate experience" list into `.cursor/profiles/test_script_memory.yaml`. The whole flow has four steps, order cannot be skipped:
+After debugging passes, **abstract into rule drafts -> ask the user to confirm -> write only after confirmation** the items worth generalizing from the "this round's candidate experience" list into the **test-script-memory** Confluence page. The whole flow has four steps, order cannot be skipped:
 
 **(1) Record**: the source is the "this round's candidate experience" list accumulated on the fly throughout debugging (user feedback + the patterns you distilled from corrections), keeping each item's verbatim words and context.
 
 **(2) Abstract**: strip one-off details like specific name/coordinate/account from the candidate experience and refine it into one `scope + category + rule + rationale`; put the specific pitfall into `rationale` as an example.
 - **Only distill general experience**: keep only practices that generalize to "all similar cases/pages from now on"; **discard** one-off locating for a specific element/case.
-- **Dedupe**: if an existing rule covers it, do not add a new one; instead add an example to its `rationale`; only increment `id` (RULE_00X) for a genuinely new rule.
+- **Dedupe by rule content**: if an existing rule already covers it (judged by the rule's content, not by any id - entries have no id), do not add a new one; instead add an example to its `rationale`. Only append a brand-new entry when the content is genuinely not yet covered.
 
 **(3) User confirmation (gate, cannot be skipped)**: list the abstracted rule draft to the user verbatim for confirmation, and only persist after the user explicitly agrees. Use this format:
 
-> This round I distilled the following reusable experience from debugging, ready to write into `.cursor/profiles/test_script_memory.yaml`, please confirm:
+> This round I distilled the following reusable experience from debugging, ready to write into the test-script-memory Confluence page, please confirm:
 >
 > ```yaml
->   - id: "RULE_0XX"
->     scope: "iOS"
+>   - scope: "iOS"
 >     category: "WAIT_STRATEGY"
 >     rule: "<one-sentence general rule>"
 >     rationale: "<why / this round's pitfall example>"
 > ```
 >
-> To confirm, reply "confirm distillation" (you may point out wording / scope changes / whether to merge into an existing RULE_0XX / whether to drop an item).
+> To confirm, reply "confirm distillation" (you may point out wording / scope changes / whether to merge into an existing rule / whether to drop an item).
 
-- **Never write to `test_script_memory.yaml` before the user confirms.**
+- **Never write to the test-script-memory Confluence page before the user confirms.**
 - If the user asks for changes, adjust the draft per feedback and **confirm again**, until the user approves.
 - If the user judges an item not worth distilling, discard it, do not store.
 
-**(4) Write**: after the user confirms, append the final entry under `rules:` in `.cursor/profiles/test_script_memory.yaml`, with `id` incrementing on the current max. Entry structure (consistent with `.cursor/agents/ai-test-agent.md`):
+**(4) Write**: after the user confirms, update the **test-script-memory** Confluence page (strictly via the shared `upload_confluence_v2.py` script - ⛔ never via an Atlassian MCP page-write tool):
+  1. Read the page back read-only via `getConfluencePage` (pageId from profile `mcp.confluence.test.memory_pages.test_script`, current value `4364992536`) and take out the `yaml` content from the single `yaml` code block in its body.
+  2. Append the new entry under `rules:` in that YAML (**no `id` field** - entries are keyed by their content), then write the whole updated YAML back into a temporary `.md` file under `.ai-sdlc/` wrapped in a single ```` ```yaml ... ``` ```` code block.
+  3. Re-publish the page with `upload_confluence_v2.py --parent <folder, profile mcp.confluence.test.memory_pages.folder, current value 4363354130> --space <profile mcp.confluence.test.space> --title "test-script-memory"` (the script dedupes by title prefix and updates the page in place). Entry structure (no id, consistent with `.cursor/agents/test-agent.md`):
 
 ```yaml
-  - id: "RULE_00X"
-    scope: "iOS"                 # iOS | Android | CrossPlatform | All
+  - scope: "iOS"                 # iOS | Android | CrossPlatform | All
     category: "WAIT_STRATEGY"    # LOCATOR_STRATEGY / WAIT_STRATEGY / GESTURE / ASSERTION / NAMING / STABILITY
     rule: "one-sentence general rule"
     rationale: "why / pitfalls hit this round (may include a specific example)"
 ```
 
-This way the memory **keeps iterating**: next time code is generated (`test-case-to-script`) or debugging happens again, reading this file first automatically avoids the same class of problems.
+This way the memory **keeps iterating**: next time code is generated (`test-case-to-script`) or debugging happens again, reading this page first automatically avoids the same class of problems.
 
 

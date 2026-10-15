@@ -20,8 +20,6 @@
       "app-prod.yaml",
       "cms-test.yaml",
       "cms-prod.yaml",
-      "test_case_memory.yaml",
-      "test_script_memory.yaml",
       "setup.json"
     ],
     "files": [
@@ -107,8 +105,8 @@
     "QA": {
       "title": "Quality Assurance",
       "phase": "开发(用例预生成) / 功能测试 / Release 回归 / CI/CD",
-      "_comment": "QA 测试类 Skill 仅随 QA 角色分发（由 ai-test-agent 编排）；cicd-agent + harness-invoke 用于触发构建 / 部署。",
-      "agents": ["ai-test-agent", "cicd-agent"],
+      "_comment": "QA 测试类 Skill 仅随 QA 角色分发（由 test-agent 编排）；cicd-agent + harness-invoke 用于触发构建 / 部署。",
+      "agents": ["test-agent", "cicd-agent"],
       "skills": [
         "jira-to-test-case",
         "test-case-authoring",

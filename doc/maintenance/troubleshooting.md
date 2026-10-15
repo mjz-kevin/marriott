@@ -33,7 +33,7 @@ Windows 下把 `~` 换成 `%USERPROFILE%`。
 | Windows 执行 `.ps1` 报中文乱码 / parser error | 直接运行了仓库里的模板（无 BOM），而非构建产物 | 使用 `init/dist/` 构建出的包内脚本（已写成 UTF-8 BOM + CRLF） |
 | Windows 提示脚本无法执行 | PowerShell 执行策略 | `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass` 后再运行 |
 | mermaid 图 / PDF 生成很慢或要联网 | 运行时包里缺离线 mermaid-cli / md-to-pdf / Chromium，回退 npx 联网 | 重装包含 `tools/` 的运行时包 |
-| 测试类 Skill 沉淀的规则「丢了」 | 重装角色包覆盖了本地的 `test_*_memory.yaml` | 重装前备份 `~/.cursor/profiles/test_*_memory.yaml`；有价值的规则提 PR 回收进仓库 |
+| 测试类 Skill 沉淀的规则「丢了」 / 没生效 | 0.3.2 起记忆改存 Confluence 页（profile `mcp.confluence.test.memory_pages`），本地 `test_*_memory.yaml` 已废弃不再读取 | 确认 Atlassian MCP 可用、当前 profile 的 `memory_pages` pageId 正确；旧本地 yaml 里有价值的规则请迁到对应 Confluence 记忆页 |
 | `ai-sdlc-info` 提示「未找到记录」 | 用版本记录功能（0.3.0）之前的旧包安装 | 重装一次最新角色包和运行时包 |
 | `ai-sdlc-info` 提示多个角色版本不一致 | 叠装的多个角色包来自不同版本 | 把所有已装角色升级到同一版本 |
 | 内容被 `sensitive-data-guard` 拦截 | 检测到疑似密钥 / 个人信息 | 确认是虚构测试数据后，按该 Skill 的白名单机制处理；**不要**为了通过而关掉护栏 |

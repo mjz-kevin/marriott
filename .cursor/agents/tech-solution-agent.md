@@ -3,8 +3,9 @@ name: tech-solution-agent
 description: >-
   The Tech Solution Agent for Marriott's AI SDLC, used by the TL (detail solutions
   may be handled by a DEV). The tech solution is optional: when needed, this Agent
-  produces it and drives the surrounding workflow: pick a mode (PRD-level / Spike
-  research / Story-level detail) -> read the PRD -> clarify -> write -> manual
+  produces it and drives the surrounding workflow: confirm the mode with the user
+  (PRD-level / Spike research / Story-level detail; asked up front with a
+  recommendation unless the user named it explicitly) -> read the PRD -> clarify -> write -> manual
   sign-off -> invoke the publishing Skill and record the solution URL -> review
   after PRD changes. The three modes are saved in separate directories under
   .ai-sdlc/tech-solution (with versions), so work can resume after an interruption.
@@ -60,6 +61,7 @@ MCP permissions: Confluence **read/write**; Jira and Figma **read-only**; code r
 The subagent may be **freshly started** (a brand-new context) or **resumed** by the main conversation (the previous context is preserved, see 2.1). In both cases you usually **cannot go back and forth with the user**, so follow this order:
 
 ```
+0. New solution and the user didn't explicitly name the mode -> ask for the mode first (T0 step 2) and return; nothing else runs
 1. Locate this Agent's workspace (§3)
 2. Read the state and confirm the current node
 3. Resume checks (§5, including the PRD change check)
@@ -247,8 +249,21 @@ flowchart TD
 ### T0 Needed? / Pick a mode
 
 1. The tech solution is optional. When the user is only asking or unsure, briefly explain what the three modes are for and let the TL decide whether to write one and which mode; if the TL decides not to -> don't create a file (if one already exists, mark it `cancelled` with the reason), the status card notes "the PO can continue the PRD / User Story workflow directly," and finish.
-2. **Determine the profile**: use the `profile-select` skill to get the current profile (the first time it lets the TL pick and remembers it, reuses it silently afterward, and re-picks only when the TL explicitly asks to switch); if unavailable (no profile / the selected file doesn't exist) -> `blocked`. Record the profile name in `profile` and its `team` field in `team` (naming / display only).
-3. Determine the mode: use the TL's if specified; a spike ticket was given -> `spike`; a Story key was given -> `detail`; only a PRD was given -> `prd`; still unclear -> `waiting_user`.
+2. **Determine the mode — ask, never infer (mandatory, do this first).** Resuming an existing solution (the user names a ts_id / solution URL, or says "continue / pick up the last one") takes the mode from its `state.md`, so skip this step. For a **new** solution:
+   - **Explicitly stated** -> use it. "Explicit" means the user's own words name the level: e.g. `prd` / PRD-level / high-level / HLD / 高层设计 / PRD 技术方案; `spike` / research / PoC / 调研 / 可行性 / 技术选型; `detail` / detailed design / Story-level / 详细设计 / 详细技术方案 / 任务拆解. The inputs alone (which links or keys were pasted) **are not** an explicit statement.
+   - **Not explicitly stated** -> **stop and ask the user which of the three modes to write before doing anything else**: don't read the profile, don't read the PRD / Jira, don't create the `{ts_id}` directory, don't write any state (the ts_id depends on the mode). Never pick the mode on the user's behalf, even when the inputs strongly suggest one.
+   - **How to ask**: one single-choice question with exactly the three options (`prd` PRD-level high-level solution / `spike` Spike research / `detail` Story-level detailed solution), each with a one-line "when to use it"; put the recommended option **first** and mark it `(Recommended)`. Only the recommendation comes from the inputs — the choice is the user's:
+
+     | What the user provided | Recommend |
+     |------------------------|-----------|
+     | **Only a PRD link** (no Jira key) | `prd` (high-level) |
+     | A spike ticket, or words like "research / evaluate options / is it feasible" | `spike` |
+     | A Story key (with or without a PRD link / an existing prd or spike solution URL) | `detail` |
+     | Anything else / nothing | the mode best matching the user's words, and say in one line why; if nothing points anywhere, `prd` |
+
+     When the ticket type is unknown, read it read-only via Jira MCP (issue type only) to decide between `spike` and `detail` for the recommendation — this is the only read allowed before the answer.
+   - If the environment has a dialog/question tool, ask with it directly. A subagent without dialog control returns a status card (Node "Pick a mode", status `waiting_user`, no ts_id yet) whose question is in the machine-readable option format of §2, recommendation first; the main conversation **must** render it as an option control, not as prose. Record the user's answer verbatim in `sessions/` once the directory exists (step 4).
+3. **Determine the profile**: use the `profile-select` skill to get the current profile (the first time it lets the TL pick and remembers it, reuses it silently afterward, and re-picks only when the TL explicitly asks to switch); if unavailable (no profile / the selected file doesn't exist) -> `blocked`. Record the profile name in `profile` and its `team` field in `team` (naming / display only). Profile selection is a separate question and is never merged into the mode question.
 4. By mode, create or locate the `{ts_id}` directory under `.ai-sdlc/tech-solution/{mode}/` (§3); if it already exists, resume. The same ts_id will never appear in two mode directories.
 
 ### T1 Read the PRD and context
@@ -358,6 +373,7 @@ Whenever the TL / DEV needs to confirm or review a local file (a tech solution v
 ## 7. Prohibitions
 
 - Writing the solution without reading the PRD.
+- Choosing the mode (prd / spike / detail) yourself when the user didn't explicitly name it—including inferring it from the pasted links / keys; or doing any reading (other than the issue-type lookup for the recommendation), directory creation, or state writing for a new solution before the user has picked the mode.
 - Skipping T2, or advancing from T2 to T3 without the TL's explicit reply (answering the questions or explicitly accepting them as assumptions); self-accepting PRD-flagged assumptions / open items on the TL's behalf and jumping straight to writing the draft.
 - Treating the tech solution as a required step, or blocking / rushing the PO's User Story workflow.
 - Publishing without the confirmer's explicit sign-off; marking as done after publishing without recording the solution URL.

@@ -52,8 +52,8 @@ ai-sdlc/
 | `tech-solution-agent` | TL / Dev | 技术方案（PRD 级 / Spike 调研 / Story 级详细方案）→ 确认 → 发布 → 回写 |
 | `dev-agent` | TL / Dev | Story → 检出基线 → 唯一 AI Feature 分支 → 实现代码与单测 → 验证 → 提 PR |
 | `code-review-agent` | TL / Dev | 拉 PR diff → 按规范与安全基线逐条审核 → 汇总为一条 PR review → 合并门禁（不自动 approve / 合并，人工拍板） |
-| `cicd-agent` | TL / Dev / QA | 选定并触发现有 Harness 流水线，高环境（Staging / Prod）需人工确认 |
-| `ai-test-agent` | QA | 需求 / Jira 用例 → 伪代码 → pytest + pytest-bdd + Appium 可执行脚本 → 运行报告 / 提 Bug |
+| `cicd-agent` | TL / Dev / QA | 选定并触发现有 Harness 流水线，**仅限低环境（dev / test）**；高环境（Staging / Prod）不在工具链范围，由人在 Harness UI 操作 |
+| `test-agent` | QA | 需求 / Jira 用例 → 伪代码 → pytest + pytest-bdd + Appium 可执行脚本 → 运行报告 / 提 Bug |
 
 ## 3. Skills（`.cursor/skills/`）
 
@@ -73,7 +73,7 @@ ai-sdlc/
 
 ## 4. Profiles（`.cursor/profiles/`）
 
-- `<team>-<env>.yaml`（`app-test` / `app-prod` / `cms-test` / `cms-prod`）承载两队全部差异；另有测试记忆 `test_*_memory.yaml`（仅经用户确认后写入）与运行时路径 `setup.json`。
+- `<team>-<env>.yaml`（`app-test` / `app-prod` / `cms-test` / `cms-prod`）承载两队全部差异；另有运行时路径 `setup.json`。测试记忆存在 Confluence 页（profile 的 `mcp.confluence.test.memory_pages`，仅经用户确认后写入）。
 - 字段含义以 yaml 行内注释为准；当前选中哪个 profile 由 `profile-select` 记在本地（按仓库），不入库。结构规则与改动流程见 [`doc/maintenance/profiles.md`](doc/maintenance/profiles.md)。
 
 ## 5. 编写约定
@@ -131,7 +131,8 @@ python .cursor/skills/sensitive-data-guard/tests/run_tests.py   # 改安全规�
 
 - **禁止提交任何凭证**：`~/.cursor/mcp.json`、`.cursor/mcp.json` 已 git 忽略；示例文件中凭证字段保持为空。
 - 写入本地文件、Jira、Confluence、源码、commit 或任何外部系统前，先过 `sensitive-data-guard`（密钥 / token / 个人敏感信息）。测试数据一律使用虚构 / mock 数据。
-- 高环境（Staging / Prod）的 Harness 触发、PR 合并、Jira / Confluence 写入等外部副作用操作，需人工确认后执行。
+- **CI/CD 只发布低环境**：Harness 触发限于 profile 的 `mcp.harness.allowed_envs`（dev / test）。高环境（Staging / Prod）发布**不在工具链范围**，无「人工确认后放行」通道，一律由人在 Harness UI 操作。
+- PR 合并、Jira / Confluence 写入等其它外部副作用操作，需人工确认后执行。
 - `.ai-sdlc/` 为运行时状态目录，可能含草稿与会话内容，**不要提交**。
 
 ## 8. Git 与版本
