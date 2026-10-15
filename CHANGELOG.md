@@ -12,6 +12,10 @@
 
 ## [Unreleased]
 
+---
+
+## [0.3.2] - 2026-10-15
+
 ### 变更
 - **技术方案模式不再擅自判断**：`tech-solution-agent` T0 改为「用户原话没点名级别（prd / spike / detail）就先问、再走后续流程」——仅凭贴了什么链接 / key 不算点名。提问在读 profile、读 PRD、建目录、写状态之前进行，单选三项、推荐项置首并标 `(Recommended)`：**只有 PRD 链接 → 推荐 `prd`（high level）**；spike 单 / 调研类措辞 → `spike`；有 Story key → `detail`；其它按用户输入推荐（推荐前允许只读查一次 Jira issue type）。原「给了 spike 单就 spike、给了 Story 就 detail、只给 PRD 就 prd」的自动判定删除；§2 执行顺序与 §7 禁止项同步。resume 已有方案时沿用 `state.md` 的 mode，不再问。设计文档未写模式判定细节，未改。
 - **CI/CD 首轮提问不再空转**：实测「部署cms」这类信息不全的请求，Agent 先读完 700 行 Agent/Skill 正文、解析 profile、扫描其它 run、写 24KB `state.md`（约 20 分钟、13 轮工具调用），**产出只是一句「9 个 CMS app 指哪个？」**——而这个判断只需看一眼用户原话。根因是节点顺序矛盾：`C0` 要求用目标拼 run_id 可读 slug，但「目标是否齐备」的校验排在其后的 `C1`，只能先用 `cms-pending` 占位名兜。`cicd-agent` 新增前置节点 `C-pre`（Pre-flight: is the request actionable yet?）：全新请求进来先只对照 C1 前置条件（能唯一定位流水线的目标选择 + 分支/tag）检查原话，缺了立刻问并返回，**不读 profile、不建目录、不写状态**；同时要求首轮把已知会用到的信息（环境、分支、以及「如果流水线需要镜像 tag 就一并给」）一次问全，少一个往返。只有可枚举的选项清单（有哪些 app / 端）才读那一处配置。注意仍不得把推测性提问的答案当权威入参——真实入参规格依旧按 `harness-invoke` S3 在触发时从 Harness 读。resume 一律跳过 `C-pre`。
