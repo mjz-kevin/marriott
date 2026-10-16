@@ -14,6 +14,17 @@
 
 ---
 
+## [0.3.3] - 2026-10-16
+
+### 变更
+- **CI/CD Agent 改为后台运行，不再把父对话挂住**：实测一次 `Android_Adhoc_Build`（dev 分支，18m37s）时，子 agent 23:13:27 已 `turn_ended: success`、`state.md` 23:12:44 已是完整终态，但结果在 Cursor 子 agent 回传层滞留约 10 分钟未送达；父对话因 `is_background: false` 只能前台干等，用户看不到任何进展，只能手动中断。回传滞留属 Cursor 框架层，仓库内无法修复，本次只消除「被拖住」：`cicd-agent` frontmatter `is_background` 改为 `true`；§6 给父对话的说明补充「启动后告知在跑及预计耗时并结束本轮、不阻塞不轮询；问进展或疑似已完成却没收到卡片时直接读 `.ai-sdlc/cicd/{run_id}/state.md` 作答；没收到卡片绝不是重新触发的理由」；C4 第 2 条注明后台运行只影响父对话，Agent 内部「收齐判决才返回」（§3.4）不变。`harness-invoke` 讲的是 Agent 内部如何托住 wait，与父对话是否阻塞无关，未改。其他 6 个 Agent 交互密、无长时间纯等待，保持 `false`。**待实测**：后台模式下 Auto-review 原生审批卡能否正常弹出（若不能则改回 `false`）；另据论坛反馈 CLI / ACP 与第 2 层以下嵌套子 agent 会忽略该字段。设计文档与 `doc/maintenance/` 未涉及该字段，未改。另发现 Cursor 列出子 agent 时 7 个 Agent 的 description 均显示为字面量 `>-`（疑似 Agent 加载器不解析折叠块，Skill 正常），影响父对话据 description 判断委派，未在本次处理。（该条此前误记在 0.3.2 下，实际在 0.3.2 tag 之后提交，0.3.2 包不含。）
+- **md-to-pdf 导出提速：mermaid 改为一次批量渲染**：`export_pdf.py` 预处理改为「先收集全部 mermaid 块 → 一次 mmdc 调用（markdown 模式）渲染全部 → 回填」三趟结构，整篇只付一次 node / Chromium 冷启动（原先每张图一次），超时按图数放宽（上限 900s）。mmdc markdown 模式对任一坏图「全有或全无」，故批处理失败时自动回退逐图渲染，坏图仍单独退化为代码块、不静默丢图。mmdc 调用前缀与 puppeteer 配置（离线 Chromium、无沙箱）抽为共用函数，离线包优先 / npx 回退的顺序不变。`SKILL.md` 用法与参数未变，未改。
+
+### 升级方式
+- **直接覆盖**：无资产增删改名、无 profile 字段变化。
+
+---
+
 ## [0.3.2] - 2026-10-15
 
 ### 变更
