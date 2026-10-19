@@ -39,7 +39,7 @@ Create tickets in Jira from the confirmed Story list, fill fields, establish bac
 | Agile Team default | `profiles/{profile}.yaml` → `mcp.jira.agile_team` (empty means no default, needs manual entry) |
 | Label enum and auto-fill policy | `profiles/{profile}.yaml` → `mcp.jira.labels` (valid enum, case sensitivity, the `auto_fill` categories allowed to be auto-filled) |
 | The link set to establish | `profiles/{profile}.yaml` → `mcp.jira.links` |
-| Figma embed policy | `profiles/{profile}.yaml` → `mcp.jira.figma_embed` (`mode`: `embed` = inline a UI design image into the description via ADF media — **preferring the design PNG already produced upstream in the Story's source (PRD / Story-list design field)**, falling back to exporting the Figma node to PNG; `link` = clickable link only. `png_scale` export scale; `heading` the heading text before the inlined images). Absent or `mode: link` ⇒ link-only, no image |
+| Figma embed policy | `profiles/{profile}.yaml` → `mcp.jira.figma_embed` (`mode`: `embed` = inline a UI design image into the description via ADF media — **preferring the design PNG already produced upstream in the Story's source (PRD / Story-list design field)**, falling back to exporting the Figma node to PNG; `link` = clickable link only. `png_scale` export scale; `max_height_px` height cap (Figma design px) above which a node counts as a full-page long image and is not exported as-is; `heading` the heading text before the inlined images). Absent or `mode: link` ⇒ link-only, no image. Missing `max_height_px` ⇒ no height gate |
 | Jira REST credentials (for Web remote links) | `.cursor/mcp.json` → `confluenceRest` (`base_url` / `email` / `api_token`); the same Atlassian account and token cover Jira REST — the site root is `base_url` minus the trailing `/wiki`, Jira REST lives at `<site>/rest/api/3`. Read by the script, never printed |
 | Web remote-link script | `~/.cursor/skills/confluence-publish/scripts/upload_confluence_v2.py --jira-remote-link` (pure stdlib, cross-platform, idempotent by `globalId`) |
 | Figma image attach/embed script | `~/.cursor/skills/confluence-publish/scripts/upload_confluence_v2.py --jira-attach-image` (uploads local PNGs as Jira attachments and inlines them into the description via ADF media over Jira REST; idempotent by filename + media id). Images are produced by the Figma image-download capability (`download_figma_images`) into a local path first |
@@ -59,7 +59,7 @@ Create tickets in Jira from the confirmed Story list, fill fields, establish bac
 
 ```
 - S1 Pre-checks
-- S2 Dedup one by one (Parent + summary)
+- S2 Dedup in one batch (one JQL per Epic, match summaries locally)
 - S3 Create tickets
 - S4 Fill fields
 - S5 Establish links (Epic + go through the team-configured link set)
@@ -68,19 +68,23 @@ Create tickets in Jira from the confirmed Story list, fill fields, establish bac
 - S8 Report
 ```
 
-### S2 Idempotent dedup
+### S2 Idempotent dedup (one batch query, not one per Story)
 
-Dedup one by one before creating, to avoid duplicate tickets. `{project}` comes from the Parent Epic key prefix (or the `mcp.jira.project_key` override). When the search returns descriptions, pass `responseContentFormat: "markdown"`:
+Dedup before creating, to avoid duplicate tickets. `{project}` comes from the Parent Epic key prefix (or the `mcp.jira.project_key` override). **Query once per Epic, then match locally**—don't fire one JQL per Story:
 
 ```text
-project = "{project}" AND summary ~ "{summary}" AND parent = "{Epic key}"
+project = "{project}" AND parent = "{Epic key}" ORDER BY created ASC
 ```
+
+Call `searchJiraIssuesUsingJql` with `fields: ["summary", "status", "issuetype"]` and `maxResults: 100` (page with `nextPageToken` until `isLast`); don't request descriptions for dedup. Tickets already mapped by key (from the caller's state) are fetched in the same style with one `key in (K1, K2, …)` query. Match each Story's summary against the result **locally**, normalized (trim, case-insensitive, collapse whitespace, ignore the `summary_prefix` platform tag such as `[Android]`):
 
 | Result | Action |
 |------|------|
 | 0 | Create |
 | 1 | Skip, report the existing key, don't update (to avoid overwriting manual edits) |
 | >=2 | Stop and hand to the user to decide |
+
+Near matches (one normalized summary contains the other, not equal) don't count as hits; list them in the plan / report as "possible duplicate: {key} {summary}" so the PO can judge before sign-off.
 
 > When one already exists, **don't update** by default. Only enter the edit flow when the user explicitly asks to update.
 >
@@ -132,7 +136,7 @@ Write per the Story template's field table:
 - The user-story sentence keywords (`As a` / `When` (or `For`) / `I will be able to` / `So that`) and each subsection heading are bold. Heading language follows `doc.body_language`: use `Linked Work Items / Reference Documents` for `en-US`, `链接的工作项 / 参考文档` for `zh-CN`.
 - Submission method: the Jira description is ADF, and `**` in plain text won't render as bold. Use `editJiraIssue` / `createJiraIssue` with `contentFormat: "markdown"` (Jira auto-converts to ADF), or construct the ADF `strong` mark directly; don't submit `**xxx**` as plain text.
 
-**Back-link subsection template** (fill the team-configured link set; heading language per `doc.body_language`). `tech_solution` is intentionally absent here — it lands as a Jira Web remote link, not in the description (see the S5 back-link landing spec):
+**Back-link subsection template** (fill the team-configured link set; heading language per `doc.body_language`). **Compose it into the description passed to `createJiraIssue`**—the PRD / Figma URLs are known from the plan before creation, so a new ticket needs no follow-up `editJiraIssue` just to add links. `tech_solution` is intentionally absent here — it lands as a Jira Web remote link, not in the description (see the S5 back-link landing spec):
 
 ```markdown
 **Linked Work Items / Reference Documents**
@@ -156,10 +160,13 @@ First establish the Parent (Epic, hierarchy), then go through the team-configure
 **Back-link landing spec** (`prd` / `figma` / `tech_solution` point to a Confluence page or an external URL, not a Jira issue):
 
 - **Parent (Epic)**: use the hierarchy parent-child relation (the `parent` field, issue<->issue), established normally.
-- **`prd` / `figma` — description subsection**: write into the back-link subsection of the target ticket description (heading language per `doc.body_language`; template above) via MCP `editJiraIssue`. **Must be a clickable hyperlink**: for markdown submission write `[display text](URL)`, or construct ADF with a `link` mark; bare URLs are forbidden (relying only on frontend autolink, they degrade to non-clickable text on export / API read).
+- **`prd` / `figma` — description subsection**: write into the back-link subsection of the target ticket description (heading language per `doc.body_language`; template above). For a **new** ticket it is already part of the `createJiraIssue` description (S3/S4), so no extra call; use MCP `editJiraIssue` only for an existing ticket that lacks it (update flow / image-supplement entry). **Must be a clickable hyperlink**: for markdown submission write `[display text](URL)`, or construct ADF with a `link` mark; bare URLs are forbidden (relying only on frontend autolink, they degrade to non-clickable text on export / API read).
 - **`figma` — inline UI design image (when `figma_embed.mode: embed`)**: in addition to the clickable Figma link above, inline the UI design image into the description so it renders in the ticket body. Resolve the image source by this priority, then upload + inline via `--jira-attach-image` (uploads the PNG as a Jira attachment, then appends an ADF `media` block under the `figma_embed.heading` heading to the description over Jira REST):
-  1. **Reuse the design image already in the Story's source (preferred)**: when the Story carries a design image produced upstream (the PRD / Story-list design field already holds a local design PNG with its screen↔Story mapping resolved), take that same local PNG directly — don't re-export from Figma. This keeps the ticket image identical to the one reviewed in the requirements doc and avoids re-identifying the node.
-  2. **Export from the Figma node (fallback)**: when the Story has no upstream design image but does carry a Figma link, export the mapped node(s) to local PNG via the Figma image-download capability (`download_figma_images`, scale per `figma_embed.png_scale`). The node is identified in this order: (a) a precise `node-id` in the link (URL `1-3` ⇒ node `1:3`) is used directly; (b) a file-level link with no resolved screen↔Story mapping is **not** guessed — read the file's board structure, propose the most likely board(s) for this Story (from its summary / description / AC) with the reasoning, and have the user confirm the node before export; don't auto-pick and inline.
+  1. **Reuse the design image already in the Story's source (preferred, mandatory when available)**: when the Story carries a design image produced upstream (the PRD / Story-list design field already holds a local design PNG with its screen↔Story mapping resolved — for a local PRD, resolve `![…](path)` against the PRD file's directory), take that same local PNG directly — **don't re-export from Figma**. This keeps the ticket image identical to the one reviewed in the requirements doc and skips the Figma read + export entirely.
+  2. **Export from the Figma node (fallback)**: when the Story has no upstream design image but does carry a Figma link, export the mapped node(s) to local PNG via the Figma image-download capability (`download_figma_images`, `pngScale` = `figma_embed.png_scale`). The node is identified in this order: (a) a precise `node-id` in the link (URL `1-3` ⇒ node `1:3`) is used directly; (b) a file-level link with no resolved screen↔Story mapping is **not** guessed — read the file's board structure (`get_figma_data` with `depth: 1`, which this Skill explicitly authorizes; never pull the whole file tree), propose the most likely board(s) for this Story (from its summary / description / AC) with the reasoning, and have the user confirm the node before export; don't auto-pick and inline.
+  3. **Size gate before export** (when `figma_embed.max_height_px` is set): read the chosen node's own dimensions first (`get_figma_data` with that `nodeId` and `depth: 1`). If its height exceeds `max_height_px` it is a full-page / section long image (e.g. a 375×3300 landing page ⇒ 750×6600 PNG at 2x) — **don't export it as-is**: list its direct child frames / cards, recommend the 1–3 that match this Story with a one-line reason each, and export only the confirmed child node(s).
+
+  **Resolve image sources before execution**: the caller's sync plan already lists, per Story, which source applies (reused PNG path / confirmed node id + size), so all node choices are confirmed in the one plan sign-off; execution then only exports + uploads, with no mid-run question. Exports for several Stories from the same Figma file go into **one** `download_figma_images` call (multiple `nodes`).
 
   Idempotent: same filename reuses the attachment, same media id is not re-inlined. When `figma_embed` is absent or `mode: link`, skip this and keep link-only. If no image source resolves, or export / upload fails, keep the clickable Figma link and note the image gap in the report — do not block ticket creation.
 
@@ -171,7 +178,7 @@ python ~/.cursor/skills/confluence-publish/scripts/upload_confluence_v2.py --jir
 
 1. Gate on `figma_embed.mode: embed` (same as the creation path). On `link` or absent, there's no inline capability — write / keep the clickable Figma link only and say so.
 2. Read the target Story's summary / description / AC via `getJiraIssue` (`responseContentFormat: "markdown"`) to ground the match.
-3. Resolve the node(s) by the priority above (reuse upstream image → precise `node-id` → file-level link ⇒ read board structure, **recommend the most likely board(s) with a one-line reason each, and have the user confirm** before export). When the user names a node-id / board, use it as given and skip the recommendation.
+3. Resolve the node(s) by the priority above (reuse upstream image → precise `node-id` → file-level link ⇒ read board structure, **recommend the most likely board(s) with a one-line reason each, and have the user confirm** before export), applying the size gate. When the user names a node-id / board, use it as given and skip the recommendation (the size gate still applies; on a hit, say so and offer the child frames).
 4. Export per `figma_embed.png_scale`, then attach + inline via `--jira-attach-image` under the `figma_embed.heading` heading. Idempotent, so a rerun is safe.
 5. Ensure the clickable Figma link also exists in the back-link subsection (add it if missing per the `figma` landing spec above).
 
@@ -213,6 +220,8 @@ Don't auto-transition forward; the schedule is a PO decision.
 | Don't estimate | Leave any field requiring human estimation empty |
 | Don't hardcode constants | The target project is derived from the Parent Epic key (or the team-config override); link types / initial status come from the team config |
 | Markdown in / Markdown out | Write: always `contentFormat: "markdown"`. Read: always `responseContentFormat: "markdown"`. Never author or re-submit Wiki (`h2.`, `{{code}}`, `[url\|url\|smart-link]`) |
+| Verify from returned results | Treat the write calls' own responses as the evidence: `createJiraIssue` returning a key, `--jira-remote-link` `ok=true`, `--jira-attach-image` `ok=true` with `embed.action` `update`/`noop`. Don't re-read each ticket afterward (no per-ticket `getJiraIssue`, no `renderedFields` rendering check); re-read only a ticket whose call returned an error or an ambiguous result, or when the user reports a rendering problem (then follow §4) |
+| Minimal reads | Dedup / status queries request only the fields they need (`summary` / `status` / `issuetype` / `parent`); read a description only when the update flow or §4 verification actually needs it |
 
 ## 4. Wiki read/render verification
 

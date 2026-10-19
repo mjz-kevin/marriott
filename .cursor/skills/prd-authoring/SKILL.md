@@ -90,6 +90,8 @@ The clarification conclusions are the source of truth; if an assumption in them 
 
 When the input contains Figma links, you must read the design content via Figma MCP (the `figma` server) as the factual basis for the UI Overview, feature-module tables, and Story design references; don't infer from the link. See "Figma design handling" for the reading flow: a single link may contain multiple boards, so filter out the designs matching the screens this PRD covers, download them as local images, and insert them into 2.3 and the corresponding Story's design fields. If reading fails (no permission, broken link, expired auth), first retry via `mcp_auth`; if it still fails, log it in the to-confirm list and, at handoff, explain in the conversation which designs weren't obtained and why—don't fabricate design details.
 
+**Reuse what clarification already read; fetch only the gap.** The clarification conclusion lists the sources it read and at which layer ("Sources read"). Facts already there (Jira types / parents, Epic sibling list, the outline or sections taken from another team's PRD, Figma board structure) are used as-is—**don't re-read them**. Fetch only what authoring newly needs: the specific Figma screen nodes to describe and export, or a section of a referenced page that the conclusion didn't cover. Use the same smallest-shape rules as `requirement-clarify` ("Read on demand": minimal Jira fields, page outline before body, Figma `nodeId` + shallow `depth`), and fire independent reads plus all image exports from the same Figma file in one batch (`download_figma_images` takes multiple `nodes`). Re-read a source in full only when the conclusion is missing it or its version changed.
+
 ### S3 Write 1. Business Overview
 
 - 1.1 Background: current problem -> business impact -> why now
@@ -184,9 +186,9 @@ When Figma links are present (2.3 UI Overview, Story design fields), read the de
 
 | Step | Constraint |
 |------|------|
-| Locate | Extract `fileKey` and `nodeId` from the link (the URL's `1-3` corresponds to node `1:3`); read the board structure, screen states, components, and copy as the factual basis; don't infer from the link |
+| Locate | Extract `fileKey` and `nodeId` from the link (the URL's `1-3` corresponds to node `1:3`); read the board structure, screen states, components, and copy as the factual basis; don't infer from the link. Always pass `nodeId` when the link has one; for a file-level link read the top-level boards with a shallow `depth` (this Skill explicitly authorizes it) and then only the matching boards—never the whole file tree |
 | Select | A single node may contain multiple boards; take only those matching the screens this PRD covers; don't export unrelated boards |
-| Export | Save images to the PRD image directory specified by the caller, using semantic English names; control size and format per "Design image adaptation" |
+| Export | Save images to the PRD image directory specified by the caller, using semantic English names; control size and format per "Design image adaptation". Export all selected screens of one file in a single `download_figma_images` call (multiple `nodes`) at the doc-embedding scale (`pngScale: 1` for mobile boards) |
 | Reference | Reference the local images with Markdown image syntax (path relative to the PRD file) in the corresponding screen of 2.3 and the Story design fields, and keep that screen's Figma link. In 2.3 give image + title + a short 1–3 sentence summary (no pixel-level specs, which go to 2.4 or the link); when several screens share one link, give it once at the top rather than per screen |
 | Completeness | Every screen the PRD covers must have a corresponding image, saved together with the PRD for the publishing step to attach |
 | Failure | If reading still fails after retrying via `mcp_auth`, log it as to-confirm in that field, and at handoff explain in the conversation which designs weren't obtained and why; don't fabricate design details |

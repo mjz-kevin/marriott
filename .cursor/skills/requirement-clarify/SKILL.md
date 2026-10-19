@@ -86,6 +86,17 @@ The clarification step before writing a PRD or tech solution; through multi-roun
 
 Don't ask the user to organize the information first in the opening round—organizing information is this Skill's job. Read the raw requirement, linked Jira/Confluence, and Figma (if any) in parallel; in technical mode also read the code-repo context and existing interface docs in parallel.
 
+**Read on demand, smallest shape first (mandatory when several sources are linked)**: input often spans several sources at once (Figma + another team's PRD + an Epic and its sibling Stories). Pulling every source in full makes the context huge and slows every later step, so read in two layers:
+
+| Source | Layer 1 — always (cheap) | Layer 2 — only when a specific dimension needs it |
+| --- | --- | --- |
+| Jira issue (any key in the input) | type / summary / status / parent only (request just those fields — e.g. `fields` or `responseFields`, or the compact view) | Description / AC of **that one issue**, when its content is the business basis being clarified |
+| Epic's other child Stories | One JQL `parent = {Epic}` returning summary / status / type only, as a list | Full body of the 1–3 siblings whose summary overlaps this requirement (dependency, duplicate scope); never all of them |
+| Confluence page (PRD / solution of another team) | Title + version + heading outline (the tool's outline / summary detail, when available) | Only the sections relevant to the dimension being scanned; read the full body only when the page *is* the requirement being clarified |
+| Figma | The linked node with `nodeId` and a shallow `depth` (1–2; this Skill explicitly authorizes `depth` for scoping). For a file-level link, the top-level boards only | The specific screen nodes this requirement covers, one by one; never fetch a whole file without `nodeId` |
+
+Record in the conclusion which sources were read at which layer, so the authoring step knows what is already known. Layer-1 results that already answer a dimension are enough — don't escalate to layer 2 "just in case."
+
 **Executor protocol (interaction-capability adaptive)**: batched questioning depends on dialog controls, which only the main agent has. Before executing, judge your own role:
 
 | Executor | Has dialog controls | Question method | Can give a clarification conclusion |
@@ -97,9 +108,9 @@ The sub-agent takes on the heavy lifting that needs no user interaction (reading
 
 **Fact self-check**: any fact obtainable from the environment (code repo, interface docs, Figma, existing Stories, the confirmed PRD-level solution) is verified by this Skill itself (dispatching a sub-agent if needed), not thrown to the user as a question; verification can run in parallel and doesn't block other ready questions. Only **decisions requiring the user's judgment** enter the questions. In technical mode, interface status, existing implementation, and dependency availability are verifiable facts, while selection trade-offs, contract changes, and Story-splitting granularity are decisions requiring judgment.
 
-**Figma visual facts**: when the input contains a Figma link, you **must** read the design content via Figma MCP (the `figma` server) (board structure, screen states, key components and fields, copy and interaction annotations); don't infer from the link and don't directly ask the user about design details. The reading results are merged into the gap scan and conflict detection, comparing dimensions like screens, data, and role scenarios to identify inconsistencies between requirement and design; the related facts are annotated in the clarification conclusion with the source "design"; screen states missing from the design are logged as to-confirm, not judged as "no such state." If reading fails (no permission / broken link / MCP unavailable), log "design facts not obtained" as a risk and continue the other dimensions—don't block the clarification.
+**Figma visual facts**: when the input contains a Figma link, you **must** read the design content via Figma MCP (the `figma` server) (board structure, screen states, key components and fields, copy and interaction annotations), scoped per "Read on demand" above (`nodeId` + shallow `depth`, then only the covered screens); don't infer from the link and don't directly ask the user about design details. The reading results are merged into the gap scan and conflict detection, comparing dimensions like screens, data, and role scenarios to identify inconsistencies between requirement and design; the related facts are annotated in the clarification conclusion with the source "design"; screen states missing from the design are logged as to-confirm, not judged as "no such state." If reading fails (no permission / broken link / MCP unavailable), log "design facts not obtained" as a risk and continue the other dimensions—don't block the clarification.
 
-**Jira linkage facts**: when the input mentions any Jira key or URL, you **must** look up each issue via Jira MCP (read-only): issue type, summary, status, parent. Use the results as facts—don't guess type from the key prefix.
+**Jira linkage facts**: when the input mentions any Jira key or URL, you **must** look up each issue via Jira MCP (read-only): issue type, summary, status, parent — these four fields only (layer 1 of "Read on demand"); fire the lookups for all keys in one parallel batch. Use the results as facts—don't guess type from the key prefix.
 
 | Lookup result | Handling |
 | ------------- | -------- |
@@ -228,6 +239,7 @@ Give the following conclusion directly in the conversation (don't write a file, 
 ## 1. Confirmed conclusions
 {Listed by dimension, one line each, annotated with source: raw requirement / round-n answer / design / code fact / interface doc / Jira MCP}
 {Must include when applicable: **Delivery Epic** = KEY (confirmed round N); **Jira references** = [list of business-context keys]}
+{**Sources read**: one line per source — what it is, version, and the layer read (e.g. `Figma 2034:101439 depth 2 + screens A/B`; `CMS PRD 4273045542 v3 outline + §2.4`; `CNAPP-178 children: list only`) — so the authoring step reuses these facts instead of re-reading}
 
 ## 2. Conflicts and decisions
 | Conflict | Options | Decision | Decider |

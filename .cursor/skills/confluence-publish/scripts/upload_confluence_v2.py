@@ -672,6 +672,70 @@ def render_mermaid_svg(code, out_svg):
 _MMDC_UNAVAILABLE = False
 
 
+def _mmdc_base_cmd():
+    """返回 mmdc 命令前缀（离线 node+cli.js 优先，否则 npx -y），不可用返回 None。"""
+    node = _scan_runtime_node()
+    cli = _offline_mmdc_cli()
+    if node and cli:
+        return [node, cli]
+    npx = _resolve_npx() if _npx_available() else None
+    return [npx, "-y", "@mermaid-js/mermaid-cli"] if npx else None
+
+
+def render_mermaid_mmdc_batch(items, workdir, scale=3):
+    """一次 mmdc 调用渲染多张图：把所有源码拼进一个临时 .md，mmdc 只起一次 node / Chromium。
+
+    items: [(out_base, code), ...]。成功返回 {out_base: png_path}；任一环节失败返回 {}，
+    由调用方退回逐张渲染（某张图语法错时整批会失败，逐张渲染能把坏图单独隔离出来）。
+    实测 npx 回退下逐张渲染每张约 50s（每次都要 npx 解析 + 启 Chromium），批量后接近单张耗时。
+    """
+    if _MMDC_UNAVAILABLE or len(items) < 2:
+        return {}
+    base_cmd = _mmdc_base_cmd()
+    if not base_cmd:
+        return {}
+    tag = uuid.uuid4().hex[:8]
+    src = os.path.join(workdir, f".mmdc-batch-{tag}.md")
+    out_md = os.path.join(workdir, f".mmdc-batch-{tag}-out.md")
+    cfg = os.path.join(workdir, f".mmdc-batch-{tag}.json")
+    produced = []
+    try:
+        with open(src, "w", encoding="utf-8") as f:
+            for _, code in items:
+                f.write("```mermaid\n" + code.rstrip("\n") + "\n```\n\n")
+        pp = {"args": ["--no-sandbox", "--disable-setuid-sandbox"]}
+        chromium = _offline_chromium()
+        if chromium:
+            pp["executablePath"] = chromium
+        with open(cfg, "w", encoding="utf-8") as f:
+            json.dump(pp, f)
+        cmd = base_cmd + ["-i", src, "-o", out_md, "-e", "png", "-b", "white", "-p", cfg,
+                          "-s", str(scale)]
+        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                              timeout=180 + 60 * len(items))
+        if proc.returncode != 0:
+            return {}
+        stem = os.path.splitext(out_md)[0]
+        result = {}
+        for n, (out_base, _) in enumerate(items, 1):
+            img = f"{stem}-{n}.png"
+            produced.append(img)
+            if not (os.path.exists(img) and os.path.getsize(img) > 200):
+                return {}
+            dst = out_base + ".png"
+            os.replace(img, dst)
+            result[out_base] = dst
+        return result
+    except Exception:
+        return {}
+    finally:
+        for f in [src, out_md, cfg] + produced:
+            try:
+                os.remove(f)
+            except OSError:
+                pass
+
+
 def render_mermaid_mmdc(code, out_path, scale=3):
     """用 mermaid-cli 把 mermaid 源码渲染为图片（按 out_path 扩展名，支持 .png/.svg）。
 
@@ -683,16 +747,10 @@ def render_mermaid_mmdc(code, out_path, scale=3):
     if _MMDC_UNAVAILABLE:
         return False
     # 优先离线包：绿色 node 直跑 runtime/tools/mermaid-cli 的 cli.js（无需联网）；否则回退 npx -y。
-    node = _scan_runtime_node()
-    cli = _offline_mmdc_cli()
-    if node and cli:
-        base_cmd = [node, cli]
-    else:
-        npx = _resolve_npx() if _npx_available() else None
-        if not npx:
-            _MMDC_UNAVAILABLE = True
-            return False
-        base_cmd = [npx, "-y", "@mermaid-js/mermaid-cli"]
+    base_cmd = _mmdc_base_cmd()
+    if not base_cmd:
+        _MMDC_UNAVAILABLE = True
+        return False
     src = out_path + ".mmd"
     cfg = out_path + ".mmdc.json"
     try:
@@ -736,7 +794,7 @@ def render_mermaid(code, out_base):
     非 flowchart 语法回退会失败，从而计入 mermaid_pending，避免假成功。
     """
     png = out_base + ".png"
-    if render_mermaid_mmdc(code, png, scale=3):
+    if render_mermaid_mmdc(code, png, scale=MERMAID_SCALE):
         return True, "mmdc", png, "image/png"
     try:
         first = next((l.strip() for l in code.splitlines() if l.strip()), "")
@@ -770,11 +828,13 @@ def nodejs_install_hint():
     return ("安装 Node.js（含 npx）后重试：\n" + cmds + "\n  npx --version            # 验证安装成功")
 
 
-def ensure_mermaid_available():
+def ensure_mermaid_available(probe=True):
     """强制前置：确认 mmdc（node/npx + mermaid-cli）可真正渲染，否则抛错阻断发布。
 
-    仅在文档确实包含 mermaid 图、且未显式放行降级时调用。用一张最小探针图实际渲染，
-    既校验 npx/node 存在，也校验能拉起 mermaid-cli 与无头 Chromium（首次需联网下载）。
+    probe=False：只做便宜检查（离线包 / npx 是否存在），不启动 Chromium——dry-run 和
+    正式发布的写入前置都用它。probe=True：再用一张最小探针图实际渲染，校验能拉起
+    mermaid-cli 与无头 Chromium；正式发布只在「本次要渲染的图一张都没用 mmdc 渲出来」时
+    才调用，用来区分「工具链坏了」（阻断）和「图本身有语法错」（记入 mermaid_pending）。
     不可用则抛 MermaidUnavailable，附带安装指引；发布/更新一律不进行，避免图表降级上线。
     """
     if not _mmdc_available():
@@ -786,12 +846,14 @@ def ensure_mermaid_available():
             "或显式加 --allow-degraded-diagrams 允许降级（flowchart 退化为低质量自绘、"
             "sequenceDiagram 等无法出图），但不推荐。"
         )
-    probe = os.path.join(tempfile.gettempdir(), f"mmdc-probe-{uuid.uuid4().hex}.png")
+    if not probe:
+        return
+    probe_path = os.path.join(tempfile.gettempdir(), f"mmdc-probe-{uuid.uuid4().hex}.png")
     try:
-        ok = render_mermaid_mmdc("flowchart TD\n  A[\"probe\"] --> B[\"ok\"]", probe, scale=1)
+        ok = render_mermaid_mmdc("flowchart TD\n  A[\"probe\"] --> B[\"ok\"]", probe_path, scale=1)
     finally:
         try:
-            os.remove(probe)
+            os.remove(probe_path)
         except OSError:
             pass
     if not ok:
@@ -805,15 +867,23 @@ def ensure_mermaid_available():
 
 
 # ============================= Confluence 附件 & 页面 =============================
-def _multipart_body(file_path, filename, content_type):
+def _multipart_body(file_path, filename, content_type, comment=None):
     boundary = "----up" + uuid.uuid4().hex
     with open(file_path, "rb") as f:
         fb = f.read()
+    parts = b""
+    if comment:
+        # 附件 comment 存内容指纹（sha256:<hex>），下次发布据此判断内容是否变化、可否跳过上传。
+        # minorEdit=true：覆盖附件不给关注者发通知。
+        for name, val in (("comment", comment), ("minorEdit", "true")):
+            parts += (f"--{boundary}\r\n"
+                      f'Content-Disposition: form-data; name="{name}"\r\n\r\n'
+                      f"{val}\r\n").encode("utf-8")
     pre = (f"--{boundary}\r\n"
            f'Content-Disposition: form-data; name="file"; filename="{filename}"\r\n'
            f"Content-Type: {content_type}\r\n\r\n").encode("utf-8")
     post = f"\r\n--{boundary}--\r\n".encode("utf-8")
-    return boundary, pre + fb + post
+    return boundary, parts + pre + fb + post
 
 
 def _find_attachment_id(base_url, auth, page_id, filename):
@@ -825,61 +895,210 @@ def _find_attachment_id(base_url, auth, page_id, filename):
     return None
 
 
-def upload_attachment(base_url, auth, page_id, file_path, filename, content_type):
-    """幂等上传附件：新建成功即返回；若同名附件已存在（400），改用更新数据接口覆盖。
+def _sha256_file(path):
+    import hashlib
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
 
-    修复：Confluence 的 child/attachment 创建接口在同名附件已存在时返回
-    400 "Cannot add a new attachment with same file name"。页面更新（update）路径
-    会因此让 mermaid 图退化为源码兜底，甚至把首发已渲染的图片覆盖掉。此处捕获该
-    情况并走 child/attachment/{id}/data 更新接口，保证 create/update 两条路径都能稳定出图。
+
+def _sha256_text(s):
+    import hashlib
+    return hashlib.sha256(s.encode("utf-8")).hexdigest()
+
+
+def list_attachments(base_url, auth, page_id):
+    """一次列出页面现有全部附件（分页），返回 {filename: {"id", "comment"}}。
+
+    更新已有页面时调用一次，替代「逐张先 POST 撞 400 → 再 GET 查 id → 再 POST 覆盖」的三连请求；
+    comment 里存的是上次上传时写入的内容指纹，用于跳过未变化的附件。查询失败返回空 dict（退回逐张上传）。
     """
-    boundary, body = _multipart_body(file_path, filename, content_type)
-    st, data = api("POST", f"{base_url}/rest/api/content/{page_id}/child/attachment", auth,
-                   body=body,
+    out = {}
+    start, limit = 0, 200
+    while True:
+        url = (f"{base_url}/rest/api/content/{page_id}/child/attachment"
+               f"?limit={limit}&start={start}&expand=metadata")
+        st, data = api("GET", url, auth)
+        if st != 200 or not isinstance(data, dict):
+            break
+        results = data.get("results") or []
+        for a in results:
+            name = a.get("title")
+            if name:
+                out[name] = {"id": a.get("id"),
+                             "comment": ((a.get("metadata") or {}).get("comment") or "")}
+        if len(results) < limit or not (data.get("_links") or {}).get("next"):
+            break
+        start += len(results)
+    return out
+
+
+# 本次运行的附件统计：uploaded=实际上传（新建/覆盖），skipped=内容未变跳过
+ATTACH_STATS = {"uploaded": 0, "skipped": 0}
+
+
+def upload_attachment(base_url, auth, page_id, file_path, filename, content_type,
+                      comment=None, existing=None):
+    """幂等上传附件。
+
+    - existing 为 list_attachments() 的结果（更新已有页面时传入）：
+      同名且 comment（内容指纹）一致 → 直接跳过，不上传；同名但内容变了 → 直接走覆盖接口；
+      不存在 → 新建。上传成功后回写 existing，便于同一次运行内复用。
+    - existing 为 None（新建页面 / 未能列出附件）：先新建；若同名附件已存在（400
+      "Cannot add a new attachment with same file name"），改走 child/attachment/{id}/data 覆盖，
+      保证 create/update 两条路径都能稳定出图。
+    """
+    def _post(url):
+        boundary, body = _multipart_body(file_path, filename, content_type, comment)
+        return api("POST", url, auth, body=body,
                    headers={"X-Atlassian-Token": "no-check",
                             "Content-Type": f"multipart/form-data; boundary={boundary}"})
+
+    def _remember(data, att_id=None):
+        if existing is None:
+            return
+        if att_id is None and isinstance(data, dict):
+            res = data.get("results")
+            att_id = (res[0].get("id") if isinstance(res, list) and res else data.get("id"))
+        existing[filename] = {"id": att_id, "comment": comment or ""}
+
+    base = f"{base_url}/rest/api/content/{page_id}/child/attachment"
+    entry = existing.get(filename) if existing is not None else None
+    if entry is not None:
+        if comment and entry.get("comment") == comment:
+            ATTACH_STATS["skipped"] += 1
+            return 200, {"skipped": True}
+        if entry.get("id"):
+            st, data = _post(f"{base}/{entry['id']}/data")
+            if st in (200, 201):
+                ATTACH_STATS["uploaded"] += 1
+                _remember(data, entry["id"])
+            return st, data
+    st, data = _post(base)
     if st in (200, 201):
+        ATTACH_STATS["uploaded"] += 1
+        _remember(data)
         return st, data
     # 同名附件已存在 → 更新该附件的数据（覆盖）
     if st == 400 and "same file name" in str(data):
         att_id = _find_attachment_id(base_url, auth, page_id, filename)
         if att_id:
-            boundary, body = _multipart_body(file_path, filename, content_type)
-            return api("POST",
-                       f"{base_url}/rest/api/content/{page_id}/child/attachment/{att_id}/data", auth,
-                       body=body,
-                       headers={"X-Atlassian-Token": "no-check",
-                                "Content-Type": f"multipart/form-data; boundary={boundary}"})
+            st, data = _post(f"{base}/{att_id}/data")
+            if st in (200, 201):
+                ATTACH_STATS["uploaded"] += 1
+                _remember(data, att_id)
     return st, data
 
 
-def replace_mermaid(body, mermaid_blocks, page_id, base_url, auth, workdir, feature):
+# mermaid 渲染倍率：同时进入附件名哈希，倍率变了即视为新图
+MERMAID_SCALE = 3
+
+
+def mermaid_attach_key(code):
+    """mermaid 源码 → 内容寻址的附件基名与指纹。
+
+    附件名只由「源码 + 渲染倍率」决定（mermaid-<hash12>），与 md 文件名 / 版本号无关：
+    同一张图在 v1.0→v2.0 之间没改，就复用页面上已有的附件，既不重渲染（省一次 Chromium 启动）也不重传。
+    """
+    digest = _sha256_text(f"{code}\n#scale={MERMAID_SCALE}")
+    return f"mermaid-{digest[:12]}", f"sha256:{digest}"
+
+
+def mermaid_cached(code, existing):
+    """页面上是否已有该 mermaid 源码对应、且指纹一致的附件（png 或回退的 svg）。返回附件名或 None。"""
+    if not existing:
+        return None
+    base, fp = mermaid_attach_key(code)
+    for ext in (".png", ".svg"):
+        e = existing.get(base + ext)
+        if e and e.get("comment") == fp:
+            return base + ext
+    return None
+
+
+def _safe_render(code, out_base):
+    try:
+        return render_mermaid(code, out_base)
+    except Exception:
+        return False, "", "", ""
+
+
+def prerender_mermaid(blocks, existing, workdir, max_workers=3):
+    """在任何 Confluence 写入之前，把页面上还没有（或源码已变）的 mermaid 图先渲染好。
+
+    - 已缓存（页面上有同源码指纹的附件）的不渲染；同一源码在文档里出现多次只渲染一次。
+    - 先用一次 mmdc 调用整批渲染；整批失败时逐张渲染（有离线 mmdc 包时并发，默认最多 3 个；
+      只有 npx 回退时串行，避免首次 `npx -y` 并发下载互相踩 npm 缓存）。
+    返回 (rendered, info)：rendered = {附件基名: (ok, engine, out_path, content_type)}；
+    info = {"attempted", "mmdc_ok", "cached"}。
+    """
+    todo, cached = {}, 0
+    for code in blocks:
+        if mermaid_cached(code, existing):
+            cached += 1
+            continue
+        base, _ = mermaid_attach_key(code)
+        todo.setdefault(base, code)
+    rendered = {}
+    if todo:
+        # 先整批一次渲染（只起一次 node / Chromium）；整批失败（如某张图语法错）再逐张渲染隔离坏图。
+        batch = render_mermaid_mmdc_batch(
+            [(os.path.join(workdir, b), c) for b, c in todo.items()], workdir, scale=MERMAID_SCALE)
+        for b in list(todo):
+            png = batch.get(os.path.join(workdir, b))
+            if png:
+                rendered[b] = (True, "mmdc", png, "image/png")
+        rest = {b: c for b, c in todo.items() if b not in rendered}
+        workers = min(max_workers, len(rest)) if (rest and _scan_runtime_node() and _offline_mmdc_cli()) else 1
+        if rest and workers > 1:
+            from concurrent.futures import ThreadPoolExecutor
+            with ThreadPoolExecutor(max_workers=workers) as ex:
+                futs = {b: ex.submit(_safe_render, c, os.path.join(workdir, b)) for b, c in rest.items()}
+                rendered.update({b: f.result() for b, f in futs.items()})
+        else:
+            rendered.update({b: _safe_render(c, os.path.join(workdir, b)) for b, c in rest.items()})
+    mmdc_ok = any(r[0] and r[1] == "mmdc" for r in rendered.values())
+    return rendered, {"attempted": len(todo), "mmdc_ok": mmdc_ok, "cached": cached}
+
+
+def replace_mermaid(body, mermaid_blocks, page_id, base_url, auth, workdir, existing=None,
+                    rendered=None):
     pending = []
     for idx, code in enumerate(mermaid_blocks, 1):
         token = f"[[MERMAID_{idx}]]"
-        out_base = os.path.join(workdir, f"{feature}-diagram-{idx}")
+        base, fp = mermaid_attach_key(code)
+        out_base = os.path.join(workdir, base)
         fallback = ('<ac:structured-macro ac:name="code" ac:schema-version="1">'
                     '<ac:parameter ac:name="language">mermaid</ac:parameter>'
                     "<ac:plain-text-body><![CDATA[" + code + "]]></ac:plain-text-body>"
                     "</ac:structured-macro>"
                     "<blockquote><p>（图待渲染：已保留 mermaid 源码与文字说明）</p></blockquote>")
+        # 用 <p> 包裹每张图独立成段：相邻两个居中 <ac:image> 若不分段，
+        # Confluence 会把设了 max-width 的图叠在一起渲染，导致多图重叠。
+        # 显式 ac:width 给一个合适的展示宽度：高分辨率 PNG 缩放到该宽度仍清晰，
+        # 且避免宽图（如多分支 flowchart）被 max-width 压得过小、文字看不清。
+        def _img(fname):
+            return (f'<p><ac:image ac:align="center" ac:width="900">'
+                    f'<ri:attachment ri:filename="{fname}"/></ac:image></p>')
+        cached = mermaid_cached(code, existing) if page_id else None
+        if cached:
+            ATTACH_STATS["skipped"] += 1
+            body = body.replace(token, _img(cached))
+            continue
         ok = False
         out_path = ""
         content_type = ""
-        try:
-            ok, _engine, out_path, content_type = render_mermaid(code, out_base)
-        except Exception:
-            ok = False
+        if rendered is not None and base in rendered:
+            ok, _engine, out_path, content_type = rendered[base]
+        else:
+            ok, _engine, out_path, content_type = _safe_render(code, out_base)
         if page_id and ok:
             fname = os.path.basename(out_path)
-            st, _ = upload_attachment(base_url, auth, page_id, out_path, fname, content_type)
-            # 用 <p> 包裹每张图独立成段：相邻两个居中 <ac:image> 若不分段，
-            # Confluence 会把设了 max-width 的图叠在一起渲染，导致多图重叠。
-            # 显式 ac:width 给一个合适的展示宽度：高分辨率 PNG 缩放到该宽度仍清晰，
-            # 且避免宽图（如多分支 flowchart）被 max-width 压得过小、文字看不清。
-            repl = (f'<p><ac:image ac:align="center" ac:width="900">'
-                    f'<ri:attachment ri:filename="{fname}"/></ac:image></p>'
-                    if st in (200, 201) else fallback)
+            st, _ = upload_attachment(base_url, auth, page_id, out_path, fname, content_type,
+                                      comment=fp, existing=existing)
+            repl = _img(fname) if st in (200, 201) else fallback
             if st not in (200, 201):
                 pending.append(idx)
         else:
@@ -903,11 +1122,12 @@ def _safe_attach_name(src):
     return name + ext.lower()
 
 
-def replace_images(body, images, page_id, base_url, auth, md_path):
+def replace_images(body, images, page_id, base_url, auth, md_path, existing=None):
     """把 [[IMAGE_n]] 占位替换为 Confluence 图片。
 
     - 本地图片：按 md 文件所在目录解析相对路径，上传为附件并用 <ac:image><ri:attachment> 内联；
-      文件缺失或上传失败登记 pending。
+      文件缺失或上传失败登记 pending。existing（list_attachments 结果）给定时，内容指纹
+      与页面上同名附件一致的图片不再重传。
     - 网络图片（http/https）：用 <ac:image><ri:url> 外链，不下载。
     返回 (body, pending)。pending 每项为 {index, src, reason}。
     """
@@ -935,7 +1155,8 @@ def replace_images(body, images, page_id, base_url, auth, md_path):
             pending.append({"index": idx, "src": src, "reason": reason})
             body = body.replace(token, f'<blockquote><p>（图未内联：{html.escape(src)}）</p></blockquote>')
             continue
-        st, _ = (upload_attachment(base_url, auth, page_id, path, fname, _IMG_MIME[ext])
+        st, _ = (upload_attachment(base_url, auth, page_id, path, fname, _IMG_MIME[ext],
+                                   comment="sha256:" + _sha256_file(path), existing=existing)
                  if page_id else (0, None))
         if st in (200, 201):
             repl = (f'<ac:image ac:align="center" ac:alt="{alt}">'
@@ -1704,7 +1925,6 @@ def main():
     with open(args.md, encoding="utf-8") as f:
         md = f.read()
     body, mermaid_blocks, images, stats = md_to_storage(md)
-    feature = re.sub(r"[^A-Za-z0-9]+", "-", os.path.splitext(os.path.basename(args.md))[0]).strip("-")
     workdir = os.path.dirname(os.path.abspath(args.md))
 
     # 自动注入 Jira Epic 回链至附录「Jira link」项（见 inject_epic_link）。
@@ -1731,9 +1951,10 @@ def main():
         return 0 if ready else 2
 
     # 图表质量硬前置：文档含 mermaid 时，除非显式放行降级，否则强制要求 mmdc 可用。
-    # 放在 dry-run 之前，让预检阶段就能暴露"本机无法出图"的问题，而非发布后才发现图糊/缺图。
+    # 这里只做便宜检查（离线包 / npx 是否存在），不启动 Chromium：dry-run 不再跑探针，
+    # 真正的「能否出图」由正式发布写页前的预渲染来证明（见下方 prerender_mermaid）。
     if mermaid_blocks and not args.allow_degraded_diagrams:
-        ensure_mermaid_available()
+        ensure_mermaid_available(probe=False)
 
     # 解析 initiative（Epic 父项）以确定归档层级：--initiative 显式指定优先，值为 none 时强制无父项；
     # 未指定则查询 Jira 取直接父项。有父项时在归档路径插入一级 {initiative} 文件夹，否则维持三级。
@@ -1780,6 +2001,17 @@ def main():
         parent = args.parent
         existing_id, existing_title = _find_child_by_key_prefix(base_url, auth, parent, title_prefix)
 
+    # 已有页面：一次列出全部附件，供 mermaid / 图片按内容指纹跳过未变化的附件。
+    existing_atts = list_attachments(base_url, auth, existing_id) if existing_id else None
+
+    # 预渲染：在任何页面写入（改名 / 建页 / 更新）之前完成，只渲染页面上还没有的图，
+    # 有离线包时并发。要渲染的图一张都没用 mmdc 出成功 → 跑一次探针区分「工具链坏了」（阻断，
+    # 不写页）与「图本身语法错」（照常发布，记入 mermaid_pending）。
+    rendered, render_info = prerender_mermaid(mermaid_blocks, existing_atts, workdir)
+    if (mermaid_blocks and not args.allow_degraded_diagrams
+            and render_info["attempted"] and not render_info["mmdc_ok"]):
+        ensure_mermaid_available(probe=True)
+
     if existing_id:
         page_id = existing_id; result["action"] = "update"
         # 命中后若现标题与最新完整标题不一致，先改名再更新正文（rename 走独立 PUT）。
@@ -1797,8 +2029,10 @@ def main():
             print(json.dumps(result, ensure_ascii=False, indent=2)); return 1
         page_id = data["id"]; result["action"] = "create"
 
-    body, pending = replace_mermaid(body, mermaid_blocks, page_id, base_url, auth, workdir, feature)
-    body, img_pending = replace_images(body, images, page_id, base_url, auth, args.md)
+    body, pending = replace_mermaid(body, mermaid_blocks, page_id, base_url, auth, workdir,
+                                    existing=existing_atts, rendered=rendered)
+    body, img_pending = replace_images(body, images, page_id, base_url, auth, args.md,
+                                       existing=existing_atts)
     ver = get_version(base_url, auth, page_id)
     st, data = update_page(base_url, auth, page_id, full_title, body, ver, args.version_msg)
     if st not in (200, 201):
@@ -1811,6 +2045,8 @@ def main():
         "url": base_url + data["_links"]["webui"] if isinstance(data, dict) else None,
         "mermaid_pending": pending,
         "image_pending": img_pending,
+        "attachments": {"uploaded": ATTACH_STATS["uploaded"], "skipped_unchanged": ATTACH_STATS["skipped"],
+                        "mermaid_rendered": render_info["attempted"]},
     })
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0

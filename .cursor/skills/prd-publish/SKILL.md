@@ -100,12 +100,13 @@ python ~/.cursor/skills/confluence-publish/scripts/upload_confluence_v2.py --md 
 
 ### Step 6: Run the upload
 
-Remove `--dry-run`, add `--version-msg` describing this change, then publish for real.
+Remove `--dry-run`, add `--version-msg` describing this change, then publish for real. **Reuse the dry-run result to skip repeat Jira lookups**: pass the confirmed `target.initiative` back as `--initiative <key>` (or `--initiative none` when it was `null`) so the script doesn't query the Epic's parent again.
 
 ```bash
-python ~/.cursor/skills/confluence-publish/scripts/upload_confluence_v2.py --md "<path to PRD.md>" --space "<space>" --root "<parent_pages.root>" --epic "<Jira Epic key, e.g. CNAPP-5661>" --kind prd --title "<title prefix>" --version-msg "PRD v1.1: add §3 Story"
+python ~/.cursor/skills/confluence-publish/scripts/upload_confluence_v2.py --md "<path to PRD.md>" --space "<space>" --root "<parent_pages.root>" --epic "<Jira Epic key, e.g. CNAPP-5661>" --initiative "<target.initiative from dry-run, or none>" --kind prd --title "<title prefix>" --version-msg "PRD v1.1: add §3 Story"
 ```
 
+- **Speed (built into the script)**: on an update, attachments whose content is unchanged are skipped — an unchanged mermaid diagram is neither re-rendered nor re-uploaded, an unchanged design image is not re-uploaded; diagrams that do need rendering go through one `mmdc` call. Expect a re-publish that only touched text to finish without any Chromium start. `attachments` in the result JSON shows `uploaded` / `skipped_unchanged` / `mermaid_rendered`.
 - **Automatic folder layering**: laid out by the script per the "Archive location" rules at the top—`--root` is the level-1 root, the script auto-looks-up the epic's direct parent to decide four-level / three-level, the `{initiative}` and `{epic}` folder titles get the Jira summary appended, missing folders are auto-created as empty container pages, and finally the PRD is created/updated under the innermost `{epic}-PRD` folder. The returned JSON's `folders` field lists each level's folder id and whether it was newly created this run. `--initiative <key>` sets the Initiative level manually, `--initiative none` forces it off; on a Jira query failure it silently falls back to no such level (doesn't block publishing).
 - **Idempotent create or update (by prefix+key)**: the script **dedups by title prefix (`--title`)** under the three-level `{epic}-PRD` folder. On a hit it `update`s, bumps the version, and writes `--version-msg`, and if the current title doesn't match the latest summary it auto-renames first (the result JSON's `renamed_from` records the original title); on a miss it `create`s with the complete "prefix-summary" title. A requirement iteration reuses the same epic and prefix to update the original page, not create a duplicate.
 - **Legacy fallback**: teams without `parent_pages.root` configured (like CMS) can still use `--parent <parent_pages.prd>` to attach directly to a fixed parent page, bypassing folder layering.

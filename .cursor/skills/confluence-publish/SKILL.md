@@ -174,14 +174,18 @@ produces a duplicate page.
 | Tables | Generates a `<colgroup>` with **pixel** column widths plus `data-table-width`, sized by each column's visual content width (Confluence Cloud ignores percentage widths). No column goes below the width its header needs, so headers don't wrap mid-word; a total above 760px switches to `full-width` layout. Cells support a literal `<br/>` for line breaks and `\|` for an escaped pipe |
 | Lists | Multi-level indented `<ul>` / `<ol>` nesting, ordered/unordered switching at the same level, and indented continuation lines folded into the preceding item |
 | Local images | `![alt](relative or absolute path)` resolves against the Markdown file's own directory, uploads as a page attachment, and inlines as `<ac:image>`; `http(s)` images stay external via `ri:url`. Missing or failed uploads are recorded in `image_pending` with a visible placeholder left in the body |
-| mermaid | Prefers `mmdc` for high-resolution PNGs (flowchart / sequenceDiagram / gantt, all types). With no Node, or on a render failure, falls back to a pure-stdlib hand-drawn SVG (**flowchart only**). When both paths fail, it degrades to a code macro and records `mermaid_pending` |
+| mermaid | Prefers `mmdc` for high-resolution PNGs (flowchart / sequenceDiagram / gantt, all types). All diagrams that need rendering go through **one** `mmdc` call (one node / Chromium start); if that batch fails (e.g. one diagram has a syntax error) it falls back to per-diagram rendering to isolate the bad one (concurrent when the offline toolchain is present, serial on the `npx` fallback). With no Node, or on a render failure, falls back to a pure-stdlib hand-drawn SVG (**flowchart only**). When both paths fail, it degrades to a code macro and records `mermaid_pending`. Diagram attachments are **content-addressed** (`mermaid-<hash12>.png`, from source + scale), written to the Markdown file's directory |
+| Unchanged attachments skipped | On an update the script lists the page's attachments once and compares a content fingerprint (`sha256:` stored in the attachment comment): an unchanged mermaid diagram is neither re-rendered nor re-uploaded, an unchanged local image is not re-uploaded, a changed one overwrites the same-named attachment directly. The result JSON's `attachments` reports `uploaded` / `skipped_unchanged` / `mermaid_rendered` |
 | Inline | Bold, italic, inline code, links, and auto-linking of bare URLs |
 | Stats | Returns section count (h2), Story count, AC count, mermaid count, and image count, so a step can reconcile the published page against its local body |
 
 **mermaid hard prerequisite**: when the document contains mermaid and `--allow-degraded-diagrams`
 is not passed, `mmdc` must be available or publishing is **blocked** — this prevents shipping a page
-with blurry or missing diagrams. The check fires before `--dry-run`, so the pre-check stage already
-surfaces it.
+with blurry or missing diagrams. `--dry-run` only does the cheap check (offline toolchain or `npx`
+present) and does **not** launch Chromium. A real publish renders the needed diagrams **before any
+page write**; only if none of them came out via `mmdc` does it run a one-off probe render to tell a
+broken toolchain (blocked, nothing written) from a diagram syntax error (published, recorded in
+`mermaid_pending`). Use `--check-env` when you want an explicit readiness check up front.
 
 **First-publication order**: images and mermaid attachments must hang off a page that already
 exists, so a first publication is "create the page to get a `page_id` -> upload attachments ->
@@ -273,7 +277,8 @@ python ~/.cursor/skills/confluence-publish/scripts/upload_confluence_v2.py --jir
 
 The script prints a result JSON to stdout and exits 0 on success. Key fields in publishing mode:
 `action` (create / update), `page_id`, `version`, `url`, `title`, `stats`, `folders` (folder mode),
-`mermaid_pending`, and `image_pending`. The calling step must report `url` back to the user and
+`mermaid_pending`, `image_pending`, and `attachments` (`uploaded` / `skipped_unchanged` /
+`mermaid_rendered`). The calling step must report `url` back to the user and
 reconcile `stats` against the local body to confirm nothing was lost.
 
 ## Related

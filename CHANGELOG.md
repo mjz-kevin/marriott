@@ -12,6 +12,52 @@
 
 ## [Unreleased]
 
+### 新增
+- **通用「查最新 build 号」（只读）**：QA / 开发问「某分支（或某环境）最新的 build 号是多少、在哪下载」时，`cicd-agent` 新增只读入口 **Q**，调 `harness-invoke` 新脚本 `scripts/latest_build.py` 直接查，不触发、不建 run、不受 `allowed_envs` 限制（仍只限 profile 已登记的流水线）。对任意团队的 profile 通用：`--pipeline <id>` 和/或任意 `--match 标签=值`（APP 的 platform / usage、CMS 的 app），按 `--branch`（代码分支）或 `--deployed-env`（CD 流水线部署到的环境）过滤。实测 iOS TestFlight（分支 `mark/CNAPP-6676-…` → #3279）、Android Adhoc（`dev` → #1168）、cncms（test → #182，带镜像 tag）。脚本内置三条实测踩到的规则：
+  - 只认**代码分支**（branch 构建的 CI 分支 / PR 构建的源分支），不认 `gitDetails.branch`（流水线 YAML 所在分支，常为 `develop`）和 PR 目标分支；Harness 自带的 branch 过滤会漏单，改为本地匹配。
+  - 「可用」= 执行 `Success` / `IgnoreFailed`，且（若 profile 声明）`artifact_stage` 成功。PR 自动触发的 iOS 构建也是 Success 但跳过 TestFlight 上传，不能报给测试去下载。
+  - 报的号是 Harness 的 `runSequence`（界面上的 Build Id / Execution Id）。iOS 模板用 `<+pipeline.sequenceId>` 作 `CURRENT_PROJECT_VERSION` / `--bundle-version`，所以它就是 TestFlight build 号；其它流水线是否同号以其定义为准。
+- profile `mcp.harness.pipelines` 新增单条可选字段 `artifact_stage`：`app-test` / `app-prod` 的 `iOS_Dragon_App_Testflight_Dev` 填 `TestFlight_Metadata`；其余流水线（含 CMS）不填即按「执行成功」判定，故 CMS profile 未改。
+- profile `mcp.jira.figma_embed` 新增 `max_height_px: 2400`（4 份 profile 同步）：待导出 Figma 节点高度超过此值视为整页长图，不直接导出，改推荐卡片 / 屏级子节点给用户确认。
+
+### 变更（需求线 / 发布提速）
+- **发布脚本 `upload_confluence_v2.py` 提速**（PRD / 技术方案 / 测试线发布共用）：
+  - mermaid **整批一次渲染**：所有要渲的图拼进一个临时 md，只起一次 node / Chromium；整批失败（某张图语法错）再逐张渲染隔离坏图（有离线包时最多 3 并发，`npx` 回退时串行）。本机 `npx` 回退实测：逐张 3 张图 146s → 整批 4 张图约 10s。
+  - **未变化的附件跳过**：更新已有页面时一次列出全部附件，按附件 comment 中的内容指纹（`sha256:`）比对——没改的 mermaid 图不重渲染也不重传，没改的本地图片不重传，改了的直接覆盖同名附件（不再「先 POST 撞 400 → GET 查 id → 再 POST」）。结果 JSON 新增 `attachments`（`uploaded` / `skipped_unchanged` / `mermaid_rendered`）。
+  - mermaid 附件改为**内容寻址命名** `mermaid-<hash12>.png`（源码 + 渲染倍率），不再按 md 文件名 `…-diagram-N`：PRD 换版本号后没改的图仍能命中复用。老页面上旧名附件保留不删。
+  - **dry-run 不再跑 Chromium 探针**，只做「离线包 / npx 是否存在」的便宜检查；正式发布在任何写页之前预渲染，只有要渲的图一张都没用 mmdc 出成功时才跑一次探针，区分「工具链坏了」（阻断、不写页）和「图语法错」（照常发布、记 `mermaid_pending`）。
+  - `prd-publish` / `tech-solution-publish`：正式上传把 dry-run 确认的 `target.initiative` 用 `--initiative` 回传，省掉一次 Jira 查父级。
+- **写入 Jira Story 提速**（`user-story-publish`、`userstory-agent`）：
+  - 去重改为**每个 Epic 一次 JQL**（`parent = EPIC`，只取 summary / status / issuetype），本地按归一化 summary 匹配；不再每个 Story 发一条 `summary ~` 查询。近似命中列为「possible duplicate」供 PO 判断，不算命中。
+  - PRD / Figma 回链小节**建单时直接写进 description**，新单不再追加一次 `editJiraIssue`。
+  - 写入成功后**不再逐单回读校验**（不做 `getJiraIssue` / renderedFields 渲染检查），以调用返回为证据；仅报错或用户反馈渲染问题时回读。
+  - Figma 内嵌：有 PRD 已产出的设计图时**必须复用**，不再重新导出；导出前按 `max_height_px` 做尺寸闸门；文件级链接只用 `depth: 1` 读画板列表；同一文件的多张图一次 `download_figma_images` 导出。`png_scale` 4 份 profile 由 2 改为 1（工单内嵌 1x 足够；需要看细节可改回 2）。
+  - `userstory-agent` S3 同步计划里**逐 Story 写明设计图来源**（复用路径 / 节点 + 尺寸 / 推荐节点），所有节点选择在一次签核里确认，执行阶段不再中途停下来问。
+  - `userstory-agent` S4 签核改为**选项按钮**（确认同步 / 调整计划 / Story 内容要改），由主对话渲染；「调整 + 明确执行词」（如「只建 S4，直接建」）视为对调整后计划的签核，直接执行；只有调整没有执行词时生成新小版本并在同一轮给出选项。
+- **多来源读取按需分层**（`requirement-clarify`、`prd-authoring`、`eval-agent` E2）：Jira 只取 type / summary / status / parent；Epic 兄弟 Story 只列清单，只对与本需求重叠的 1–3 条读正文；他队 Confluence 页先看大纲再读相关章节；Figma 必带 `nodeId` + 浅 `depth`，只读本需求涉及的屏。澄清结论新增「Sources read」一行（来源、版本、读到哪一层），`prd-authoring` 据此复用、只补缺口，不再重读。
+- 文档：`confluence-publish` SKILL（body handling / mermaid 前置 / 输出字段）同步；设计文档只描述到职责层，本次未涉及职责、MCP 权限或人工确认点增减，未改。
+
+### 变更
+- **防重复触发（cncms t5 一次确认出了 #184 / #185 两条执行）**：同一条 `stage_run.py --execute --wait` 命令被 Cursor 工具层原样执行了两次（15:52 / 16:05，同一终端服务进程），脚本当时不检查结果文件，于是又发了一次部署。现在：
+  - `--execute` **必须带 `--result-json`**，该文件即触发的幂等锁：开跑时（读 Harness 之前）若已存在即拒绝；发送前用 `O_EXCL` 独占创建，两个并发调用只有一个能发。被拒绝时**什么都不发**，退出码 **6**、打印 `TERMINAL: already_triggered` 与已记录的执行 id / Build 号 / URL，并给出 `--wait-execution` 续等命令。
+  - 结果文件新增 `trigger_outcome`（`sent` / `unknown` / `not_sent`）。Harness 明确拒绝（HTTP 错误）或根本没连上时记 `not_sent`，这种文件下次 `--execute` 会被挪到 `*.not_sent.<时间>` 后重新占用；其它任何已存在的文件都拒绝。新部署用新路径 `t{n}_result.json`，禁止删文件绕过。
+  - `harness-invoke` SKILL（S4 说明、情形表、S5 退出码、排障表）与 `cicd-agent` C3 同步退出码 6 的处理。
+  - **触发与等待拆成两次调用**（根治）：`stage_run.py --execute` 只发请求、记句柄、打印 `TRIGGERED: execution=… build=… expected_duration_s=…` 后几秒内返回；等待一律用只读的 `--wait-execution <id>`（可安全重跑，永不触发）。`--execute --wait` 现在**直接拒绝**。这样被工具层重放的长命令只可能是等待，不可能再发一次部署。`--wait-execution` 若与 `--result-json` 已记录的执行 id 不一致也拒绝，避免覆盖别的触发记录。`harness-invoke` S4 / S5 / Rules / Quality gates / 排障表与 `cicd-agent` §3.4、C3、C4 同步改为两步；等待日志改用 `tee -a` 追加。**破坏性提示**：自己写过 `--execute --wait` 调用的需改成两步。
+- **触发结果带 Build 号**：`stage_run.py` 触发后读取 `runSequence`，打印 `build number`，写入 `--result-json` 的 `build_number`，`TERMINAL:` 行追加 `build=`，成功提示带 `Build #N`；`cicd-agent` 的 `state.md` `execution` / `history` 新增 `build_number`，运行报告、状态卡、Jira 回写都带 Build 号；`harness-invoke` S4 / S6 / 输出模板同步。
+- `stage_run.py` 只读请求（执行历史等）遇响应截断 / 断连自动重试 3 次（上次 cncms t3 触发前就因 `IncompleteRead` 中断过一次）；**触发请求本身不重试**，以免重复部署。profile 解析拆出 `load_harness_section()` 供两个脚本共用。
+- **CI/CD 不再临时写脚本**（cncms t4 触发响应被截断后，agent 手写了 `tmp/t4_continue_wait.py` 才等到 #183 结束，t1 也有过 `t1_continue_wait.py`）：
+  - `stage_run.py` 触发响应读不全（`IncompleteRead` / 断连 / 读超时 / 非 JSON）时**不重发**，改为只读从执行历史找回句柄：仅当恰好一条执行「发送后开始 + 同一 stage 子集 + `MANUAL` + 触发人是本 API key 身份」时认领并继续等待（`--result-json` 记 `handle_recovered: true`）；找不到 / 多条 / 读不到身份 → 退出码 **5**、`TERMINAL: trigger_unknown`，列出候选，交人判断。发送前先在结果文件记 `trigger_sent_at`。`--check` 增加打印 API key 对应身份。
+  - 新增 `--wait-execution <id>`：只等不触发，接着等已触发的执行（shell 断开 / 会话中断 / 超时后），输出、结果文件、退出码与 `--execute --wait` 一致；id 不属于 `--app` 对应流水线时拒绝。
+  - 结果文件新增 `stage_statuses` / `started_at` / `ended_at` / `duration_s`，报告直接读，不用再自己算。
+  - `harness-invoke` SKILL（S4 情况表、S5、规则、排障）与 `cicd-agent`（§3.4 第 6 条、C3、C4、§5）明确：触发 / 找回 / 等待只用 skill 脚本，**禁止手写等待循环、内联 `python3 -` 导入脚本函数或在 `tmp/` 放脚本**；遇到脚本不覆盖的情况报 `blocked`、修脚本。
+  - 用 #183 实测：`--wait-execution` 输出正确；找回逻辑回放事故现场能唯一认领 #183，换身份 / 无身份 / 换 dev 子集都拒绝认领。
+- **`cicd-agent` 完成后报告直接返回给用户，不再问「要不要打印」**：它是后台子 agent，最后一条消息只给主对话，问「回复『打印』」时自己已结束，用户看不到报告。§6.1 改为：C5 写了运行报告就把**全文**原样嵌入状态卡片（新增 `### 📄 Run report` 小节），卡片里不再出现「打印？」；§6 给主对话的说明同步：收到 `done` 卡片时同一条回复里把报告全文展示给用户，卡片里没有就按 `state.md` 的 `report` 路径读文件展示，不只给路径。其它前台 Agent（eval / userstory / tech-solution / code-review）的 §6.1 未改，它们直接面对用户，「问是否打印」仍可用。
+- 文档同步：`doc/AI-Toolchain-Design.md` §4 `harness-invoke` 一行、`doc/maintenance/profiles.md` `mcp.harness` 一行。
+- **等待部署结果改为「后台启动 + 分段 await」，修子 agent 部署完不返回**：实测 cncms #186（test，main）16:56 已结束、`--result-json` 已写入终态 `success_with_ignored`，但 `cicd-agent` 把 `--wait-execution` 作为一次 35 分钟的前台调用并挂了 `notify_on_output`，这次调用的完成信号一直没回到 Agent，Agent 停在 `polling` 直到 17:16 被人工打断；日志里还能看到等待被工具层重跑了一次（只读，无重复部署）。`harness-invoke` S5「Deliver the result」第 1–3 条改写：step 2 前台阻塞设为 0 立即转后台，用 `AwaitShell`（pattern `^TERMINAL:`，每段 ≤ 20 分钟）分段等，**每段结束都读 `--result-json`，`terminal` 有值立即收尾**；不再要求单次前台预算覆盖 `expected_duration_s`（改为各段累计覆盖），并明确禁止对等待挂 `notify_on_output`。Rules / Quality gates / 排障表同步，排障表新增本次症状一行。`cicd-agent` §3.4 第 1 条、`wait_handle` 注释、C4 第 2 条、禁止项同步。`stage_run.py` 只改两处注释，行为不变。设计文档与 `doc/maintenance/` 未写到等待托管细节，未改。
+
+### 升级方式
+- 直接覆盖。
+
 ---
 
 ## [0.3.2] - 2026-10-15

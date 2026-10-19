@@ -8,9 +8,11 @@ description: >-
   must be in the profile's allowed_envs (dev / test), and anything else (staging / stg / uat / prod)
   is out of scope - stop and hand it to a human in the Harness UI, with no human-confirmation
   bypass. A missing required input stops the trigger rather than being defaulted. Use when the CI/CD
-  step needs to trigger a Harness pipeline to build / deploy to a low environment or to query
-  execution status;
-  triggers: harness invoke / trigger pipeline / 触发流水线 / 触发 Harness / 跑流水线 / 部署到 / 查执行状态.
+  step needs to trigger a Harness pipeline to build / deploy to a low environment, to query
+  execution status, or to look up the latest build (build number) of a branch / environment on any
+  registered pipeline (read-only, e.g. which TestFlight build to install);
+  triggers: harness invoke / trigger pipeline / 触发流水线 / 触发 Harness / 跑流水线 / 部署到 / 查执行状态 /
+  latest build / build number / 最新 build / build 号 / 最新包.
 metadata:
   agent: CI/CD Agent
 ---
@@ -40,6 +42,7 @@ Locate the **unique** Harness pipeline from the team config, read the runtime in
 | Deny list (optional) | `mcp.harness.deny_list` → pipelines that must never be agent-triggered **whatever environment they target**, each with a reason. A different axis from `allowed_envs`: it records what a pipeline *can do* (wipe cluster resources, execute arbitrary YAML), not where it deploys. **No profile currently uses it** — a pipeline that must not be triggered is simply left out of `pipelines` (unlisted = not triggerable), and the reason is kept as a comment there so nobody re-adds it. If a profile does define it, it still hard-blocks, and is checked before the pipeline list so an entry mistakenly added to `pipelines` is refused anyway |
 | Allowed-environment allowlist | `mcp.harness.allowed_envs` → the only environments this step may trigger (low environments; currently `dev` / `test`). Matched case-insensitively against the **resolved** target environment. Anything else → out of scope, stop (see S2) |
 | Stage-fallback switch | `mcp.harness.allow_stage_execution_fallback` → whether this skill's stage-subset script may be used (see S4) |
+| Artifact stage (optional, per pipeline) | `mcp.harness.pipelines[].artifact_stage` → the stage whose success means "this build was actually published / is installable" (e.g. `TestFlight_Metadata` on the iOS TestFlight pipeline). Used by the latest-build query (§2.1); absent → a successful execution counts as available |
 | Wait spec | `mcp.harness.poll` → `mode` / `timeout_seconds` / `interval_seconds` |
 | Harness credentials | the Harness **MCP server config** (`mcp.json` → the Harness server's `env`: `HARNESS_ACCOUNT_ID` / `HARNESS_BASE_URL` / `HARNESS_API_KEY`), deliberately **not** in the profile — so credentials and the account id stay out of version control and can never drift from what the MCP itself uses |
 
@@ -132,9 +135,9 @@ Any input whose key or value looks like a credential is never echoed back — re
 
 ### S4 Trigger
 
-Trigger via the Harness MCP using S1's scope + the matched pipeline and the S3 inputs. Immediately record the **execution handle** (id and clickable URL) before anything else, so an interruption right after triggering can never cause a double-trigger. On failure: one auth retry; if it still fails, report and stop — never blind re-trigger. If the rejection is about inputs, report which ones Harness asked for and don't retry with guessed values.
+Trigger via the Harness MCP using S1's scope + the matched pipeline and the S3 inputs. Immediately record the **execution handle** (id and clickable URL) before anything else, so an interruption right after triggering can never cause a double-trigger. Record the **build number** with it: Harness's `runSequence` (the "Build Id" / "Execution Id" the UI shows, and — for a pipeline that stamps `<+pipeline.sequenceId>` into its artifact — the artifact's build number). It is what people quote and search by; the `planExecutionId` is for APIs and URLs. `stage_run.py` prints it, writes it to `--result-json` as `build_number`, and adds `build=` to the `TERMINAL:` line; through the MCP, read it from the execution summary. On failure: one auth retry; if it still fails, report and stop — never blind re-trigger. If the rejection is about inputs, report which ones Harness asked for and don't retry with guessed values.
 
-**Set the terminal-state wait on this same call.** Under `poll.mode: server_wait` the wait is a *parameter of the trigger action*, not a separate step — pass it together with the inputs, bounded by `timeout_seconds`, so the call returns at the instant the execution goes terminal. Triggering first and then waiting as a second operation forfeits that and degrades into the loop S5 warns about.
+**Through the MCP, set the terminal-state wait on the trigger call.** Under `poll.mode: server_wait` the wait is a *parameter of the MCP's trigger action*, not a separate step — pass it together with the inputs, bounded by `timeout_seconds`, so the call returns at the instant the execution goes terminal. (The stage-subset fallback below is the exception: it splits trigger and wait into two calls, for the reason given there.)
 
 **An execution you find is not an execution you triggered.** Only a handle this trigger returned is yours. Before adopting any execution you merely *observed* (e.g. one found running while reconciling after an interruption), read its trigger metadata and require **both** its trigger type and its triggering identity to match this trigger — a pipeline+branch match alone is not evidence. A webhook/PR-triggered run belongs to whoever pushed; a manual run belongs to whoever started it. Adopting a stranger's execution makes you report their result as yours, and then act on it. When the metadata doesn't match or is unclear, **stop and ask** — never adopt on resemblance.
 
@@ -143,11 +146,27 @@ Trigger via the Harness MCP using S1's scope + the matched pipeline and the S3 i
 ```bash
 python3 scripts/stage_run.py --check                       # verify it resolved the right Harness
 python3 scripts/stage_run.py --app <app> --env <env> ...    # dry run (default): shows stages, input set, expected duration
-python3 scripts/stage_run.py --app <app> --env <env> ... --execute --wait \
+# step 1 — trigger: short call, returns in seconds, prints `TRIGGERED: execution=<id> build=<n> expected_duration_s=<s>`
+python3 scripts/stage_run.py --app <app> --env <env> ... --execute \
+  --result-json <run_dir>/tmp/t{n}_result.json
+# step 2 — wait: read-only, safe to re-run, prints `TERMINAL: …` and writes the verdict to the same file
+python3 scripts/stage_run.py --app <app> --wait-execution <execution-id> \
   --result-json <run_dir>/tmp/t{n}_result.json
 ```
 
-Pass `--wait` on the real trigger so the terminal-state wait stays on this call (see S5), and `--result-json` so the verdict is on disk even if nobody reads stdout. **Host the command so the wait can actually finish — see S5's "deliver the result" rules; `--wait` alone does not get a result to the caller.**
+**Trigger and wait are two separate calls — never one.** Step 1 sends the request, records the handle in `--result-json`, and returns; step 2 holds the long wait. `--execute --wait` is **refused** by the script. Reason: the long call is the one a caller's harness may re-run (a retried tool call, a resumed turn, a replayed shell) — once that call is read-only, a re-run costs a duplicate *wait*, never a duplicate *deploy*. Keeping the wait on the trigger call is exactly how one confirmation produced two cncms executions (#184 / #185, 13 minutes apart). Read the execution id for step 2 from the `TRIGGERED:` line or from `--result-json`; `--wait-execution` refuses an id that differs from the one the result file records. **Host step 2 so the wait can actually finish — see S5's "deliver the result" rules.**
+
+**`--result-json` is mandatory with `--execute` and is the trigger's idempotency lock.** The script creates the file exclusively right before sending; if the file already exists, it **refuses to send** (exit **6**, `TERMINAL: already_triggered`) and prints the recorded handle. This is the second line of defence against the *same trigger command running twice*. So: **one path per trigger** (`t{n}_result.json`, `n` = this run's trigger number), and **never delete or rename that file to get past a refusal**. The only file it re-claims on its own is one recording `trigger_outcome: not_sent` (Harness rejected the request with an HTTP error, or no connection was ever made — provably nothing fired); that file is moved aside as `*.not_sent.<ts>`.
+
+**The script covers every path of a trigger, so never write your own code around it** — no ad-hoc wait loop, no `python3 - <<EOF` that imports its functions, no helper file under `tmp/`. Hand-written code next to a deploy path is unreviewed and is exactly where a double-trigger or a misread verdict gets introduced. If a situation seems to need one, it is a gap in the script: stop, report it, and fix the script — don't work around it in the run.
+
+| Situation | What the script does / what you run |
+|------|------|
+| Trigger response unreadable (`IncompleteRead`, dropped connection, read timeout, bad JSON) | **Handled automatically, never re-sent.** It recovers the handle read-only from history: adopts only **exactly one** execution of this pipeline that started after the request was sent, ran this stage subset, and is `MANUAL` by **this API key's identity** (S4's ownership rule, applied mechanically; `--check` prints that identity). Then it records the handle as normal (`handle_recovered: true` in `--result-json`) and prints `TRIGGERED:`; continue with step 2 |
+| …and no execution can be attributed (none / several / identity unreadable) | Exit code **5** with `TERMINAL: trigger_unknown` and the candidates listed. It **may have fired**: do not re-trigger. Check Harness; if exactly one new run is yours by S4's rule, resume with `--wait-execution <id>`; otherwise ask the user |
+| `--execute` run again with a `--result-json` that already exists (re-run tool call, retried shell, resumed turn) | **Refused before any Harness call, nothing sent.** Exit code **6** with `TERMINAL: already_triggered` and the recorded execution id / build / URL. Resume with the printed `--wait-execution <id>` command. A genuinely new deploy is a new trigger `t{n+1}` with a new path — never delete the file to re-send |
+| The wait detached, the session was interrupted, or the wait timed out (exit 4) | Re-run step 2 as-is (`--wait-execution <id>`, same `--result-json`) — it is read-only, so re-running it is always safe. It refuses an id that belongs to a different pipeline than `--app`'s, or that differs from the id the result file records |
+| Need the stage statuses / duration for the report | Already in `--result-json`: `stage_statuses`, `started_at`, `ended_at`, `duration_s` — read the file, don't re-derive |
 
 It reads credentials from the Harness MCP config and the stage subset from the profile; neither can be passed in. It also refuses any `--env` outside the profile's `allowed_envs`, with no flag to override — the low-environment scope is enforced in the tool, not only in this document. Every rule here still applies: it is a trigger, not an escape hatch. **Never read or forward credentials yourself to improvise a path around a missing tool capability.**
 
@@ -155,20 +174,20 @@ If the restriction is ignored (a tell-tale sign: the rejection names stages you 
 
 ### S5 Wait for a terminal state
 
-`mcp.harness.poll.mode` decides how: `server_wait` → the wait rides on the trigger call itself (S4), bounded by `timeout_seconds`, returning the moment the state is terminal — **one call, no polling loop**; only when that mode is unavailable do you fall back to polling at `interval_seconds`.
+`mcp.harness.poll.mode` decides how: `server_wait` → through the MCP, the wait rides on the trigger call itself (S4), bounded by `timeout_seconds`, returning the moment the state is terminal — **one call, no polling loop**; only when that mode is unavailable do you fall back to polling at `interval_seconds`.
 
-**This applies to the stage-subset fallback too — pass it `--wait`.** Triggering through `scripts/stage_run.py` without `--wait` returns at the trigger and leaves you polling from the outside, which on a 20-minute pipeline is dozens of round trips held in one session; an interruption at any of them loses the result silently while the deploy keeps running. The script's `--wait` applies this section's terminal-state vocabulary and takes its budget from `poll.timeout_seconds` / `interval_seconds`, so the wait stays on the trigger call exactly as `server_wait` requires. Its exit code carries the verdict: `0` success (or completed-with-ignored-items), `2` failed, `3` aborted, `4` timed out still running.
+**The stage-subset fallback waits in its own call — step 2, `--wait-execution <id>`.** It applies this section's terminal-state vocabulary and takes its budget from `poll.timeout_seconds` / `interval_seconds`, so it is still one blocking call with no hand-written polling — it just isn't the trigger call (S4 says why). Don't poll Harness from the outside instead. Exit codes: step 1 (`--execute`) `0` sent and handle recorded, `5` trigger outcome unknown (may have fired — never re-trigger, see S4), `6` refused because `--result-json` already records a trigger (nothing sent — go to step 2), `1` error (`trigger_outcome: not_sent` when Harness rejected it); step 2 (`--wait-execution`) `0` success (or completed-with-ignored-items), `2` failed, `3` aborted, `4` timed out still running.
 
-#### Deliver the result — `--wait` is not enough on its own
+#### Deliver the result — a wait is not enough on its own
 
-`--wait` guarantees the script *learns* the verdict. It does **not** guarantee the verdict reaches the caller. When the script runs through a bounded shell, the budget expires long before a multi-minute pipeline finishes, the shell is detached, and the verdict lands in a file **nobody is waiting on** — the deploy is done, the result exists, and the caller is still saying "waiting". Treat delivery as a separate obligation from waiting, and satisfy all four points:
+The wait guarantees the script *learns* the verdict. It does **not** guarantee the verdict reaches the caller. When the script runs through a bounded shell, the budget expires long before a multi-minute pipeline finishes, the shell is detached, and the verdict lands in a file **nobody is waiting on** — the deploy is done, the result exists, and the caller is still saying "waiting". Treat delivery as a separate obligation from waiting, and satisfy all four points (they apply to step 2; step 1 returns in seconds):
 
-1. **Size the foreground budget from the expected duration, never from a guess.** Every run prints `expected_duration_s=<n>` (the high-water mark for this stage subset, from the pipeline's own history) **before** the trigger, including in a dry run. Give the shell at least `expected_duration_s` plus a margin. A budget below it detaches the wait by construction — a 150s budget on a ~1500s pipeline is not a slow report, it is a guaranteed lost one.
-2. **Stream the output; never redirect it away.** Use `… --execute --wait 2>&1 | tee <log>` rather than `> <log> 2>&1`. Redirecting only to a file means nothing can observe progress and no output notification can fire — the log is complete and unread, which is the failure above.
-3. **Have the terminal line wake you.** The script prints one greppable line the instant the verdict exists: `TERMINAL: {verdict} status={harness_status} execution={id}`. Register a shell output-notification rule on `^TERMINAL:` so the result surfaces when it lands instead of when you remember to look.
-4. **If the shell is detached anyway, you are not done — wait it out.** A detached wait is a result you have not collected. Await that shell to completion (or poll the `--result-json` file) **before** reporting; do not end the turn on "it's running in the background," and do not look up the awaiting tool's signature and then return without calling it. Report only after the verdict is in hand.
+1. **Host step 2 in the background and await it in slices — never as one long foreground call.** Every run prints `expected_duration_s=<n>` (the high-water mark for this stage subset, from the pipeline's own history) in the dry run and on the `TRIGGERED:` line; that sizes the **total** wait, not a single call. Start step 2 with the shell's foreground block set to `0` (backgrounded immediately), then loop: await that shell (Cursor: `AwaitShell` with its `shell_id`, `pattern: "^TERMINAL:"`, `block_until_ms` ≤ 1200000 per slice), and **after every slice — matched, timed out, or returned for any other reason — read `--result-json`**. A non-null `terminal` there is the verdict: stop awaiting and report. Keep slicing until the verdict is in hand or the total exceeds `expected_duration_s` plus `poll.timeout_seconds`' margin (then it is the script's own `timed_out`, exit 4). **Don't** give one shell call a 20–35 minute foreground budget, and **don't** attach an output-notification rule (`notify_on_output`) to it: a single long blocking call is the one the tool layer may silently re-run, and the one whose completion can fail to reach you — cncms #186 finished at 16:56, its result file was written, and the caller sat on that call for 20 more minutes until interrupted.
+2. **Stream the output; never redirect it away.** Use `… --wait-execution <id> … 2>&1 | tee -a <log>` rather than `> <log> 2>&1`. Redirecting only to a file means nothing can observe progress and no await pattern can match — the log is complete and unread, which is the failure above. Append (`-a`), so a re-run wait doesn't overwrite the earlier output.
+3. **The terminal line is what each await slice watches for.** The script prints one greppable line the instant the verdict exists: `TERMINAL: {verdict} status={harness_status} execution={id}`. Use it as the await `pattern` so a slice returns the moment the result lands — but treat `--result-json` as the authority, since a pattern match (or its absence) can be lost while the file cannot.
+4. **If the shell is detached anyway, you are not done — wait it out.** A detached wait is a result you have not collected. Await that shell to completion (or poll the `--result-json` file) **before** reporting; do not end the turn on "it's running in the background," and do not look up the awaiting tool's signature and then return without calling it. Report only after the verdict is in hand. If the shell is gone (killed / interrupted), simply re-run step 2 with the same id and path — never a hand-written wait loop, and **never step 1 again**.
 
-**Always pass `--result-json <path>`.** It records the handle at trigger time and the verdict at terminal time (`terminal` / `harness_status` / `failed_stages` / `exit_code` / `terminal_at`, merged into one atomically-written file). This is the copy that survives a detached process, an interrupted session, or unread output — and it is the first thing to read when you come back to a run, ahead of re-deriving the state from Harness.
+**Always pass `--result-json <path>`.** It records the attempt before sending (`trigger_sent_at`), the handle at trigger time, and the verdict at terminal time (`terminal` / `harness_status` / `failed_stages` / `stage_statuses` / `started_at` / `ended_at` / `duration_s` / `exit_code` / `terminal_at`, merged into one atomically-written file). This is the copy that survives a detached process, an interrupted session, or unread output — and it is the first thing to read when you come back to a run, ahead of re-deriving the state from Harness.
 
 **The result is due the moment it exists.** A terminal state the caller learns about minutes late is a defective report even when the verdict is right. Two rules keep the fallback honest:
 
@@ -190,7 +209,29 @@ Beyond `timeout_seconds` still not terminal → stop waiting, report "still runn
 
 ### S6 Report
 
-Report the trigger conclusion, execution handle, and terminal result; on failure attach a **stage-level summary** (which stage/step failed, error overview), not the raw log.
+Report the trigger conclusion, execution handle, **build number**, and terminal result; on failure attach a **stage-level summary** (which stage/step failed, error overview), not the raw log.
+
+## 2.1 Query the latest build (read-only)
+
+A separate, read-only path for "what's the newest build of branch X / environment Y, and where is it?" — typically asked by QA after someone else ran a build, to install it (e.g. from TestFlight). It **triggers nothing**, so S2's scope check doesn't apply; it still only covers pipelines registered in `mcp.harness.pipelines`.
+
+```bash
+python3 scripts/latest_build.py --match platform=ios --branch <code-branch>     # APP: any locating tag(s)
+python3 scripts/latest_build.py --match app=cncms --deployed-env test           # CMS: latest deployed to test
+python3 scripts/latest_build.py --pipeline <id> --branch <b> --json             # machine-readable
+```
+
+Select the pipeline with `--pipeline <id>` and/or any number of `--match tag=value` against the profile entry's own tags (whatever shape the team uses); ambiguity stops with the candidates listed — ask which one, don't pick. Filter by `--branch` (exact code branch) and/or `--deployed-env` (a CD pipeline's Harness environment). Exit code `0` = found, `1` = none in the scanned window.
+
+The script owns three rules that make a naive answer wrong — don't re-derive them by hand through the MCP:
+
+| Rule | Why |
+|------|-----|
+| Match the **code** branch (a branch build's CI branch, a PR build's source branch) | `gitDetails.branch` is where the pipeline YAML lives (often `develop`), and a PR's target branch isn't the branch being built. Harness's own branch filter also misses builds — so executions are listed and matched locally |
+| "Available" = execution `Success` / `IgnoreFailed` **and** the entry's `artifact_stage` succeeded (when set) | A PR-triggered run of the iOS TestFlight pipeline is green but skips the upload; reporting it would send a tester looking for a build that isn't there |
+| The number reported is `runSequence` | It is the Build Id the UI shows. Say it's the artifact's own build number only for a pipeline known to stamp `<+pipeline.sequenceId>` into it (the iOS TestFlight pipeline does: `CURRENT_PROJECT_VERSION` / `--bundle-version`) |
+
+Report the latest available build — build number, branch, commit, who triggered it and how, finish time, execution URL, and the published artifact links / image tags Harness recorded — plus any **newer** matching execution that is still running (with its build number, so the asker knows to wait) or that finished without being available (and why, e.g. "PR build, upload skipped"). None found → say so and name the window scanned; don't widen to another branch or pipeline on your own.
 
 ## 3. Rules
 
@@ -204,10 +245,11 @@ Report the trigger conclusion, execution handle, and terminal result; on failure
 | Never default a required input | A missing required answer stops the trigger — no defaults, no prior run's value, no input-set value |
 | Scope by where the run actually lands | Judge from the environment resolved in S2 — the pipeline's env / stage subset **and** the runtime-input values you are about to pass (a value naming prod / stg / staging / uat / perf targets that environment, whatever the tag says) — never the pipeline's name or tag; an ambiguous value or an unresolvable environment stops the trigger |
 | Confine a promotion chain | Restrict execution to that environment's stage subset, recovered from execution history; unknown → don't trigger; a subset reaching outside `allowed_envs` → out of scope |
-| Idempotent-safe triggering | Record the handle immediately; one auth retry on failure; never blind re-trigger |
+| Idempotent-safe triggering | Record the handle immediately; one auth retry on failure; never blind re-trigger. An unreadable trigger response is recovered read-only by `stage_run.py`, never re-sent |
+| No ad-hoc scripts around the trigger | Use `stage_run.py` (`--execute`, then `--wait-execution`) and `latest_build.py` as-is. Never write a wait loop, a recovery script, or an inline `python3 -` that imports their functions; a missing capability is a script gap to report and fix, not something to improvise in the run |
 | Only report an execution you triggered | Adopt an observed execution only when its trigger type **and** triggering identity match this trigger; pipeline+branch resemblance is not evidence — unclear → stop and ask |
-| Wait on the trigger call | Under `server_wait` the terminal-state wait is a parameter of the trigger action, not a later step; the stage-subset fallback takes `--wait` for the same reason. Fall back to `interval_seconds` polling only when neither is available |
-| Deliver the result, don't just wait for it | `--wait` makes the script learn the verdict; it does not make it reach you. Size the foreground budget from the printed `expected_duration_s`, stream with `\| tee` (never `>` alone), wake on `^TERMINAL:`, always pass `--result-json`, and if the shell detaches anyway, await it to completion before reporting — never end a turn on "running in the background" |
+| Wait in one blocking call | Under `server_wait` the MCP's terminal-state wait is a parameter of its trigger action. The stage-subset fallback splits it: `--execute` (returns at once), then `--wait-execution <id>` (one blocking, read-only call) — never `--execute --wait` (refused), never an outside polling loop. Fall back to `interval_seconds` polling only when neither is available |
+| Deliver the result, don't just wait for it | A wait makes the script learn the verdict; it does not make it reach you. Start step 2 backgrounded (`| tee -a`, never `>` alone, always `--result-json`), await it in slices (≤ 20 min each, pattern `^TERMINAL:`) until the total covers the printed `expected_duration_s`, read `--result-json` after every slice and stop the moment `terminal` is set; no single long foreground call, no `notify_on_output` — never end a turn on "running in the background" |
 | Report the result when it lands | Don't overshoot the expected finish with an oversized wait; as it nears, shrink the remaining wait to the interval |
 | Classify a terminal state, never guess one | Use S5's vocabulary: `IgnoreFailed` is terminal and the deploy proceeded — report it as completed-with-ignored-items, naming the ignored stages, not as a failure. An unrecognized status keeps the wait going and is reported raw; never map it onto the nearest familiar one |
 | Wait to a terminal state | An in-pipeline approval is not terminal; on timeout report "still running" + handle, don't rule success or failure |
@@ -222,8 +264,8 @@ Report the trigger conclusion, execution handle, and terminal result; on failure
 - The input spec came from Harness at trigger time; every required input was answered and no value violates its permitted set
 - A promotion chain's stage subset was recovered from execution history and carried on the trigger; its effect was verified, and it stays within `allowed_envs`
 - The execution handle is recorded and traceable, and belongs to this trigger — no observed execution was adopted without a trigger-type and identity match
-- The terminal-state wait rode on the trigger call under `server_wait` (the stage-subset fallback was given `--wait`); any fallback polling used `interval_seconds` and did not overshoot the expected finish
-- The result actually reached the caller: the foreground budget covered the printed `expected_duration_s`, output was streamed rather than redirected away, `--result-json` was passed, and no turn ended with the verdict still sitting in a detached shell
+- The terminal-state wait rode on the MCP trigger call under `server_wait`, or — on the stage-subset fallback — trigger (`--execute`) and wait (`--wait-execution`) were two separate calls; any fallback polling used `interval_seconds` and did not overshoot the expected finish
+- The result actually reached the caller: step 2 ran backgrounded and was awaited in slices whose total covered the printed `expected_duration_s`, `--result-json` was read after every slice, output was streamed rather than redirected away, and no turn ended with the verdict still sitting in a detached shell
 - Waited to a terminal state; or on timeout reported "still running" + handle, without misjudging success/failure or mistaking a pending approval for a failure
 - The terminal state was classified from S5's vocabulary: `IgnoreFailed` reported as completed-with-ignored-items (ignored stages named), not as a failure; no unrecognized status was mapped onto a familiar one
 - On failure includes a stage-level summary
@@ -237,6 +279,7 @@ Branch/tag: {branch_or_tag}  ·  Target environment: {target_env} (low environme
 
 - **Trigger**: success / failure ({reason})
 - **Execution**: {execution_url} (id={execution_id})
+- **Build**: #{build_number} (Harness Build Id / runSequence)
 - **Stages** (promotion chain only): {subset executed}  ·  excluded: {stages outside this environment}
 - **Result**: ✅ Success | ✅ Completed with ignored items ({stages}) | ❌ Failure | ⛔ Aborted | ⏳ Timed out, still running
 - **Pending approval** (when waiting on one): {stage/step}
@@ -283,13 +326,20 @@ Pipeline: {id}  ·  Resolved target environment: {target_env} (resolved from {en
 | `stage_run.py` refuses the environment as out of scope | Correct behaviour, not a config bug: the env isn't in `allowed_envs` and there is no override flag. Report it per S2 and point to the Harness UI |
 | Execution sits in a waiting status | Check whether it's an in-pipeline approval: report as still running with the approval named; never read it as a failure |
 | An execution of this pipeline is already running when you arrive | It is not necessarily yours. Read its trigger metadata: a webhook/PR trigger or a different triggering identity means it belongs to someone else — report whose it is and stop; don't adopt it as this trigger's result and don't abort it without the owner's say-so |
-| The result reached the caller noticeably later than the execution finished | The wait wasn't on the trigger call, or a fallback wait overshot the finish. Put the wait on the trigger action under `server_wait` (`--wait` on the stage-subset fallback); when polling, hold to `interval_seconds` and shrink the remaining wait as the expected finish nears |
-| The pipeline finished but the caller was still told "waiting" | The wait was hosted in a shell whose budget was smaller than the run, so it detached and the verdict landed in a file nobody was awaiting. Fix the hosting, not the script: budget ≥ the printed `expected_duration_s`, `\| tee` instead of `>`, a `^TERMINAL:` notification rule, and if it detaches anyway, await that shell (or read `--result-json`) before reporting |
-| You looked up the awaiting tool after a shell detached, then returned anyway | Looking it up is not calling it. A detached `--wait` is an uncollected result: await it to completion or read the `--result-json` file, and report only with the verdict in hand |
+| The result reached the caller noticeably later than the execution finished | The wait wasn't on the trigger call, or a fallback wait overshot the finish. Put the wait on the trigger action under `server_wait`; on the stage-subset fallback, start step 2 (`--wait-execution`) right after step 1 returns; when polling, hold to `interval_seconds` and shrink the remaining wait as the expected finish nears |
+| The pipeline finished but the caller was still told "waiting" | The wait was hosted in a shell whose budget was smaller than the run, so it detached and the verdict landed in a file nobody was awaiting. Fix the hosting, not the script: background step 2, await it in slices with pattern `^TERMINAL:`, `\| tee` instead of `>`, and read `--result-json` after every slice before reporting |
+| The pipeline finished (result file written) but the caller kept blocking on the wait call for many minutes | Step 2 was hosted as one long foreground call (20–35 min budget) with an output-notification rule; the call's completion never reached the caller, and the tool layer re-ran it once (two `Waiting up to …` headers in the log — harmless, the wait is read-only). Background step 2 and await in ≤ 20-min slices, read `--result-json` after each, no `notify_on_output` (cncms #186) |
+| You looked up the awaiting tool after a shell detached, then returned anyway | Looking it up is not calling it. A detached wait is an uncollected result: await it to completion, re-run step 2, or read the `--result-json` file, and report only with the verdict in hand |
 | `--result-json` file exists from an earlier attempt | Read it first — it carries the handle, and a non-null `terminal` means the verdict is already known and nothing needs re-triggering or re-deriving from Harness |
 | The execution ends as `IgnoreFailed` | Terminal, and the deploy proceeded: a non-blocking step failed and the failure strategy ignored it. Report it as completed-with-ignored-items and name the stages carrying one; don't call it a failed deploy, and don't keep waiting on it |
 | The wait timed out but Harness shows the run finished long ago | The terminal status wasn't in the vocabulary, so the wait read it as "still running". Check it against S5's table and report the raw status rather than extending the wait |
-| The stage fallback exits without a result | It was run without `--wait`, so it returns at the trigger. Re-check the handle's status — don't re-trigger — and pass `--wait` next time || A retry is rejected for a required variable the original run clearly had | A retry does not inherit a webhook/trigger-supplied input set. Read the original execution's merged runtime inputs and replay them verbatim — don't re-answer them yourself, or the retry runs on values the original never used |
+| The stage fallback's trigger returned without a verdict | Expected: step 1 (`--execute`) always returns at `TRIGGERED:`. Don't re-trigger — run step 2, `--wait-execution <id>` with the same `--result-json` |
+| `--execute --wait` is refused | Expected: trigger and wait are two calls now. Drop `--wait`, run step 1, then step 2 |
+| `stage_run.py` exits 5 / prints `TERMINAL: trigger_unknown` | The trigger response was unreadable and no execution could be attributed to it. It may have fired: **don't re-trigger**. Check the pipeline in Harness; adopt a new run only by S4's ownership rule and resume with `--wait-execution <id>`; anything unclear → ask the user |
+| `stage_run.py` exits 6 / prints `TERMINAL: already_triggered` | The idempotency lock worked: this exact trigger already went out (or may have). Nothing was sent. Resume with the `--wait-execution <id>` it printed; if it printed no id, reconcile by S4's ownership rule. Don't delete the result file or switch to a fresh path to "get it through" — that is precisely the double deploy the lock prevents |
+| Two executions appeared for one confirmation | The same `--execute` command ran twice (a re-run tool call). The lock (exit 6) now blocks this; if it still happens, the two calls used different `--result-json` paths — check how the path was built. Report both executions to the user and let them decide which to abort; never abort one yourself |
+| You're about to write a script (wait loop, recovery, inline `python3 -`) during a run | Stop. Every trigger path is covered by `stage_run.py`; if one isn't, report the gap and fix the script instead |
+| A retry is rejected for a required variable the original run clearly had | A retry does not inherit a webhook/trigger-supplied input set. Read the original execution's merged runtime inputs and replay them verbatim — don't re-answer them yourself, or the retry runs on values the original never used |
 | Waiting times out still not terminal | Report "still running" + handle, hand to a human; don't rule success/failure |
 | The pipeline fails | Report a stage-level summary, hand to development/DevOps; don't guess the root cause or auto re-trigger |
 | Need to re-run a failed pipeline | A human decision; this step doesn't auto re-run |
