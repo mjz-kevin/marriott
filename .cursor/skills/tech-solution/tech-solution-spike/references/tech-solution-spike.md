@@ -119,7 +119,7 @@
 
 ## 4. Validation Process (if a PoC exists) — multiple options
 
-{If a PoC exists, record the validation method, demo or data, and key conclusions for each option validated. If no PoC was run, write `—`.}
+{If a PoC exists, record the validation method, demo or data, and key conclusions for each option validated. PoC scope: with 2 or fewer options in chapter 3, every option gets a PoC; with more than 2, only the options the TL selected. If no PoC was run, write `—`.}
 
 ### Option 1: {Name}
 

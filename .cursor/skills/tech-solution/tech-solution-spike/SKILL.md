@@ -46,7 +46,7 @@ Template: [tech-solution-spike.md](references/tech-solution-spike.md)
 - S2 Chapter 1 Background and research goals (problem / key questions / constraints)
 - S3 Chapter 2 Evaluation dimensions (6 dimensions, extendable)
 - S4 Chapter 3 Solution comparison (>=2 solutions, 6 elements each + comparison matrix)
-- S5 Chapter 4 Validation process (PoC: method / Demo+data / conclusion)
+- S5 Chapter 4 Validation process (PoC scope by option count: <=2 options -> auto PoC for each; >2 -> TL picks; then method / Demo+data / conclusion)
 - S6 Chapter 5 Selection conclusion and recommendation (recommendation + rejection reasons + impact on estimation/schedule)
 - S7 Chapter 6 Open items and risks
 - S8 Chapter 7 Review conclusion (leave only the header row blank, filled in manually by reviewers)
@@ -80,8 +80,20 @@ To keep the solution readable, add diagrams on demand per [diagram-guide.md](../
 
 ### S5 Validation process (PoC)
 
-For each validated solution, give: the validation method, the Demo / data, and the key conclusion.
+**PoC scope — decided by the number of options in chapter 3 (do this before writing chapter 4):**
+
+| Options in chapter 3 | PoC scope | Ask the TL? |
+| --- | --- | --- |
+| <= 2 (including a single option with "why there's no alternative") | Generate the PoC for **every** option automatically | No — proceed directly |
+| > 2 | Only the option(s) the TL selects | **Yes — stop and ask before writing chapter 4** |
+
+- **How to ask (> 2 options):** one multi-select question listing every chapter-3 option (`Option X: {Name}` + a one-line summary drawn from the comparison matrix); put up to two recommended options first, marked `(Recommended)` — the recommendation comes from the matrix, the choice is the TL's. Also offer "No PoC this cycle". Use the dialog/question tool when available; without dialog control (sub-agent), return the question in the machine-readable option format with status `waiting_user` and stop — never pick on the TL's behalf.
+- Record the TL's answer verbatim in the solution's `sessions/` and carry it into revisions (don't re-ask unless the option set in chapter 3 changes).
+- Chapter 4 contains one `### Option N: {Name}` block per option in scope, in chapter-3 order; options outside the scope get no block (their rejection reasons still go in chapter 5). "No PoC this cycle" -> chapter 4 is `—`.
+
+For each option in scope, give: the validation method, the Demo / data, and the key conclusion.
 The PoC code lands in the team's actual code repo, and the build command must run successfully.
+Measured numbers come only from an actual run or a cited source — never fabricate them; when the PoC hasn't been run yet, state the expected measurement in "Demo / data" and log the pending run as an item in chapter 6.
 
 ### S6 Selection conclusion and recommendation
 
@@ -98,6 +110,7 @@ The PoC code lands in the team's actual code repo, and the build command must ru
 | Don't expand into field-level design | When field-level design is needed, the conclusion moves to a separate Story-level detailed solution |
 | Decision criteria first | Research without decision criteria isn't started |
 | The conclusion must be a single choice | After the comparison you must give a recommendation; when a single choice isn't possible, state that the evaluation dimensions or data are insufficient |
+| PoC scope by option count | <= 2 options -> PoC every option automatically, no question; > 2 options -> the TL selects which option(s) get a PoC before chapter 4 is written; never choose the PoC scope yourself when there are > 2 options |
 | Don't estimate | Only give the impact on estimation; points are set by DEV/QA |
 | Example data must be mock | Same as other solution tiers |
 | Diagrams on demand | Where an approach or flow would take long prose, add a diagram per the diagram guide instead; text next to a diagram doesn't restate it; diagrams only visualize sourced facts |
@@ -118,7 +131,8 @@ The PoC code lands in the team's actual code repo, and the build command must ru
 - >= 2 solutions, each with all 6 elements filled
 - Every mermaid diagram passes the diagram guide's syntax spec and renders; diagrams of different options use consistent naming
 - The comparison matrix is filled (when >=2 solutions)
-- The PoC has a validation method and a key conclusion
+- PoC scope matches the rule: <= 2 options -> every option has a PoC block; > 2 options -> exactly the TL-selected options (answer recorded in `sessions/`), or `—` if the TL chose "No PoC this cycle"
+- Each PoC block has a validation method and a key conclusion; no fabricated measurements
 - The recommended solution + rejection reasons + impact on estimation/schedule are all present
 - The time box and decision criteria are visible in the text
 

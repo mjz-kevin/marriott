@@ -288,6 +288,7 @@ flowchart TD
 2. By mode, invoke `tech-solution-prd` / `tech-solution-spike` / `tech-solution-detail` with the PRD read in T1 and other materials, plus the **output path and version number**; when revising, also provide the previous version file as the basis.
 3. Append an entry to `versions` (`status: draft`) and update `current_version`; mark the previous unpublished draft as `superseded`.
 4. In prd mode, handle the Skill's determinations: STB / ARB triggered -> prompt the TL to initiate a review and reserve time; points that can't be concluded -> write to `pending_spikes` and prompt the TL to open a spike ticket at the refine meeting (whether to open it is the TL's decision).
+   In spike mode, apply the Skill's PoC-scope rule (`tech-solution-spike` S5): <= 2 options in chapter 3 -> PoC every option automatically, no question; > 2 options -> pause T3 with `status: waiting_user` and ask the TL (multi-select option control, recommendation first, plus "No PoC this cycle") which option(s) get a PoC, record the verbatim answer in `sessions/{timestamp}_poc-scope.md`, then resume T3. Never choose the PoC scope on the TL's behalf.
 5. `waiting_confirm`, clear `confirmed`, and set `confirmers_required` (prd: TL only—write-back into the PRD, links and content alike, is done directly by this Agent and needs no PO sign-off; spike: TL; detail: DEV or TL, depending on the user).
 
 ### T4 Manual sign-off (👤)
