@@ -3,7 +3,7 @@
 先跑两条命令收集事实，大部分问题能直接定位：
 
 ```bash
-python ~/.cursor/skills/ai-sdlc-info/scripts/version.py     # 用户机器：装了哪些角色 / 版本 / 是否缺资产 / 版本是否混装
+python ~/.cursor/skills/common/ai-sdlc-info/scripts/version.py     # 用户机器：装了哪些角色 / 版本 / 是否缺资产 / 版本是否混装
 python init/check.py                                        # 仓库里：资产与清单是否一致
 ```
 
@@ -20,6 +20,7 @@ Windows 下把 `~` 换成 `%USERPROFILE%`。
 | 运行时包构建告警「res/tools 无 …」「res/mcp-offline 不存在」 | 对应载荷没准备 | 按 `init/README.md`「离线载荷准备」补齐；告警不阻断构建，但用户侧会回退联网 npx / 系统 Chrome |
 | 在本仓库里调到的 Skill 行为和刚改的不一样 / 仓库里跑 `upload_confluence_v2.py` 报 `mcp.json 缺少 confluenceRest` | 仓库级与用户级 Skill 同时加载；仓库内脚本按自身位置找 `.cursor/mcp.json` | 见 [testing.md §3](testing.md#3-在-cursor-里实测-agent--skill) |
 | `sensitive-data-guard` 测试报 `fixture does not exist` 或部分用例失败 | `tests/fixtures/` 被 git 忽略，新克隆的仓库里没有或不全 | 见 [testing.md §2](testing.md#2-脚本测试) |
+| `check.py` 报 `[layout]` ERROR | Skill 没放在分组目录下（直接放在 `.cursor/skills/<skill>/`，或嵌套超过一层分组），或两个分组下有同名 skill | 移到 `.cursor/skills/<group>/<skill>/`（分组见 `AGENTS.md` §3）；同名的改名，Cursor 以目录名识别 skill |
 
 ## 2. 用户侧（安装 / 运行）
 
@@ -29,7 +30,7 @@ Windows 下把 `~` 换成 `%USERPROFILE%`。
 | MCP server（figma / marriott-github / harness）连不上 | ① 运行时未装，`mcp.json` 回退到系统 node 且入口 js 不存在；② 凭证为空；③ node 路径与实际芯片（arm64 / x64）不符 | ① 先装运行时包，再**重跑角色包 `install`** 重新生成 `mcp.json`；② 在 `~/.cursor/mcp.json` 填凭证；③ 同 ①，安装脚本会按实际运行时目录改写路径 |
 | Atlassian MCP 不可用 | 远程 MCP 需要在 Cursor 里完成 OAuth 授权 | 在 Cursor MCP 设置里对 `Atlassian-MCP-Server` 重新登录 |
 | 发布到 Confluence 失败：`mcp.json 缺少 confluenceRest` | 用户 `~/.cursor/mcp.json` 中 `confluenceRest.email` / `api_token` 未填 | 填写后重试（token 获取地址见 `mcp.json` 的 `_comment`） |
-| 每次都问选哪个 profile，或用错了团队 / 环境 | 选择是按「仓库根路径」记忆的，换了目录 / 仓库就需要重选 | `python ~/.cursor/skills/profile-select/scripts/profile.py show` 看当前选择，`use <name>` 切换 |
+| 每次都问选哪个 profile，或用错了团队 / 环境 | 选择是按「仓库根路径」记忆的，换了目录 / 仓库就需要重选 | `python ~/.cursor/skills/common/profile-select/scripts/profile.py show` 看当前选择，`use <name>` 切换 |
 | Windows 执行 `.ps1` 报中文乱码 / parser error | 直接运行了仓库里的模板（无 BOM），而非构建产物 | 使用 `init/dist/` 构建出的包内脚本（已写成 UTF-8 BOM + CRLF） |
 | Windows 提示脚本无法执行 | PowerShell 执行策略 | `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass` 后再运行 |
 | mermaid 图 / PDF 生成很慢或要联网 | 运行时包里缺离线 mermaid-cli / md-to-pdf / Chromium，回退 npx 联网 | 重装包含 `tools/` 的运行时包 |
@@ -37,3 +38,5 @@ Windows 下把 `~` 换成 `%USERPROFILE%`。
 | `ai-sdlc-info` 提示「未找到记录」 | 用版本记录功能（0.3.0）之前的旧包安装 | 重装一次最新角色包和运行时包 |
 | `ai-sdlc-info` 提示多个角色版本不一致 | 叠装的多个角色包来自不同版本 | 把所有已装角色升级到同一版本 |
 | 内容被 `sensitive-data-guard` 拦截 | 检测到疑似密钥 / 个人信息 | 确认是虚构测试数据后，按该 Skill 的白名单机制处理；**不要**为了通过而关掉护栏 |
+| 同一个 Skill 出现两份（`~/.cursor/skills/<skill>/` 与 `~/.cursor/skills/<分组>/<skill>/` 并存） | 0.3.3 及以前的包是平铺安装；之后又装了旧版包（降级），或用旧版包的 `uninstall` 卸载（它只认平铺路径） | 用最新角色包的 `uninstall` 卸载（同时清分组路径与平铺残留）后再装需要的版本；只是升级的话直接跑最新包 `install`，会自动迁移平铺残留 |
+| 安装时提示「…/skills/<分组>/ 是你自己的 skill，与 AI SDLC 分组目录同名」 | 用户自建的 skill 恰好叫 `common` / `test` / `dev` 等分组名，AI SDLC 的 skill 被装进了它的目录 | 把自建 skill 改个名（目录名与 frontmatter `name` 一起改），再重跑 `install` |

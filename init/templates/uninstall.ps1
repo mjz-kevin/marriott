@@ -4,7 +4,7 @@
 #
 # 会删除（仅限清单内、AI SDLC 带来的资产；清单由 build.py 从 roles.json 汇总注入）：
 #   - agents：所有角色涉及的 agent（~\.cursor\agents\<name>.md）
-#   - skills：所有角色 + 公共的 skill（~\.cursor\skills\<name>\）
+#   - skills：所有角色 + 公共的 skill（~\.cursor\skills\<分组>\<name>\，含旧版平铺残留 ~\.cursor\skills\<name>\；空分组目录一并删除）
 #   - profiles：所有 *.yaml 以及 setup.json（~\.cursor\profiles\）
 #   - mcp 示例模板：mcp.example.macos.json / mcp.example.windows.json
 #   - 角色版本记录：~\.cursor\ai-sdlc-installed\role-*.json
@@ -66,9 +66,23 @@ foreach ($a in $Agents) {
 }
 
 # ---- 2) skills（仅清单内的，绝不动用户自己的 skill）----
+# 清单项为 <分组>/<skill>：删分组路径，同时删旧版平铺安装残留的 skills\<skill>，最后删空的分组目录。
 Write-Host "--> 卸载 skills"
 foreach ($s in $Skills) {
-    if ($s) { Remove-One (Join-Path $CursorHome "skills\$s") "skill" }
+    if (-not $s) { continue }
+    Remove-One (Join-Path $CursorHome ("skills\" + ($s -replace '/', '\'))) "skill"
+    $name = Split-Path -Leaf $s
+    $legacy = Join-Path $CursorHome "skills\$name"
+    if ($name -ne $s -and (Test-Path (Join-Path $legacy "SKILL.md"))) { Remove-One $legacy "skill（旧版平铺）" }
+}
+if (-not $DryRun) {
+    foreach ($s in $Skills) {
+        if (-not $s -or $s -notmatch '/') { continue }
+        $groupDir = Join-Path $CursorHome ("skills\" + ($s.Split('/')[0]))
+        if ((Test-Path $groupDir) -and -not (Get-ChildItem -Force -Path $groupDir -ErrorAction SilentlyContinue)) {
+            Remove-Item -LiteralPath $groupDir -Force -ErrorAction SilentlyContinue
+        }
+    }
 }
 
 # ---- 3) profiles（所有 *.yaml 与 setup.json）----

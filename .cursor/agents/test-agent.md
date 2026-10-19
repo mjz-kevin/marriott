@@ -29,7 +29,7 @@ A development Agent for mobile (iOS-first) UI automation testing. Built around t
 | What | Where / how |
 |------|-------------|
 | **Select this Agent** | Cursor Agent picker → **`test-agent`** (matches frontmatter `name` in this file). |
-| **Six Skills** | Full definitions under `.cursor/skills/<skill-name>/SKILL.md`. This Agent **reads and executes** the matching file per the routing table below; Skills may also auto-match globally via their `description`. |
+| **Six Skills** | Full definitions under `.cursor/skills/test/<skill-name>/SKILL.md`. This Agent **reads and executes** the matching file per the routing table below; Skills may also auto-match globally via their `description`. |
 | **Memory** | Both memory libraries now live on Confluence (DBU4 space, folder from profile `mcp.confluence.test.memory_pages.folder`, current value `4363354130`), read read-only via `getConfluencePage` and written back only via the shared `upload_confluence_v2.py` script: the **test-script-memory** page (implementation rules; pageId from profile `mcp.confluence.test.memory_pages.test_script`, current value `4364992536`); the **test-case-memory** page (step-breakdown habits, especially for `test-case-to-script`; pageId from profile `mcp.confluence.test.memory_pages.test_case`, current value `4364632091`). Each page body is a single `yaml` code block. |
 | **MCP** | Copy `.cursor/mcp.example.macos.json` (or `.windows.json`) → `.cursor/mcp.json`, authorize Atlassian per Skill prerequisites. **If the Cursor Atlassian plugin is also installed, ask the user to disable it** (Settings → Plugins / Integrations) so only `Atlassian-MCP-Server` exposes Jira / Confluence tools — a duplicate tool set makes tool selection ambiguous and offers Confluence page-write tools that are forbidden here (every Confluence body goes through the `confluence-publish` upload script). |
 
@@ -71,7 +71,7 @@ A development Agent for mobile (iOS-first) UI automation testing. Built around t
 
 ## Command routing (Agent semantic routing - not native Cursor slash commands)
 
-> **Mechanism**: Cursor Skills (`.cursor/skills/*/SKILL.md`) themselves **cannot** be manually invoked with `/` or `./`; they are only auto-matched via their `description`. Real `/` slash commands come from `.cursor/commands/` (not created in this project). This section is **this Agent's semantic routing convention**: within a conversation where `test-agent` is selected, when the user types any "trigger form" in the table below, this Agent immediately **reads and executes** the corresponding `SKILL.md`, equivalent to entering that Skill directly. This routing works by the Agent understanding the user input and does not depend on Cursor's native command mechanism.
+> **Mechanism**: Cursor Skills (`.cursor/skills/<group>/<skill>/SKILL.md`) themselves **cannot** be manually invoked with `/` or `./`; they are only auto-matched via their `description`. Real `/` slash commands come from `.cursor/commands/` (not created in this project). This section is **this Agent's semantic routing convention**: within a conversation where `test-agent` is selected, when the user types any "trigger form" in the table below, this Agent immediately **reads and executes** the corresponding `SKILL.md`, equivalent to entering that Skill directly. This routing works by the Agent understanding the user input and does not depend on Cursor's native command mechanism.
 
 **Matching rule**: when the user input is prefixed with `/` or `./`, or writes a Skill name directly (case-insensitive), route per the table below; once routing is recognized, skip the guessing in "entry recognition and tiering" and go straight into the target Skill (but **the per-step user-confirmation gates still cannot be skipped**).
 
@@ -88,12 +88,12 @@ A development Agent for mobile (iOS-first) UI automation testing. Built around t
 
 | Trigger form (any works) | Routed-to Skill (read and execute its SKILL.md) | Purpose |
 |----------------------|------------------------------------------|------|
-| `/jira-to-test-case`, `./jira-to-test-case`, `jira-to-test-case`; or intent keywords "**design test cases / analyze requirements / produce a case outline / convert requirement into cases / functional test cases / summarize from a requirement**" | `.cursor/skills/jira-to-test-case/SKILL.md` | **Upstream**: requirement/Jira -> requirement outline + functional test cases -> publish to the Confluence `{epic}-TestCase` folder beside the Tech Solution (no feature/scripts) |
-| `/test-case-authoring`, `./test-case-authoring`, `test-case-authoring` | `.cursor/skills/test-case-authoring/SKILL.md` | Main line 1: Jira MCP -> pseudocode + feature (its upstream can come from the Confluence case page published by `jira-to-test-case` - landing based on that page's case list + involved pages) |
-| `/test-case-to-script`, `./test-case-to-script`, `test-case-to-script` | `.cursor/skills/test-case-to-script/SKILL.md` | Main line 2: pseudocode -> executable pytest+Appium code |
-| `/test-debug-script`, `./test-debug-script`, `test-debug-script` | `.cursor/skills/test-debug-script/SKILL.md` | Main line 3: debug/run feature -> locate/fix + distill experience |
-| `/test-page-elements`, `./test-page-elements`, `test-page-elements` | `.cursor/skills/test-page-elements/SKILL.md` | Auxiliary: current real-device page -> Page Object elements |
-| `/test-run-report-bug`, `./test-run-report-bug`, `test-run-report-bug` | `.cursor/skills/test-run-report-bug/SKILL.md` | Execution: ask run iOS/Android/all/custom + app version -> run all features for that platform -> publish run report into the Automation Report / `<platform> <version>` folder (error cause on top) -> file Jira Bugs for failed cases |
+| `/jira-to-test-case`, `./jira-to-test-case`, `jira-to-test-case`; or intent keywords "**design test cases / analyze requirements / produce a case outline / convert requirement into cases / functional test cases / summarize from a requirement**" | `.cursor/skills/test/jira-to-test-case/SKILL.md` | **Upstream**: requirement/Jira -> requirement outline + functional test cases -> publish to the Confluence `{epic}-TestCase` folder beside the Tech Solution (no feature/scripts) |
+| `/test-case-authoring`, `./test-case-authoring`, `test-case-authoring` | `.cursor/skills/test/test-case-authoring/SKILL.md` | Main line 1: Jira MCP -> pseudocode + feature (its upstream can come from the Confluence case page published by `jira-to-test-case` - landing based on that page's case list + involved pages) |
+| `/test-case-to-script`, `./test-case-to-script`, `test-case-to-script` | `.cursor/skills/test/test-case-to-script/SKILL.md` | Main line 2: pseudocode -> executable pytest+Appium code |
+| `/test-debug-script`, `./test-debug-script`, `test-debug-script` | `.cursor/skills/test/test-debug-script/SKILL.md` | Main line 3: debug/run feature -> locate/fix + distill experience |
+| `/test-page-elements`, `./test-page-elements`, `test-page-elements` | `.cursor/skills/test/test-page-elements/SKILL.md` | Auxiliary: current real-device page -> Page Object elements |
+| `/test-run-report-bug`, `./test-run-report-bug`, `test-run-report-bug` | `.cursor/skills/test/test-run-report-bug/SKILL.md` | Execution: ask run iOS/Android/all/custom + app version -> run all features for that platform -> publish run report into the Automation Report / `<platform> <version>` folder (error cause on top) -> file Jira Bugs for failed cases |
 
 > **Behavior after routing**: after entering the target Skill, still follow the "usage principles" in this file - read the **test-script-memory** Confluence page (read-only via `getConfluencePage`, pageId from profile `mcp.confluence.test.memory_pages.test_script`) before generating, stop at each step's artifact for user confirmation, write back to the memory page (via the `upload_confluence_v2.py` script) after `test-debug-script` passes. Command routing only handles "which Skill to enter quickly" and does not change each Skill's internal constraints and confirmation gates.
 >
@@ -108,13 +108,14 @@ A development Agent for mobile (iOS-first) UI automation testing. Built around t
 |-- profiles/
 |   |-- (test_case_memory / test_script_memory 已迁至 Confluence，不再是本地文件；权威源见各 profile mcp.confluence.test.memory_pages)
 |-- mcp.example.macos.json                    # Jira MCP config template -> copy to mcp.json and fill credentials
-|-- skills/                                   # full Skill definitions (auto-matched by description; this Agent also enters quickly via the "Command routing" table above)
-    |-- jira-to-test-case/SKILL.md            # upstream: requirement/Jira -> requirement outline + functional test cases -> publish to Confluence {epic}-TestCase beside the Tech Solution (no feature/scripts)
-    |-- test-case-authoring/SKILL.md          # main line 1: Jira MCP -> pseudocode + feature
-    |-- test-case-to-script/SKILL.md          # main line 2: pseudocode -> executable pytest+Appium code
-    |-- test-debug-script/SKILL.md            # main line 3: debug/run feature -> locate/fix + write experience back to memory
-    |-- test-page-elements/SKILL.md           # auxiliary Skill: current real-device page -> Page Object elements (tests/mobile/ios/pages/)
-    |-- test-run-report-bug/SKILL.md          # execution Skill: ask run iOS/Android/all/custom + app version -> run all features -> publish run report into Automation Report / <platform> <version> folder (error cause on top) -> file Jira Bugs
+|-- skills/                                   # full Skill definitions, grouped by folder (auto-matched by description; this Agent also enters quickly via the "Command routing" table above)
+    |-- test/                                 # QA test group
+        |-- jira-to-test-case/SKILL.md        # upstream: requirement/Jira -> requirement outline + functional test cases -> publish to Confluence {epic}-TestCase beside the Tech Solution (no feature/scripts)
+        |-- test-case-authoring/SKILL.md      # main line 1: Jira MCP -> pseudocode + feature
+        |-- test-case-to-script/SKILL.md      # main line 2: pseudocode -> executable pytest+Appium code
+        |-- test-debug-script/SKILL.md        # main line 3: debug/run feature -> locate/fix + write experience back to memory
+        |-- test-page-elements/SKILL.md       # auxiliary Skill: current real-device page -> Page Object elements (tests/mobile/ios/pages/)
+        |-- test-run-report-bug/SKILL.md      # execution Skill: ask run iOS/Android/all/custom + app version -> run all features -> publish run report into Automation Report / <platform> <version> folder (error cause on top) -> file Jira Bugs
 ```
 
 Companion memory (both migrated to Confluence - DBU4 space, folder from profile `mcp.confluence.test.memory_pages.folder`; read read-only via `getConfluencePage`, written back only via the `upload_confluence_v2.py` script; each page body is a single `yaml` code block):
@@ -122,7 +123,7 @@ Companion memory (both migrated to Confluence - DBU4 space, folder from profile 
 - **test-script-memory** Confluence page (pageId from profile `mcp.confluence.test.memory_pages.test_script`, current value `4364992536`) — **general-rules** memory (locator/wait/assert/stability); read before generating; written after distilled debugging experience.
 - **test-case-memory** Confluence page (pageId from profile `mcp.confluence.test.memory_pages.test_case`, current value `4364632091`) — **step-breakdown** memory when scenario steps are vague; primarily consumed by `test-case-to-script` (and optionally `test-case-authoring`).
 
-Skill entries: all **six** Skills under `.cursor/skills/` — `jira-to-test-case` / `test-case-authoring` / `test-case-to-script` / `test-debug-script` / `test-page-elements` / `test-run-report-bug` — are full definitions auto-matched by `description` and reachable quickly by this Agent via the "Command routing" table (`/<skill-name>` semantic triggers). **Single source of truth for orchestration**: `.cursor/agents/test-agent.md` only. **Single source of truth for cross-case technical rules**: the **test-script-memory** Confluence page (profile `mcp.confluence.test.memory_pages.test_script`).
+Skill entries: all **six** Skills under `.cursor/skills/test/` — `jira-to-test-case` / `test-case-authoring` / `test-case-to-script` / `test-debug-script` / `test-page-elements` / `test-run-report-bug` — are full definitions auto-matched by `description` and reachable quickly by this Agent via the "Command routing" table (`/<skill-name>` semantic triggers). **Single source of truth for orchestration**: `.cursor/agents/test-agent.md` only. **Single source of truth for cross-case technical rules**: the **test-script-memory** Confluence page (profile `mcp.confluence.test.memory_pages.test_script`).
 
 ## Current project artifact locations (ground truth - all artifacts land here)
 

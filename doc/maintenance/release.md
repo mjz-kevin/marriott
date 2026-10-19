@@ -26,7 +26,7 @@
 # 0) 前置：develop 已包含要发布的全部改动，工作区干净
 git checkout develop && git pull
 python init/check.py --strict         # WARN 也要处理或确认可接受
-python .cursor/skills/sensitive-data-guard/tests/run_tests.py   # 与上一版本的结果对比（fixtures 不入库，见 testing.md §2）
+python .cursor/skills/common/sensitive-data-guard/tests/run_tests.py   # 与上一版本的结果对比（fixtures 不入库，见 testing.md §2）
 python init/build.py --no-zip --yes    # 先确认能组装
 
 # 1) 开 release 分支（以 0.3.1 为例）

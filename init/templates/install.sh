@@ -71,8 +71,34 @@ copy_dir_contents() {
 echo "--> 安装 agents"
 copy_dir_contents "$PKG_DIR/agents" "$CURSOR_HOME/agents"
 
-echo "--> 安装 skills"
+echo "--> 安装 skills（按分组：skills/<分组>/<skill>/）"
+# 迁移：旧版平铺安装（skills/<skill>/）或上个版本放在别的分组下的同名 AI SDLC skill，
+# 会让 Cursor 同时识别到两份同名 skill。先把旧目录并入新分组路径（保留用户在 skill 目录里
+# 新增的文件，如 sensitive-data-guard/whitelists/ 下自建的白名单），再删掉旧目录。
+( cd "$PKG_DIR/skills" && find . -mindepth 2 -name SKILL.md ) | while IFS= read -r md; do
+  rel="${md#./}"; rel="${rel%/SKILL.md}"          # <分组>/<skill>
+  name="$(basename "$rel")"
+  dst="$CURSOR_HOME/skills/$rel"
+  for old in "$CURSOR_HOME/skills/$name" "$CURSOR_HOME/skills"/*/"$name"; do
+    [ -f "$old/SKILL.md" ] || continue
+    [ "$old" = "$dst" ] && continue
+    mkdir -p "$dst"
+    cp -R "$old/." "$dst/"
+    rm -rf "$old"
+    echo "    已迁移旧位置的 skill：${old} → ${dst}"
+    parent="$(dirname "$old")"
+    [ "$parent" != "$CURSOR_HOME/skills" ] && rmdir "$parent" 2>/dev/null || true
+  done
+done
 copy_dir_contents "$PKG_DIR/skills" "$CURSOR_HOME/skills"
+# 分组目录本身若是用户自己的 skill（如 ~/.cursor/skills/test/SKILL.md），AI SDLC 的 skill 会被装进它的目录里，
+# Cursor 识别结果不可预期；不擅自改动用户资产，只提示。
+for g in "$PKG_DIR/skills"/*/; do
+  g="$(basename "$g")"
+  if [ -f "$CURSOR_HOME/skills/$g/SKILL.md" ]; then
+    echo "    ⚠️ ${CURSOR_HOME}/skills/${g}/ 是你自己的 skill，与 AI SDLC 分组目录同名；建议把它改名后重跑本脚本。"
+  fi
+done
 
 echo "--> 安装 profiles"
 # profile 的 *.yaml 无条件覆盖（团队统一配置，无用户修改场景）；
@@ -315,4 +341,4 @@ echo "     - Harness: HARNESS_ACCOUNT_ID + HARNESS_API_KEY  marriott.harness.io 
 echo "  2) 在 Cursor 的 MCP 设置里确认 Atlassian / figma / marriott-github / harness 四个 server 已连接"
 echo "     （agents / skills 已放入 ~/.cursor/，Cursor 会自动识别，无需重启）"
 echo "  3) 之后想查看当前安装的版本：在 Cursor 对话里问「当前 AI SDLC 是什么版本」，"
-echo "     或运行 python3 $CURSOR_HOME/skills/ai-sdlc-info/scripts/version.py"
+echo "     或运行 python3 $CURSOR_HOME/skills/common/ai-sdlc-info/scripts/version.py"

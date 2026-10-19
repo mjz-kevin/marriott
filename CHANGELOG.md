@@ -13,10 +13,13 @@
 ## [Unreleased]
 
 ### 变更
+- **Skill 按分组文件夹存放（仓库、安装包、用户机器三处一致）**：33 个 Skill 从平铺的 `.cursor/skills/<skill>/` 移到 `.cursor/skills/<分组>/<skill>/`，分组与 `AGENTS.md` §3 一致：`common`（公共 5 个）/ `requirement`（PO 5 个）/ `tech-solution`（4 个）/ `dev`（8 个）/ `code-review`（4 个）/ `cicd`（`harness-invoke`）/ `test`（QA 6 个）。Cursor 官方支持 skill 嵌套目录（递归扫描 `SKILL.md`，skill 身份取 `SKILL.md` 所在目录名，分组目录只起组织作用），frontmatter `name` 不变。`roles.json` 仍只写 skill 名，分组只由磁盘目录决定：`build.py` 递归发现 skill 并按分组路径打包，manifest 的 skills 增加 `path` 字段，卸载清单改为 `<分组>/<skill>`；`install.sh` / `install.ps1` 按分组落到 `~/.cursor/skills/<分组>/<skill>/`，安装前把旧版平铺（或上个版本在其它分组下）的同名 skill 合并进新位置后删除，避免同名 skill 出现两份，用户在 skill 目录里自建的文件（如 `sensitive-data-guard/whitelists/` 下的白名单）会保留；`uninstall.*` 同时清理分组路径、旧平铺残留与空分组目录。按固定层数定位的脚本改为「向上找最近的 `.cursor` 目录」，与分组深度无关：`upload_confluence_v2.py`（`mcp.json`）、`ai-sdlc-info/version.py`（cursor home，且按 manifest 的 `path` 核对安装完整性，兼容旧记录）、`sensitive-data-guard/platform_paths.py`（兜底仓库根）、`test-page-elements/collect_page.py`（仓库根）；`harness-invoke/stage_run.py` 改为在任意分组下查找 `profile-select`。`check.py` 改为递归发现 skill，新增 `layout` 检查（必须位于 `<分组>/<skill>/`、跨分组不得重名）。全仓库 `skills/<skill>` 形式的路径引用（Skill 正文中的脚本命令、`test-agent` 路由表、`AGENTS.md`、`init/README.md`、`doc/maintenance/`）已统一改为带分组的路径；`../<skill>/references/` 形式的跨 skill 相对引用两端同组，仍然有效。Agent 不分组（Cursor 文档未说明 `agents/` 支持子目录），保持平铺。设计文档里只有示意性的 `skills/` 目录，未改。
 - **技术方案按需增加图表，提升可读性**：反馈三档技术方案文字过多、不便阅读。新增三档共用的图表规范 `tech-solution-detail/references/diagram-guide.md`（放在 TL / Dev 都会安装的 `tech-solution-detail` 下，`tech-solution-prd` / `tech-solution-spike` 用 `../tech-solution-detail/references/diagram-guide.md` 引用）：保留模板原有的基础图（PRD 级架构图、Spike 各方案示意图、Detail 主流程图 / CMS 架构图，仍可用 Confluence 链接替代），其余按需增加——某段内容在描述结构 / 调用顺序 / 分支 / 状态 / 数据关系、用图比文字更清楚时，加对应的时序图 / 流程图 / 状态图 / ER 图 / 任务依赖图 / timeline·gantt / quadrantChart；规范给出按内容选图的对照、各档常见加图位置（建议而非清单）、图旁文字不复述图、单图约 15 节点以内、不为加图而加图，以及 mermaid 语法规范（只用稳定图类型，已用内置 mermaid-cli 12 实测渲染）。三个 Skill 各加一节「Diagrams on demand」及对应强制规则 / 质量门禁（门禁只要求「长段纯文字已考虑配图」与 mermaid 可渲染，不新增必须出现的图）；「忠于模板」规则明确放在已有章节内的图（可带一行图注）不算模板外内容；四份模板的引导块补了按需配图提示（引导块不进成品）。`tech-solution-agent` 的 T4 以 Skill 质量门禁为准，未改；`tech-solution-publish` / `md-to-pdf` 已支持全部 mermaid 类型与本地图片，未改；`prd-authoring` 自带的 Diagram spec 属 PO 包，未改。
 
 ### 升级方式
-- **直接覆盖**：仅新增一个 reference 文件并修改 Skill 正文，无资产删改名、无 profile 字段变化。
+- **直接覆盖**：新包的 `install` 会自动把 `~/.cursor/skills/<skill>/` 下的旧版平铺 skill 迁到 `~/.cursor/skills/<分组>/<skill>/`，无需先卸载。注意命令行里直接调用 skill 脚本的路径变了，如 `~/.cursor/skills/common/confluence-publish/scripts/upload_confluence_v2.py`、`~/.cursor/skills/common/ai-sdlc-info/scripts/version.py`。
+  - 升级后**卸载请用本版及以后的包**：0.3.3 及以前包的 `uninstall` 只认平铺路径，删不掉分组目录。**降级**到 0.3.3 及以前，要先用本版包 `uninstall`，再装旧包——否则旧包平铺安装一份，加上分组目录里的一份，同一个 skill 会出现两份。
+- 技术方案图表：仅新增一个 reference 文件并修改 Skill 正文，无资产删改名、无 profile 字段变化。
 ---
 
 ## [0.3.3] - 2026-10-16

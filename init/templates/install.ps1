@@ -76,8 +76,50 @@ function Copy-Contents($src, $dst) {
 Write-Host "--> 安装 agents"
 Copy-Contents (Join-Path $PkgDir "agents") (Join-Path $CursorHome "agents")
 
-Write-Host "--> 安装 skills"
-Copy-Contents (Join-Path $PkgDir "skills") (Join-Path $CursorHome "skills")
+Write-Host "--> 安装 skills（按分组：skills\<分组>\<skill>\）"
+# 迁移：旧版平铺安装（skills\<skill>\）或上个版本放在别的分组下的同名 AI SDLC skill，
+# 会让 Cursor 同时识别到两份同名 skill。先把旧目录并入新分组路径（保留用户在 skill 目录里
+# 新增的文件，如 sensitive-data-guard\whitelists\ 下自建的白名单），再删掉旧目录。
+$skillsSrc = Join-Path $PkgDir "skills"
+$skillsDst = Join-Path $CursorHome "skills"
+if (Test-Path $skillsSrc) {
+    Get-ChildItem -Path $skillsSrc -Recurse -File -Filter "SKILL.md" | ForEach-Object {
+        $skillDir = $_.Directory
+        $rel = $skillDir.FullName.Substring($skillsSrc.Length).TrimStart('\', '/')   # <分组>\<skill>
+        if ($rel -notmatch '[\\/]') { return }                                        # 只处理分组下的 skill
+        $name = $skillDir.Name
+        $dst = Join-Path $skillsDst $rel
+        $olds = @(Join-Path $skillsDst $name)
+        if (Test-Path $skillsDst) {
+            $olds += Get-ChildItem -Path $skillsDst -Directory -ErrorAction SilentlyContinue |
+                     ForEach-Object { Join-Path $_.FullName $name }
+        }
+        foreach ($old in $olds) {
+            if (-not (Test-Path (Join-Path $old "SKILL.md"))) { continue }
+            if ((Resolve-Path $old).Path -eq [System.IO.Path]::GetFullPath($dst)) { continue }
+            New-Item -ItemType Directory -Force -Path $dst | Out-Null
+            Get-ChildItem -Path $old -Force | ForEach-Object {
+                Copy-Item -Path $_.FullName -Destination $dst -Recurse -Force
+            }
+            Remove-Item -LiteralPath $old -Recurse -Force
+            Write-Host "    已迁移旧位置的 skill：$old → $dst"
+            $parent = Split-Path -Parent $old
+            if ($parent -ne $skillsDst -and -not (Get-ChildItem -Force -Path $parent -ErrorAction SilentlyContinue)) {
+                Remove-Item -LiteralPath $parent -Force -ErrorAction SilentlyContinue
+            }
+        }
+    }
+}
+Copy-Contents $skillsSrc $skillsDst
+# 分组目录本身若是用户自己的 skill（如 ~\.cursor\skills\test\SKILL.md），AI SDLC 的 skill 会被装进它的目录里，
+# Cursor 识别结果不可预期；不擅自改动用户资产，只提示。
+if (Test-Path $skillsSrc) {
+    Get-ChildItem -Path $skillsSrc -Directory | ForEach-Object {
+        if (Test-Path (Join-Path $skillsDst "$($_.Name)\SKILL.md")) {
+            Write-Warning "$skillsDst\$($_.Name)\ 是你自己的 skill，与 AI SDLC 分组目录同名；建议把它改名后重跑本脚本。"
+        }
+    }
+}
 
 Write-Host "--> 安装 profiles"
 # profile 的 *.yaml 无条件覆盖（团队统一配置，无用户修改场景）；
@@ -227,4 +269,4 @@ Write-Host "     - Harness: HARNESS_ACCOUNT_ID + HARNESS_API_KEY  marriott.harne
 Write-Host "  2) 在 Cursor 的 MCP 设置里确认 Atlassian / figma / marriott-github / harness 四个 server 已连接"
 Write-Host "     （agents / skills 已放入 ~/.cursor/，Cursor 会自动识别，无需重启）"
 Write-Host "  3) 之后想查看当前安装的版本：在 Cursor 对话里问「当前 AI SDLC 是什么版本」，"
-Write-Host "     或运行 python $CursorHome\skills\ai-sdlc-info\scripts\version.py"
+Write-Host "     或运行 python $CursorHome\skills\common\ai-sdlc-info\scripts\version.py"

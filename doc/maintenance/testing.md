@@ -23,13 +23,13 @@ python init/build.py --no-zip --yes     # 能否正常组装，汇总里「占�
 
 | 范围 | 命令 |
 | --- | --- |
-| `sensitive-data-guard` | `python .cursor/skills/sensitive-data-guard/tests/run_tests.py`（用例说明见同目录 `TESTING.md`） |
-| 其他带 `scripts/` 的 Skill | 目前没有自动化测试。改动后至少用 `--help` / 只读子命令跑通一次，如 `python .cursor/skills/profile-select/scripts/profile.py list`、`python .cursor/skills/ai-sdlc-info/scripts/version.py --json` |
+| `sensitive-data-guard` | `python .cursor/skills/common/sensitive-data-guard/tests/run_tests.py`（用例说明见同目录 `TESTING.md`） |
+| 其他带 `scripts/` 的 Skill | 目前没有自动化测试。改动后至少用 `--help` / 只读子命令跑通一次，如 `python .cursor/skills/common/profile-select/scripts/profile.py list`、`python .cursor/skills/common/ai-sdlc-info/scripts/version.py --json` |
 | `confluence-publish` 上传脚本 | 只能发到 **test 空间**（`*-test.yaml` 的 `mcp.confluence`）验证，不要用 prod profile 试 |
 
 新增脚本时，建议参考 `sensitive-data-guard/tests/` 的结构补测试（`cases.json` + `fixtures/` + `run_tests.py`），测试数据一律虚构。
 
-> ⚠️ **`sensitive-data-guard` 的 `tests/fixtures/` 不入库**（`.cursor/skills/sensitive-data-guard/.gitignore` 忽略了它，出自提交 `c950c37`「排除测试用例」）。仓库里没记录原因，推测是 fixture 里故意写的「像真的一样」的假密钥会触发平台的 secret scanning。所以：
+> ⚠️ **`sensitive-data-guard` 的 `tests/fixtures/` 不入库**（`.cursor/skills/common/sensitive-data-guard/.gitignore` 忽略了它，出自提交 `c950c37`「排除测试用例」）。仓库里没记录原因，推测是 fixture 里故意写的「像真的一样」的假密钥会触发平台的 secret scanning。所以：
 > - 刚克隆的仓库里 fixture 不全，`run_tests.py` 会报 `fixture does not exist`，要找维护者拿一份本地 fixture；
 > - `cases.json` 是入库的，本地 fixture 可能和它对不上。**改规则前先跑一遍记下基线**，改完再跑，只看新增的失败；
 > - 新增用例时，`cases.json` 正常提交，fixture 只留在本地，并通知其他维护者同步。
@@ -43,7 +43,7 @@ python init/build.py --no-zip --yes     # 能否正常组装，汇总里「占�
 注意：
 
 - **用户级（`~/.cursor/`，已安装的旧版本）也会同时加载**，同名 Skill 可能出现两份，触发到的未必是你改的那份。实测前可以先把用户级同名资产临时挪走，或用方式 B。
-- 仓库内脚本按**自身位置**找配置：`upload_confluence_v2.py` 向上三级找 `mcp.json`（仓库里即 `.cursor/mcp.json`，需自己放一份，已 git 忽略，**切勿提交**；也可用 `--mcp <path>` 指定）；`profile.py` 向上找 `.cursor/profiles/`。所以**不要改变这些 skill 的目录深度**。
+- 仓库内脚本按**自身位置**找配置：`upload_confluence_v2.py` 向上找最近的 `.cursor` 目录下的 `mcp.json`（仓库里即 `.cursor/mcp.json`，需自己放一份，已 git 忽略，**切勿提交**；也可用 `--mcp <path>` 指定）；`profile.py` 向上找 `.cursor/profiles/`。都不依赖固定层数，skill 换分组不影响。
 
 ### 方式 B：装一次自己构建的角色包（改打包 / 安装 / 路径相关内容时必须）
 
