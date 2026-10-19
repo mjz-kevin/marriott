@@ -29,13 +29,14 @@ Convert a finished local PRD / tech-solution `.md` (along with its referenced lo
 
 ## 0. Config values
 
-This skill doesn't read the team profile; conversion is a purely local operation that depends only on how the Python interpreter and `npx` resolve (both from `.cursor/profiles/setup.json`).
+This skill doesn't read the team profile; conversion is a purely local operation that depends only on how the Python interpreter and the offline toolchain resolve (all from `setup.json` beside the installed profiles: `~/.cursor/profiles/setup.json`, Windows `%USERPROFILE%\.cursor\profiles\setup.json`). Full offline-runtime layout: `profile-select` → "Offline runtime & tools".
 
 | Purpose | Key / source |
 | ------ | ------ |
-| python path | Prefer the `python` in the current platform's (`windows` / `macos` / `linux`) / `common` section of `.cursor/profiles/setup.json` (expand a leading `~`); otherwise fall back to the system `python` / `python3` on `PATH` |
-| npx path | Prefer the `npx` in the current platform's / `common` section of `.cursor/profiles/setup.json`; otherwise the system `PATH`; otherwise scan `node-*` under the runtime directory `AI_SDLC_RUNTIME` (default `C:/AI-SDLC/runtime`) |
-| offline tools | Under `AI_SDLC_RUNTIME/tools`: `mermaid-cli/` (mmdc), `md-to-pdf/` (PDF), and `chromium/` (headless browser). Present -> fully offline; absent -> fall back to `npx -y` + system/downloaded Chromium |
+| python path | Prefer the `python` in the current platform's (`windows` / `macos` / `linux`) / `common` section of `~/.cursor/profiles/setup.json` (expand a leading `~`); otherwise fall back to the system `python` / `python3` on `PATH` |
+| runtime root | env `AI_SDLC_RUNTIME` -> `runtime_root` in `setup.json` -> default `C:/AI-SDLC/runtime` (Windows) / `~/.cursor/AI-SDLC/runtime` (macOS / Linux) |
+| npx path | Prefer the `npx` in the current platform's / `common` section of `setup.json`; otherwise the system `PATH`; otherwise scan `node-*` under the runtime root |
+| offline tools | Under `<runtime root>/tools`: `mermaid-cli/` (mmdc), `md-to-pdf/` (PDF), and `chromium/` (headless browser). Present -> fully offline; absent -> fall back to `npx -y` + system/downloaded Chromium |
 
 The run is blocked only when neither the offline toolchain nor `npx` is available; follow the install guidance the script prints, then retry.
 
@@ -44,7 +45,7 @@ The run is blocked only when neither the offline toolchain nor `npx` is availabl
 Run `--check-env` first. `ready: true` means it can convert: either the offline toolchain (`offline_pdf` + `offline_mmdc` + `offline_chromium`, laid down by the AI-SDLC runtime under `runtime/tools/`) is in place — fully offline, no network and no system Chrome needed — or `npx` is available as a fallback (the first `npx -y` run fetches `md-to-pdf`, `@mermaid-js/mermaid-cli`, and headless Chromium over the network, then uses the npm cache; warm the cache once when the network is restricted).
 
 ```bash
-python .cursor/skills/common/md-to-pdf/scripts/export_pdf.py --check-env
+python ~/.cursor/skills/common/md-to-pdf/scripts/export_pdf.py --check-env
 ```
 
 ## 2. Workflow
@@ -65,10 +66,10 @@ Conversion progress:
 
 ### Step 3: Run the conversion
 
-> **Command form (cross-platform, unified)**: the command is a single line with no line continuations, and can run directly in Windows PowerShell / CMD, macOS, and Linux. `python` is a placeholder for the interpreter resolved from `.cursor/profiles/setup.json`: before running, read that short file and take the `python` field from the section matching the current platform (`windows` / `macos` / `linux`), falling back to the `common` section (expand a leading `~`); only when both leave it empty (or the file is missing) fall back to the `python` / `python3` on your `PATH`. The script resolves `npx` automatically from the same `setup.json`, so there's no need to specify a Node path in the command.
+> **Command form (cross-platform, unified)**: the command is a single line with no line continuations, and can run directly in Windows PowerShell / CMD, macOS, and Linux. `python` is a placeholder for the interpreter resolved from `~/.cursor/profiles/setup.json` (Windows `%USERPROFILE%\.cursor\profiles\setup.json`; see `profile-select` → "Offline runtime & tools"): before running, read that short file and take the `python` field from the section matching the current platform (`windows` / `macos` / `linux`), falling back to the `common` section (expand a leading `~`); only when both leave it empty (or the file is missing) fall back to the `python` / `python3` on your `PATH`. The script resolves `npx` automatically from the same `setup.json`, so there's no need to specify a Node path in the command.
 
 ```bash
-python .cursor/skills/common/md-to-pdf/scripts/export_pdf.py --md "<absolute or relative path to the .md>"
+python ~/.cursor/skills/common/md-to-pdf/scripts/export_pdf.py --md "<absolute or relative path to the .md>"
 ```
 
 By default it outputs a `.pdf` with the same name in the same directory as the source `.md`, A4 landscape. Common options:

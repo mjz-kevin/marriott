@@ -57,6 +57,13 @@
 - **`cicd-agent` 完成卡片强制带「转述指令」行，修主对话只给摘要**：实测 cncms #187（test，main）子 agent 已把报告全文嵌进卡片，但卡片没带 §6 里那段「给主对话的说明」，主对话不读 agent 文件、只看卡片，于是把报告压缩成摘要给了用户。§6 卡片模板第一行新增固定的 `🔁 RELAY-TO-USER` 指令（要求原样完整展示 `📄 Run report`，不摘要、不只给路径）；§6.1 规定每张 `done` 卡片必须逐字带这一行（保持英文，不得省略或翻译）；frontmatter `description` 末尾补一句同义说明。只改 Agent；`harness-invoke`、设计文档、`doc/maintenance/` 不涉及卡片转述，未改。
 - 文档同步：`doc/AI-Toolchain-Design.md` §4 `harness-invoke` 一行、`doc/maintenance/profiles.md` `mcp.harness` 一行。
 - **等待部署结果改为「后台启动 + 分段 await」，修子 agent 部署完不返回**：实测 cncms #186（test，main）16:56 已结束、`--result-json` 已写入终态 `success_with_ignored`，但 `cicd-agent` 把 `--wait-execution` 作为一次 35 分钟的前台调用并挂了 `notify_on_output`，这次调用的完成信号一直没回到 Agent，Agent 停在 `polling` 直到 17:16 被人工打断；日志里还能看到等待被工具层重跑了一次（只读，无重复部署）。`harness-invoke` S5「Deliver the result」第 1–3 条改写：step 2 前台阻塞设为 0 立即转后台，用 `AwaitShell`（pattern `^TERMINAL:`，每段 ≤ 20 分钟）分段等，**每段结束都读 `--result-json`，`terminal` 有值立即收尾**；不再要求单次前台预算覆盖 `expected_duration_s`（改为各段累计覆盖），并明确禁止对等待挂 `notify_on_output`。Rules / Quality gates / 排障表同步，排障表新增本次症状一行。`cicd-agent` §3.4 第 1 条、`wait_handle` 注释、C4 第 2 条、禁止项同步。`stage_run.py` 只改两处注释，行为不变。设计文档与 `doc/maintenance/` 未写到等待托管细节，未改。
+- **告诉 AI 离线运行时 / 工具在哪，修 macOS 离线渲染失效**：
+  - **修 bug**：`upload_confluence_v2.py` / `export_pdf.py` 定位离线 mmdc / md-to-pdf / Chromium 时，运行时根目录写死为 `C:/AI-SDLC/runtime`（只认 `AI_SDLC_RUNTIME` 覆盖，安装脚本又不设这个变量），macOS 上一律找不到，发布 PRD / 技术方案、导出 PDF 都回退 `npx -y` 联网，断网直接阻断。现按 `AI_SDLC_RUNTIME` → `setup.json` 的 `runtime_root` → 平台默认（Windows `C:/AI-SDLC/runtime`，macOS / Linux `~/.cursor/AI-SDLC/runtime`）解析，本机 arm64 实测三件离线工具均命中。
+  - **`setup.json` 成为离线运行时的唯一出处**：各平台段新增 `runtime_root` 字段，新增 `_layout` 说明运行时根目录下 `node-*` / `python-*` / `mcp-offline/` / `tools/{mermaid-cli,md-to-pdf,chromium}` 的布局。
+  - **安装时修正 `setup.json`**：`install.sh` / `install.ps1` 以包内 `setup.json` 为骨架，保留用户已有文件里仍有效的自定义路径，并把当前平台段里为空或失效的路径改写为本机实测运行时路径（Intel Mac 不再拿到 `darwin-arm64` 的死路径；旧安装重跑也会补上 `runtime_root`）。此前「已存在则不动」的行为改为「合并 + 修正」。
+  - **`profile.py runtime`**（`profile-select` 新子命令，只读）：以 JSON 打印本机 python / node / npm / npx、离线工具、离线 MCP 包各自解析到的路径和来源，`missing` 列出缺失项；运行时根目录不存在时退出码 2。
+  - **Skill 正文**：`profile-select` 新增「Offline runtime & tools」一节，作为其它 skill 统一引用的出处（含布局表、解释器解析规则、禁止自行 `npx -y` / `npm install` / `pip install` 兜底）；`sensitive-data-guard` 把 `setup.json` 位置从错误的「仓库内 `.cursor/profiles/`」改为 `~/.cursor/profiles/`；`md-to-pdf` 配置表与命令改用安装后路径；`confluence-publish` / `prd-publish` / `tech-solution-publish` 的解释器说明改指 `~/.cursor/profiles/setup.json`；此前缺解释器说明的 `harness-invoke`、`user-story-publish`、`jira-to-test-case`、`test-run-report-bug`、`test-page-elements`（仅发布命令，采集脚本仍用项目 `.venv`）补上。
+  - 文档：`init/README.md` 安装步骤与「升级与重装」表、`doc/maintenance/profiles.md` `setup.json` 一行、`doc/maintenance/README.md` 权威来源表、`change-checklist.md` §8（新增「运行时根目录 / 布局」一行，注明三份解析逻辑副本须逐个改）、`testing.md`（离线运行时定位的验证方法）、`troubleshooting.md`（mermaid 联网 / AI 自行装工具两条）、`AGENTS.md` §4、`ai-sdlc-info` SKILL（无运行时记录时指向 `profile.py runtime`）同步；安装日志里「保留已有 setup.json，未覆盖」改为合并说明。Agent 正文未写死解释器路径，未改；设计文档只到职责层，未改。
 
 ### 升级方式
 - **直接覆盖**：新包的 `install` 会自动把 `~/.cursor/skills/<skill>/` 下的旧版平铺 skill 迁到 `~/.cursor/skills/<分组>/<skill>/`，无需先卸载。注意命令行里直接调用 skill 脚本的路径变了，如 `~/.cursor/skills/common/confluence-publish/scripts/upload_confluence_v2.py`、`~/.cursor/skills/common/ai-sdlc-info/scripts/version.py`。
@@ -64,6 +71,7 @@
 - 技术方案图表：仅新增一个 reference 文件并修改 Skill 正文，无资产删改名、无 profile 字段变化。
 - Spike PoC 范围：只改 Skill / Agent 正文与模板引导块，直接覆盖安装即可。
 - CI/CD 查最新 build / 防重复触发 / 发布提速：无资产删改名，直接覆盖。
+- 离线运行时定位：直接覆盖安装角色包即可，`install` 会自动给已有的 `~/.cursor/profiles/setup.json` 补 `runtime_root`、修正失效路径（不再需要为更新 `setup.json` 先卸载）。装完可运行 `python ~/.cursor/skills/common/profile-select/scripts/profile.py runtime` 确认 `missing` 为空。
 
 ---
 

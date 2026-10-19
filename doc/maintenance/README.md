@@ -16,7 +16,7 @@
 | 团队差异（Jira / Confluence / 仓库 / 命令 / 流水线） | `.cursor/profiles/<team>-<env>.yaml`（字段含义写在 yaml 注释里） | Skill 正文里的示例值 |
 | 打包内容、包结构、manifest 字段 | [`init/build.py`](../../init/build.py) | `init/README.md` |
 | 安装 / 卸载行为 | `init/templates/*.sh` / `*.ps1` | `init/README.md` |
-| 运行时版本与路径 | `.cursor/profiles/setup.json`、`.cursor/mcp.example.*.json`、`init/res/` 下的载荷文件名 | — |
+| 运行时版本与路径 | `.cursor/profiles/setup.json`（含 `runtime_root` / `_layout`）、`.cursor/mcp.example.*.json`、`init/res/` 下的载荷文件名 | `profile-select` SKILL「Offline runtime & tools」（给 AI 看的说明） |
 | 当前版本号 | git tag + `pyproject.toml` 的 `version` | — |
 | 哪些文件入库 / 走 LFS | `.gitignore`（根、`.cursor/`、`init/`）、`.gitattributes`、`git ls-files` | — |
 

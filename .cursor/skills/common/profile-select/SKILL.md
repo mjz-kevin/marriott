@@ -9,7 +9,11 @@ description: >-
   profile from here without asking again; it re-selects only when the user explicitly asks
   to switch. Any workflow that needs to read profile config (Confluence destination, Jira
   project, naming templates, template paths, etc.) should first use this skill to get the
-  current profile's path. Works on both macOS and Windows.
+  current profile's path. It is also the single reference for the offline AI SDLC runtime
+  (portable python / node, offline mmdc / md-to-pdf / Chromium, offline MCP packages):
+  `setup.json` beside the profiles says where they are, and `profile.py runtime` prints what
+  resolves on this machine. Works on both macOS and Windows; triggers: select profile / switch
+  profile / 切换 profile / offline runtime / 离线运行时 / 离线工具在哪 / 用哪个 python.
 ---
 
 # profile-select (selecting and remembering the team profile)
@@ -57,6 +61,52 @@ The commands below assume the skill root `.cursor/skills/common/profile-select` 
 directory; the scripts walk up from the script location to locate the `.cursor/profiles`
 directory (resolving to `~/.cursor/profiles/` once installed), independent of the
 current working directory.
+
+## Offline runtime & tools (where the offline payload lives)
+
+The AI SDLC install ships a portable, offline runtime so nothing has to be downloaded at use time.
+**This section is the single reference other skills point to** for "which python / node to use"
+and "where the offline tools are".
+
+**Single source of truth: `setup.json`** next to the profiles (`~/.cursor/profiles/setup.json` on
+macOS / Linux, `%USERPROFILE%\.cursor\profiles\setup.json` on Windows; in a dev checkout,
+`<repo>/.cursor/profiles/setup.json`). It is **not** in the user's business repo — don't look for
+it in the current workspace. Per platform section (`windows` / `macos` / `linux`, falling back to
+`common`) it holds `runtime_root`, `python`, `node`, `npm`, `npx`; the role-package installer
+rewrites stale entries to the paths actually present on this machine (e.g. Intel vs Apple Silicon).
+
+**Runtime root** (resolution order: env `AI_SDLC_RUNTIME` -> `setup.json` `runtime_root` -> default
+`C:/AI-SDLC/runtime` on Windows, `~/.cursor/AI-SDLC/runtime` on macOS / Linux) has a fixed layout:
+
+| Path under the runtime root | What it is | Who uses it |
+|-----------------------------|------------|-------------|
+| `node-v<ver>-<plat>/` | portable Node.js (`node` / `npm` / `npx`) | offline MCP servers, mmdc, md-to-pdf |
+| `python-<ver>-<plat>/` | portable Python 3 (`bin/python3`; Windows: embed `python.exe`) | every skill script |
+| `mcp-offline/{figma,github,harness}/` | offline MCP server packages | already wired into `~/.cursor/mcp.json` by the installer — nothing to do |
+| `tools/mermaid-cli/` | mmdc (mermaid -> PNG) | `confluence-publish`, `md-to-pdf` scripts |
+| `tools/md-to-pdf/` | Markdown -> PDF | `md-to-pdf` script |
+| `tools/chromium/` | headless Chromium for mmdc / md-to-pdf | both scripts, injected automatically |
+
+**How to use it:**
+
+1. **Python interpreter for any skill script**: read `setup.json` and take `python` from the
+   current platform section (fallback `common`, expand a leading `~`); use it only if that file
+   exists, otherwise fall back to `python3` / `python` on `PATH`. Every skill that says "`python`
+   is a placeholder for the interpreter resolved from `setup.json`" means exactly this.
+2. **Diagnose / locate everything at once** (read-only, prints JSON with each resolved path, its
+   source `setup.json` / `runtime` / `path` / `missing`, and a `missing` list):
+
+   ```bash
+   python ~/.cursor/skills/common/profile-select/scripts/profile.py runtime
+   ```
+
+   Exit code 2 = the runtime root doesn't exist (the runtime package `AI-SDLC-Runtime-*.zip` isn't
+   installed) — report that to the user instead of improvising.
+3. **Don't install tools yourself.** The publish / export scripts find mmdc, md-to-pdf and Chromium
+   under the runtime root on their own; never run `npx -y @mermaid-js/mermaid-cli`, `npm install`,
+   `pip install`, or download a browser as a workaround. If `profile.py runtime` lists something
+   under `missing`, tell the user to (re)install the runtime package and re-run the role-package
+   installer.
 
 ## When to use
 
@@ -144,6 +194,7 @@ python scripts/profile.py clear
 | `profile.py resolve` | Print the current profile's absolute path | 0 / 2 not remembered |
 | `profile.py clear` | Clear the current repo's memory | 0 |
 | `profile.py path` | Print the memory file's location | 0 |
+| `profile.py runtime` | Print where the offline runtime / python / node / tools / MCP packages resolve on this machine (JSON, read-only) | 0 / 2 runtime root missing |
 
 ## Notes
 

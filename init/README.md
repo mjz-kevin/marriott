@@ -122,12 +122,13 @@ python init/build.py --runtime mac-intel
 
 角色包安装脚本做的事：
 
-1. 把 `agents/` → `~/.cursor/agents/`，`skills/<分组>/<skill>/` → `~/.cursor/skills/<分组>/<skill>/`（保持分组结构，Cursor 递归识别；旧版平铺在 `~/.cursor/skills/<skill>/` 或其它分组下的同名 skill 会先迁入新位置再删除，保留用户在其中新增的文件，避免同名 skill 出现两份），`profiles/` → `~/.cursor/profiles/`（其中 `setup.json` 已存在则保留用户本地内容，不覆盖）；
+1. 把 `agents/` → `~/.cursor/agents/`，`skills/<分组>/<skill>/` → `~/.cursor/skills/<分组>/<skill>/`（保持分组结构，Cursor 递归识别；旧版平铺在 `~/.cursor/skills/<skill>/` 或其它分组下的同名 skill 会先迁入新位置再删除，保留用户在其中新增的文件，避免同名 skill 出现两份），`profiles/` → `~/.cursor/profiles/`（团队 `*.yaml` 覆盖；`setup.json` 已存在时**合并**：保留用户仍有效的自定义路径，补齐新字段，见第 4 步）；
 2. 把 mcp 示例 → `~/.cursor/`；
 3. **复用已就位的运行时**：定位 node（运行时优先，回退系统 PATH；可用环境变量 `AI_SDLC_RUNTIME` 指定运行时根目录）和 `runtime/mcp-offline/` 下的离线 MCP 入口 js；运行时缺失会提示先装运行时包；
-4. **生成 `~/.cursor/mcp.json`**：`figma` / `marriott-github` / `harness` 的 `command` 写成 node 绝对路径（Windows 为 `node.exe`），`args[0]` 写成对应离线包入口 js，不走 npx、不联网；删除 `_comment`，凭证字段留空，已存在的 mcp.json 会保留已填凭证；
-5. 提示用户填 `~/.cursor/mcp.json` 凭证，再在 Cursor MCP 设置里确认 Atlassian / figma / marriott-github / harness 四个 server 已连接（agents / skills 自动识别，无需重启）；
-6. **记录安装版本**：开始时打印「已安装版本 → 本包版本」（低于已安装版本会提示降级），结束时把本包 `manifest.json` 加上 `installed_at` 写到 `~/.cursor/ai-sdlc-installed/role-<role>.json`（每个角色一个文件，多角色叠装互不覆盖）。
+4. **修正 `~/.cursor/profiles/setup.json`**：当前平台段里为空或失效的 `runtime_root` / `python` / `node` / `npm` / `npx` 改写为本机实测的运行时路径（按 CPU 架构）。这是 AI 找离线 python / node / mmdc / md-to-pdf / Chromium 的唯一出处，可用 `python ~/.cursor/skills/common/profile-select/scripts/profile.py runtime` 查看本机实际解析结果；
+5. **生成 `~/.cursor/mcp.json`**：`figma` / `marriott-github` / `harness` 的 `command` 写成 node 绝对路径（Windows 为 `node.exe`），`args[0]` 写成对应离线包入口 js，不走 npx、不联网；删除 `_comment`，凭证字段留空，已存在的 mcp.json 会保留已填凭证；
+6. 提示用户填 `~/.cursor/mcp.json` 凭证，再在 Cursor MCP 设置里确认 Atlassian / figma / marriott-github / harness 四个 server 已连接（agents / skills 自动识别，无需重启）；
+7. **记录安装版本**：开始时打印「已安装版本 → 本包版本」（低于已安装版本会提示降级），结束时把本包 `manifest.json` 加上 `installed_at` 写到 `~/.cursor/ai-sdlc-installed/role-<role>.json`（每个角色一个文件，多角色叠装互不覆盖）。
 
 ## 查看已安装版本
 
@@ -160,7 +161,8 @@ python init/build.py --runtime mac-intel
 
 - 同一个角色升级到新版本，而且新版本只是**修改或新增**了 agent、skill 或 profile，没有删掉或改名任何东西；
 - 团队 profile（`*.yaml`）更新：每次安装都会无条件覆盖；
-- `mcp.json` 需要重新生成（比如运行时装好了、node 路径变了）：重跑 `install` 就行，已经填好的凭证会保留。
+- `mcp.json` 需要重新生成（比如运行时装好了、node 路径变了）：重跑 `install` 就行，已经填好的凭证会保留；
+- 运行时版本 / 位置变了，`setup.json` 里的路径失效：重跑 `install` 会把失效路径改写为本机实测路径，仍有效的自定义路径保留。
 
 **需要先卸载再安装**（先跑 `uninstall`，再跑新包的 `install`）：
 
@@ -169,7 +171,6 @@ python init/build.py --runtime mac-intel
 | 新版本**删除或改名**了某个 Agent / Skill | 旧的 agent 或 skill 会留在 `~/.cursor/`，和新的同时生效，可能被误触发。⚠️ 卸载清单由构建时的 `roles.json` 生成，**新包的 `uninstall` 已不认识旧名**：要用**旧版本包**的 `uninstall`，或按 `CHANGELOG.md` 提示手动删除 `~/.cursor/skills/<分组>/<旧名>/` / `~/.cursor/agents/<旧名>.md` |
 | 新版本删除了某个 Skill 里的文件（`references/` / `scripts/` 等） | 覆盖只会更新同名文件，删掉的旧文件会一直留着 |
 | **换角色**（比如 Dev 改成 QA），或者想只保留单一角色 | 上一个角色的 agents / skills 不会被清掉 |
-| 运行时版本升级，`setup.json` 里的路径需要更新 | 安装时如果 `setup.json` 已存在，会保留原文件不覆盖；卸载会把它删掉，重装后拿到新路径 |
 | 本地资产乱了或装坏了，想回到干净状态 | 卸载按全量清单清理，再重新安装 |
 | **降级**到 Skill 平铺安装的旧版本（0.3.3 及以前） | 旧包装到 `~/.cursor/skills/<skill>/`，不会清理新版的 `~/.cursor/skills/<分组>/<skill>/`，同一个 skill 会出现两份。要先用**新版包**的 `uninstall`（旧包的 `uninstall` 只认平铺路径），再装旧包。升级则不需要卸载：新包 `install` 会自动把平铺的旧 skill 迁到分组目录 |
 
@@ -189,7 +190,7 @@ python init/build.py --runtime mac-intel
 
 | 场景 | 卸载方式 |
 | --- | --- |
-| node / python **版本升级** | `uninstall-runtime` 全量卸载后再装；装完**重跑角色包 `install`**，刷新 `mcp.json` 里的 node 路径（要更新 `setup.json` 的话也需要先卸载角色包，见上表） |
+| node / python **版本升级** | `uninstall-runtime` 全量卸载后再装；装完**重跑角色包 `install`**，刷新 `mcp.json` 里的 node 路径，并自动把 `setup.json` 里失效的运行时路径改写为新版本路径 |
 | 离线 MCP 包（figma / github / harness）**版本升级** | 只删 MCP 包：`./uninstall.sh --mcp-only`（mac）/ `.\uninstall.ps1 -McpOnly`（win）→ 再跑 `install-runtime` → 再重跑角色包 `install` |
 | 离线工具包（mermaid-cli / md-to-pdf / Chromium）**版本升级** | 目前没有单独卸载工具包的开关：要么全量卸载运行时，要么手动删掉 `runtime/tools/<工具名>/` 后重跑 `install-runtime` |
 | 运行时损坏（目录不是空的，但文件不完整） | 全量卸载运行时后重装 |

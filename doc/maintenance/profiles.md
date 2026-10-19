@@ -8,9 +8,9 @@
 | --- | --- | --- |
 | `app-test.yaml` / `app-prod.yaml` | APP 团队（iOS / Android）的全部差异 | 维护者 |
 | `cms-test.yaml` / `cms-prod.yaml` | CMS 团队（cncms / 前端 monorepo）的全部差异 | 维护者 |
-| `setup.json` | node / python / npm / npx 可执行路径（按运行时布局写死，留空回退系统 PATH） | 维护者（随运行时版本） |
+| `setup.json` | 离线运行时根目录 `runtime_root` 与 node / python / npm / npx 可执行路径（按运行时布局写死，留空回退系统 PATH；`_layout` 说明运行时下离线 MCP / 工具的位置）。AI 找离线东西的唯一出处，`profile-select` 的「Offline runtime & tools」一节引用它，`profile.py runtime` 打印本机解析结果 | 维护者（随运行时版本）；安装脚本按本机实测改写失效路径 |
 
-全部文件都在 `init/roles.json` 的 `common.profiles` 中登记，随**每个**角色包安装到 `~/.cursor/profiles/`。团队 profile 每次安装都会覆盖，`setup.json` 已存在则保留；对升级的影响见 [`init/README.md`「升级与重装」](../../init/README.md#升级与重装直接覆盖-vs-先卸载)。
+全部文件都在 `init/roles.json` 的 `common.profiles` 中登记，随**每个**角色包安装到 `~/.cursor/profiles/`。团队 profile 每次安装都会覆盖，`setup.json` 已存在则合并（保留仍有效的自定义路径、补新字段、改写失效路径）；对升级的影响见 [`init/README.md`「升级与重装」](../../init/README.md#升级与重装直接覆盖-vs-先卸载)。
 
 当前选中哪个 profile 由 `profile-select` 记在用户本机（按仓库根路径），不入库：
 

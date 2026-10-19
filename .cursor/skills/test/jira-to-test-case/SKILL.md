@@ -83,6 +83,8 @@ and produces a reviewable **"requirement outline + functional test cases"** docu
 1. First dedupe by title in the `{epic}-TestCase` folder (`getConfluencePageDescendants` to list folder children / `searchConfluenceUsingCql` to search title by `<JIRA_KEY>`) to know in advance whether this is a first publish or a rework; **dedupe can be fired in parallel with "reading the body-spec page / navigation page"** (see "Execution speedup conventions"). The script dedupes by `--title` prefix on its own, so this step is for your own awareness and for the merged-page case.
 2. Write the case body to a local Markdown file under `.ai-sdlc/` (intermediate publishing input, git-ignored), then run:
 
+> `python` / `python3` in commands below is a placeholder for the AI SDLC interpreter: read `~/.cursor/profiles/setup.json` (Windows `%USERPROFILE%\.cursor\profiles\setup.json`) and use the `python` of the current platform section (fallback `common`, expand `~`) if that path exists, otherwise the `python3` / `python` on `PATH`. Layout of the offline runtime and the one-shot locator `profile.py runtime`: `profile-select` → "Offline runtime & tools".
+
 ```bash
 # app (folder mode — lands in {epic}-TestCase, sibling to {epic}-Tech Solution):
 python ~/.cursor/skills/common/confluence-publish/scripts/upload_confluence_v2.py --md "<.ai-sdlc/<key>-cases.md>" --space "<mcp.confluence.space, current DBU4>" --root <mcp.confluence.parent_pages.root, current 4205314140> --epic <Jira Epic key, e.g. CNAPP-5661> --kind test_case --title "iOS Test Case - <JIRA_KEY>" --title-tail " <short requirement name>" --version-msg "<what changed this run>"

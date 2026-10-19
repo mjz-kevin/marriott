@@ -25,6 +25,7 @@ python init/build.py --no-zip --yes     # 能否正常组装，汇总里「占�
 | --- | --- |
 | `sensitive-data-guard` | `python .cursor/skills/common/sensitive-data-guard/tests/run_tests.py`（用例说明见同目录 `TESTING.md`） |
 | 其他带 `scripts/` 的 Skill | 目前没有自动化测试。改动后至少用 `--help` / 只读子命令跑通一次，如 `python .cursor/skills/common/profile-select/scripts/profile.py list`、`python .cursor/skills/common/ai-sdlc-info/scripts/version.py --json` |
+| 离线运行时定位（`upload_confluence_v2.py` / `export_pdf.py` / `profile.py runtime`） | `python .cursor/skills/common/profile-select/scripts/profile.py runtime`（`missing` 应为空）+ `python .cursor/skills/common/md-to-pdf/scripts/export_pdf.py --check-env`（`offline_mmdc` / `offline_pdf` / `offline_chromium` 应为 `true`）；再用一份含 mermaid 的虚构 md 实际导出一次 PDF |
 | `confluence-publish` 上传脚本 | 只能发到 **test 空间**（`*-test.yaml` 的 `mcp.confluence`）验证，不要用 prod profile 试 |
 
 新增脚本时，建议参考 `sensitive-data-guard/tests/` 的结构补测试（`cases.json` + `fixtures/` + `run_tests.py`），测试数据一律虚构。
