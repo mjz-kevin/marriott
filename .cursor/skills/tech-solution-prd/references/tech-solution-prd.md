@@ -53,7 +53,7 @@
 
 ## 3. Core Technical Solution
 
-{Describe the end-to-end technical approach. Optional sub-items not involved: keep the bullet and write `—`.}
+{Describe the end-to-end technical approach. Add sequence / flow / other diagrams on demand where they are clearer than text (see `diagram-guide.md` §3.1). Optional sub-items not involved: keep the bullet and write `—`.}
 
 - **Overall Architecture**: {Module breakdown, upstream/downstream dependencies, data flow; attach architecture diagram or Confluence link}
 - **Key Flow / Sequence**: {End-to-end main flow; attach flow diagram; full-feature sequence diagram (optional)}

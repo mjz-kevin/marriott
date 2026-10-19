@@ -36,7 +36,7 @@
 
 ## 2. Technical Solution
 
-{Describe how content is modeled, published, and consumed. Attach an architecture or main flow diagram (edit → review → publish → consume).}
+{Describe how content is modeled, published, and consumed. Attach an architecture or main flow diagram (edit → review → publish → consume); section 3 may add ER / state / sequence diagrams on demand (see `diagram-guide.md` §3.4).}
 
 - **Overall Approach:** {Overall plan for how content is modeled, published, and consumed}
 - **Architecture / Flow:** {Attach architecture diagram or main flow diagram}

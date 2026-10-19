@@ -12,6 +12,11 @@
 
 ## [Unreleased]
 
+### 变更
+- **技术方案按需增加图表，提升可读性**：反馈三档技术方案文字过多、不便阅读。新增三档共用的图表规范 `tech-solution-detail/references/diagram-guide.md`（放在 TL / Dev 都会安装的 `tech-solution-detail` 下，`tech-solution-prd` / `tech-solution-spike` 用 `../tech-solution-detail/references/diagram-guide.md` 引用）：保留模板原有的基础图（PRD 级架构图、Spike 各方案示意图、Detail 主流程图 / CMS 架构图，仍可用 Confluence 链接替代），其余按需增加——某段内容在描述结构 / 调用顺序 / 分支 / 状态 / 数据关系、用图比文字更清楚时，加对应的时序图 / 流程图 / 状态图 / ER 图 / 任务依赖图 / timeline·gantt / quadrantChart；规范给出按内容选图的对照、各档常见加图位置（建议而非清单）、图旁文字不复述图、单图约 15 节点以内、不为加图而加图，以及 mermaid 语法规范（只用稳定图类型，已用内置 mermaid-cli 12 实测渲染）。三个 Skill 各加一节「Diagrams on demand」及对应强制规则 / 质量门禁（门禁只要求「长段纯文字已考虑配图」与 mermaid 可渲染，不新增必须出现的图）；「忠于模板」规则明确放在已有章节内的图（可带一行图注）不算模板外内容；四份模板的引导块补了按需配图提示（引导块不进成品）。`tech-solution-agent` 的 T4 以 Skill 质量门禁为准，未改；`tech-solution-publish` / `md-to-pdf` 已支持全部 mermaid 类型与本地图片，未改；`prd-authoring` 自带的 Diagram spec 属 PO 包，未改。
+
+### 升级方式
+- **直接覆盖**：仅新增一个 reference 文件并修改 Skill 正文，无资产删改名、无 profile 字段变化。
 ---
 
 ## [0.3.3] - 2026-10-16

@@ -72,6 +72,11 @@ Fill all 6 elements for each solution: approach overview / architecture (with a 
 
 - At least 2 solutions. With only one solution, state in the text "why there's no alternative"
 - With >=2 solutions, add a comparison matrix
+- When several options are drawn, use the same layout and naming across their diagrams so the differences are visible side by side
+
+### Diagrams on demand (applies to every chapter)
+
+To keep the solution readable, add diagrams on demand per [diagram-guide.md](../tech-solution-detail/references/diagram-guide.md) (shared by all three tech-solution tiers; §3.2 lists where they usually help at this tier): wherever a passage describes structure, call order, branching, or states and a diagram would be clearer than prose, add the matching diagram inside the template section it illustrates (no new headings; an optional one-line `Figure N: …` caption above it), don't re-narrate it in text, and follow its mermaid syntax spec. Typical spots: a PoC setup flowchart in chapter 4, a decision flowchart or `quadrantChart` in chapter 5 (in addition to, never instead of, the comparison-matrix table). Don't add a diagram just to have one.
 
 ### S5 Validation process (PoC)
 
@@ -95,7 +100,8 @@ The PoC code lands in the team's actual code repo, and the build command must ru
 | The conclusion must be a single choice | After the comparison you must give a recommendation; when a single choice isn't possible, state that the evaluation dimensions or data are insufficient |
 | Don't estimate | Only give the impact on estimation; points are set by DEV/QA |
 | Example data must be mock | Same as other solution tiers |
-| Faithful to the template | The body starts from "## Document Information" (with the mandatory first line `This document was created with AI assistance.` prepended above it, not in the template); **strip the author-facing ` (optional)` marker from every heading and field/row label in the product** (it is a writing note meaning "may be omitted," not visible title text—e.g. `## 6. Open Items and Risks (optional)` → `## 6. Open Items and Risks`, `### Option C: {Name} (optional)` → `### Option C: {Name}`); fill only the template's existing sections and fields, don't add explanatory sentences, lead-ins, comments, or subsections not defined by the template. Never copy `{guidance blocks}`, `> **`Example`**` block quotes, or HTML comments into the product; the template file's title and author notes are not part of the product |
+| Diagrams on demand | Where an approach or flow would take long prose, add a diagram per the diagram guide instead; text next to a diagram doesn't restate it; diagrams only visualize sourced facts |
+| Faithful to the template | The body starts from "## Document Information" (with the mandatory first line `This document was created with AI assistance.` prepended above it, not in the template); **strip the author-facing ` (optional)` marker from every heading and field/row label in the product** (it is a writing note meaning "may be omitted," not visible title text—e.g. `## 6. Open Items and Risks (optional)` → `## 6. Open Items and Risks`, `### Option C: {Name} (optional)` → `### Option C: {Name}`); fill only the template's existing sections and fields, don't add explanatory sentences, lead-ins, comments, or subsections not defined by the template (mermaid diagrams placed inside an existing section per the diagram guide, with at most a one-line caption, are that section's content and are allowed). Never copy `{guidance blocks}`, `> **`Example`**` block quotes, or HTML comments into the product; the template file's title and author notes are not part of the product |
 | AI first line | The product's first line is exactly `This document was created with AI assistance.` (its own line above `## Document Information`); mandatory product content added by the skill, not present in the template |
 | Real author | `Author` (Document Information + Version Change Log column) is the real person generating the doc—ask the user for the name and fill it verbatim; never write an AI/agent name (e.g. "AI SDLC ... Agent"). If no name is given, leave `—` |
 | Don't delete sections | For an optional item/section not involved, keep the heading and write `—` (a checklist trace meaning "assessed, not needed this cycle"); when a full sentence is needed use "Not applicable this cycle"; don't delete the section |
@@ -110,6 +116,7 @@ The PoC code lands in the team's actual code repo, and the build command must ru
 - No `{guidance block}` residue, no `> **`Example`**` block-quote residue, and no HTML-comment residue; **do not** treat business-domain terms alone (Bonvoy, Marriott, etc.) as leakage
 - No author-facing ` (optional)` marker left in any heading or field/row label (it is stripped from the product, e.g. `## 6. Open Items and Risks`, `### Option C: {Name}`)
 - >= 2 solutions, each with all 6 elements filled
+- Every mermaid diagram passes the diagram guide's syntax spec and renders; diagrams of different options use consistent naming
 - The comparison matrix is filled (when >=2 solutions)
 - The PoC has a validation method and a key conclusion
 - The recommended solution + rejection reasons + impact on estimation/schedule are all present
@@ -127,6 +134,7 @@ Even if this round is just a local revision to a finalized solution, finishing t
 ## 6. Related
 
 - Template: references/tech-solution-spike.md
+- Diagram guide: ../tech-solution-detail/references/diagram-guide.md (shared by the three tiers)
 - Upstream: spike ticket (the research question logged during Refinement)
 - Downstream: tech-solution-detail (conclusion refinement), tech-solution-publish
 - Parallel option: md-to-pdf (convert the finalized local tech solution to PDF for local review/archiving)

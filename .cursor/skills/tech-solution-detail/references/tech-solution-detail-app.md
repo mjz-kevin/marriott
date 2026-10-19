@@ -31,7 +31,7 @@
 
 ## 2. Flow Diagram
 
-{Describe the end-to-end main flow: page entry, request timing, data loading, business exceptions, page state transitions, and navigation after key actions. Attach a flow diagram or Confluence link.}
+{Describe the end-to-end main flow: page entry, request timing, data loading, business exceptions, page state transitions, and navigation after key actions. Attach a flow diagram or Confluence link; add a sequence or state diagram on demand where it is clearer than text (see `diagram-guide.md` §3.3).}
 
 Flow diagram: {image or mermaid}
 

@@ -48,7 +48,7 @@
 
 ## 3. Solution Comparison
 
-{Provide at least two comparable options. For each option, cover the approach, key implementation points, pros and cons, platform-consistency impact, dependencies and risks, and reusability. Options not involved: keep the heading and write `—`.}
+{Provide at least two comparable options. For each option, cover the approach, key implementation points, pros and cons, platform-consistency impact, dependencies and risks, and reusability. Add diagrams on demand where clearer than text, using the same layout and naming across options (see `diagram-guide.md` §3.2). Options not involved: keep the heading and write `—`.}
 
 ### Option A: {Name}
 

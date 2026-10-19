@@ -74,12 +74,16 @@ Template: [tech-solution-prd.md](references/tech-solution-prd.md)
 | Sub-item | Requirement |
 | ---------------- | ------------------------------------------------------------ |
 | Overall architecture | Module partition, upstream/downstream dependencies, data flow, with an architecture diagram (diagram language per team config, default mermaid); may reference a Confluence address |
-| Key flow / sequence | End-to-end main flow + a whole-feature sequence diagram (optional) |
+| Key flow / sequence | End-to-end main flow + a whole-feature sequence diagram (on demand: add it when several systems interact and the order matters, instead of narrating the order in prose) |
 | Interface and data contracts | Only set boundaries (interface / method / purpose / upstream-downstream); field-level is left to the Story-level detailed solution |
 | Backend tech solution | Optional |
-| Fallbacks for key use cases | Optional |
+| Fallbacks for key use cases | Optional; when several failure modes have different fallbacks, a fallback flowchart (or an `alt` block in the sequence diagram) can be added on demand |
 
 When referencing code facts, give real paths (repos per the team's actual codebase); when nothing is found, write "no existing implementation found," don't fabricate search results.
+
+### Diagrams on demand (applies to every chapter)
+
+To keep the solution readable, add diagrams on demand per [diagram-guide.md](../tech-solution-detail/references/diagram-guide.md) (shared by all three tech-solution tiers; §3.1 lists where they usually help at this tier): wherever a passage describes structure, call order, branching, states, or data relations and a diagram would be clearer than prose, add the matching diagram (sequence / flowchart / state / relation / timeline, etc.) inside the template section it illustrates (no new headings; an optional one-line `Figure N: …` caption above it), don't re-narrate it in text, and follow its mermaid syntax spec. Don't add a diagram just to have one.
 
 ### S5 Dependencies (STB/ARB decision required)
 
@@ -106,12 +110,13 @@ Undecidable technical points are logged as a spike ticket for research (state th
 | No task breakdown | Task breakdown belongs to the Story-level detailed solution |
 | Interface examples must be mock | Domain `api.example.com`; approach per the team's example-data convention |
 | Architecture diagram uses mermaid | Easier for Confluence rendering and diffs |
+| Diagrams on demand | Where structure, call order, branching, or states would take long prose, add a diagram per the diagram guide instead; text next to a diagram doesn't restate it; diagrams only visualize sourced facts and never add components / calls without a basis |
 | Reference real code paths | Actually search before referencing |
 | Don't estimate | Only give impact scope and suggested split direction; points are set by DEV/QA/PO |
 | Don't write business rules | Business rules belong to the PRD; the solution only writes the technical implementation |
 | Don't delete sections | For an optional item/section not involved, keep the heading and write `—` (a checklist trace meaning "assessed, not needed this cycle"); when a full sentence is needed use "Not applicable this cycle"; don't delete the section |
 | No fabricated optional content | Don't proactively generate content for an optional item without a requirement/clarification basis; write it only when the requirement, clarification conclusion, or user explicitly calls for it, otherwise write `—` |
-| Faithful to the template | The body starts from "## Document Information" (with the mandatory first line `This document was created with AI assistance.` prepended above it, not in the template); **strip the author-facing ` (optional)` marker from every heading and field/row label in the product** (it is a writing note meaning "may be omitted," not visible title text—e.g. `## 6. Risks and Open Items (optional)` → `## 6. Risks and Open Items`, `STB / ARB Trigger Assessment (optional)` → `STB / ARB Trigger Assessment`); fill only the template's existing sections and fields, don't add explanatory sentences, lead-ins, comments, or subsections not defined by the template. Never copy `{guidance blocks}`, `> **`Example`**` block quotes, or HTML comments into the product; the template file's title and author notes are not part of the product |
+| Faithful to the template | The body starts from "## Document Information" (with the mandatory first line `This document was created with AI assistance.` prepended above it, not in the template); **strip the author-facing ` (optional)` marker from every heading and field/row label in the product** (it is a writing note meaning "may be omitted," not visible title text—e.g. `## 6. Risks and Open Items (optional)` → `## 6. Risks and Open Items`, `STB / ARB Trigger Assessment (optional)` → `STB / ARB Trigger Assessment`); fill only the template's existing sections and fields, don't add explanatory sentences, lead-ins, comments, or subsections not defined by the template (mermaid diagrams placed inside an existing section per the diagram guide, with at most a one-line caption, are that section's content and are allowed). Never copy `{guidance blocks}`, `> **`Example`**` block quotes, or HTML comments into the product; the template file's title and author notes are not part of the product |
 | AI first line | The product's first line is exactly `This document was created with AI assistance.` (its own line above `## Document Information`); mandatory product content added by the skill, not present in the template |
 | Real author | `Author` (Document Information + Version Change Log column) is the real person generating the doc—ask the user for the name and fill it verbatim; never write an AI/agent name (e.g. "AI SDLC ... Agent"). If no name is given, leave `—` |
 
@@ -125,6 +130,7 @@ Undecidable technical points are logged as a spike ticket for research (state th
 - No author-facing ` (optional)` marker left in any heading or field/row label (it is stripped from the product, e.g. `## 6. Risks and Open Items`, `STB / ARB Trigger Assessment`)
 - No `[Enter ...]` / `{feature_name}` / `{author}` / `TODO` placeholder residue
 - An architecture diagram exists (mermaid or a Confluence reference)
+- Long text-only passages describing structure / call order / branching have been considered for a diagram; every mermaid diagram passes the diagram guide's syntax spec and renders
 - The STB/ARB trigger-decision row has a clear conclusion (if unsure, treat as triggered)
 - Post-launch monitoring and version-compat strategy are written
 - Risks and open items have an Owner and a due date
@@ -144,6 +150,7 @@ Even if this round is just a local revision to a finalized solution, finishing t
 ## 6. Related
 
 - Template: references/tech-solution-prd.md
+- Diagram guide: ../tech-solution-detail/references/diagram-guide.md (shared by the three tiers)
 - Upstream: prd-authoring (PRD)
 - Downstream: tech-solution-detail (refinement), tech-solution-spike (research), tech-solution-publish
 - Parallel option: md-to-pdf (convert the finalized local tech solution to PDF for local review/archiving)

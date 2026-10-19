@@ -66,7 +66,11 @@ S1–S10 are logical steps, not chapter numbers; fill by the actual chapter name
 
 ### S3 Main flow
 
-Fill the template's main-flow section: entry, request timing, data loading, business exceptions, state transitions, redirect after a key action, with a flowchart or architecture diagram. mermaid diagrams follow the diagram spec: declare the diagram type and direction on the first line, double-quote node text and edge labels, use ASCII node IDs, cover all branch outlets, and do a previewer render self-check when finished; publishing renders them into images via mmdc, using the AI-SDLC runtime's offline packages (`runtime/tools/` mmdc + Chromium) first and falling back to Node.js (`npx`) only if they're absent.
+Fill the template's main-flow section: entry, request timing, data loading, business exceptions, state transitions, redirect after a key action , with a flowchart or architecture diagram (the template's baseline diagram). Add further diagrams on demand where they make the flow clearer than text, e.g. a request sequence diagram when request timing is non-trivial, a state diagram when UI states transition in non-obvious ways (see the diagram guide APP §3.3 / CMS §3.4). Publishing renders mermaid into images via mmdc, using the AI-SDLC runtime's offline packages (`runtime/tools/` mmdc + Chromium) first and falling back to Node.js (`npx`) only if they're absent.
+
+### Diagrams on demand (applies to every section)
+
+To keep the solution readable, add diagrams on demand per [references/diagram-guide.md](references/diagram-guide.md) (shared by all three tech-solution tiers): wherever a passage describes structure, call order, branching, states, or data relations and a diagram would be clearer than prose, add the matching diagram (sequence / flowchart / state / ER / task dependency, etc.) inside the template section it illustrates (no new headings; an optional one-line `Figure N: …` caption above it), don't re-narrate it in text, and follow its mermaid syntax spec. Typical spots: CMS content model (`erDiagram`), publishing workflow (`stateDiagram-v2`), consumer interaction (sequence diagram), migration steps; key Figma frames as local images in the design-source section. Don't add a diagram just to have one.
 
 ### S4 Contracts and dependencies
 
@@ -133,11 +137,12 @@ Fill the template's special sections item by item:
 | Examples include error scenarios | Success-only examples can't be accepted |
 | Reference real code paths | Actually search the relevant code repo before referencing |
 | Every task has acceptance criteria | Missing one is rejected |
+| Diagrams on demand | Where structure, call order, branching, states, or data relations would take long prose, add a diagram per the diagram guide instead; text next to a diagram doesn't restate it; diagrams only visualize sourced facts and never add components / calls / states without a basis |
 | Don't estimate | Only give impact scope and task count |
 | No missing states | Every screen state the design defines needs a handling note |
 | Don't delete sections | For an optional item/section not involved, keep the heading and write `—` (a checklist trace meaning "assessed, not needed this cycle"); when a full sentence is needed use "Not applicable this cycle"; don't delete the section |
 | No fabricated optional content | Don't proactively generate content for an optional item without a requirement/clarification basis; write it only when the requirement, clarification conclusion, or user explicitly calls for it, otherwise write `—` |
-| Faithful to the template | The body starts from "## Document Information" (with the mandatory first line `This document was created with AI assistance.` prepended above it, not in the template); **strip the author-facing ` (optional)` marker from every heading and field/row label in the product** (it is a writing note meaning "may be omitted," not visible title text—e.g. `## 5. Key Alignment Items (optional)` → `## 5. Key Alignment Items`, `### 3.4 Data Migration (optional)` → `### 3.4 Data Migration`); fill only the template's existing sections and fields, don't add explanatory sentences, lead-ins, comments, or subsections not defined by the template. Never copy `{guidance blocks}`, `> **`Example`**` block quotes, or HTML comments into the product; the template file's title and author notes are not part of the product |
+| Faithful to the template | The body starts from "## Document Information" (with the mandatory first line `This document was created with AI assistance.` prepended above it, not in the template); **strip the author-facing ` (optional)` marker from every heading and field/row label in the product** (it is a writing note meaning "may be omitted," not visible title text—e.g. `## 5. Key Alignment Items (optional)` → `## 5. Key Alignment Items`, `### 3.4 Data Migration (optional)` → `### 3.4 Data Migration`); fill only the template's existing sections and fields, don't add explanatory sentences, lead-ins, comments, or subsections not defined by the template (mermaid diagrams / design images placed inside an existing section per the diagram guide, with at most a one-line caption, are that section's content and are allowed). Never copy `{guidance blocks}`, `> **`Example`**` block quotes, or HTML comments into the product; the template file's title and author notes are not part of the product |
 | AI first line | The product's first line is exactly `This document was created with AI assistance.` (its own line above `## Document Information`); mandatory product content added by the skill, not present in the template |
 | Real author | `Author` (Document Information + Version Change Log column) is the real person generating the doc—ask the user for the name and fill it verbatim; never write an AI/agent name (e.g. "AI SDLC ... Agent"). If no name is given, leave `—` |
 
@@ -149,6 +154,7 @@ Fill the template's special sections item by item:
 - The body starts from "## Document Information," with no explanatory sentences, lead-ins, or subsections added beyond the template
 - No `{guidance block}` residue, no `> **`Example`**` block-quote residue, and no HTML-comment residue; **do not** treat business-domain terms alone (Bonvoy, Marriott, etc.) as leakage
 - No author-facing ` (optional)` marker left in any heading or field/row label (it is stripped from the product, e.g. `## 5. Key Alignment Items`, `### 3.4 Data Migration`)
+- The template's baseline diagram is present (APP: main-flow diagram; CMS: architecture / flow diagram); long text-only passages describing structure / order / states / relations have been considered for a diagram; every mermaid diagram passes the diagram guide's syntax spec and renders
 - Interface contracts include request/response/error-code mocks, with null and failure fallbacks stated
 - The Feature Flag table includes "behavior on read failure"
 - Every task has acceptance criteria
@@ -170,6 +176,7 @@ Even if this round is just a local revision to a finalized solution, finishing t
 ## 6. Related
 
 - Templates: references/tech-solution-detail-app.md / references/tech-solution-detail-cms.md (pick by the profile's `team`: APP / CMS)
+- Diagram guide: references/diagram-guide.md (shared with tech-solution-prd / tech-solution-spike)
 - Upstream: tech-solution-prd
 - Downstream: tech-solution-publish
 - Parallel option: md-to-pdf (convert the finalized local tech solution to PDF for local review/archiving)
