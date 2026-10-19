@@ -122,7 +122,7 @@ python init/build.py --runtime mac-intel
 
 角色包安装脚本做的事：
 
-1. 把 `agents/` → `~/.cursor/agents/`，`skills/` → `~/.cursor/skills/`，`profiles/` → `~/.cursor/profiles/`（其中 `setup.json` 已存在则保留用户本地内容，不覆盖）；
+1. 把 `agents/` → `~/.cursor/agents/`，`skills/<分组>/<skill>/` → `~/.cursor/skills/<分组>/<skill>/`（保持分组结构，Cursor 递归识别；旧版平铺在 `~/.cursor/skills/<skill>/` 或其它分组下的同名 skill 会先迁入新位置再删除，保留用户在其中新增的文件，避免同名 skill 出现两份），`profiles/` → `~/.cursor/profiles/`（其中 `setup.json` 已存在则保留用户本地内容，不覆盖）；
 2. 把 mcp 示例 → `~/.cursor/`；
 3. **复用已就位的运行时**：定位 node（运行时优先，回退系统 PATH；可用环境变量 `AI_SDLC_RUNTIME` 指定运行时根目录）和 `runtime/mcp-offline/` 下的离线 MCP 入口 js；运行时缺失会提示先装运行时包；
 4. **生成 `~/.cursor/mcp.json`**：`figma` / `marriott-github` / `harness` 的 `command` 写成 node 绝对路径（Windows 为 `node.exe`），`args[0]` 写成对应离线包入口 js，不走 npx、不联网；删除 `_comment`，凭证字段留空，已存在的 mcp.json 会保留已填凭证；
@@ -141,7 +141,7 @@ python init/build.py --runtime mac-intel
 查询方式：
 
 - 在 Cursor 对话里直接问「当前 AI SDLC 是什么版本」，由公共 skill `ai-sdlc-info` 回答。它还会检查各角色记录的 agents / skills 是否还在、多个角色是否版本不一致、是否缺运行时记录；
-- 或在命令行运行 `python ~/.cursor/skills/ai-sdlc-info/scripts/version.py`（加 `--json` 输出结构化结果）。
+- 或在命令行运行 `python ~/.cursor/skills/common/ai-sdlc-info/scripts/version.py`（加 `--json` 输出结构化结果）。
 
 > 用本功能上线前的旧包安装的用户没有版本记录，`ai-sdlc-info` 会提示「未找到记录」，重装一次最新角色包（和运行时包）即可。
 > 运行时安装器按组件幂等，`runtime.json` 表示「最近一次运行的运行时包版本」，已就位而被跳过的组件不会被这次安装更新。
@@ -166,11 +166,12 @@ python init/build.py --runtime mac-intel
 
 | 场景 | 为什么直接覆盖不行 |
 | --- | --- |
-| 新版本**删除或改名**了某个 Agent / Skill | 旧的 agent 或 skill 会留在 `~/.cursor/`，和新的同时生效，可能被误触发。⚠️ 卸载清单由构建时的 `roles.json` 生成，**新包的 `uninstall` 已不认识旧名**：要用**旧版本包**的 `uninstall`，或按 `CHANGELOG.md` 提示手动删除 `~/.cursor/skills/<旧名>/` / `~/.cursor/agents/<旧名>.md` |
+| 新版本**删除或改名**了某个 Agent / Skill | 旧的 agent 或 skill 会留在 `~/.cursor/`，和新的同时生效，可能被误触发。⚠️ 卸载清单由构建时的 `roles.json` 生成，**新包的 `uninstall` 已不认识旧名**：要用**旧版本包**的 `uninstall`，或按 `CHANGELOG.md` 提示手动删除 `~/.cursor/skills/<分组>/<旧名>/` / `~/.cursor/agents/<旧名>.md` |
 | 新版本删除了某个 Skill 里的文件（`references/` / `scripts/` 等） | 覆盖只会更新同名文件，删掉的旧文件会一直留着 |
 | **换角色**（比如 Dev 改成 QA），或者想只保留单一角色 | 上一个角色的 agents / skills 不会被清掉 |
 | 运行时版本升级，`setup.json` 里的路径需要更新 | 安装时如果 `setup.json` 已存在，会保留原文件不覆盖；卸载会把它删掉，重装后拿到新路径 |
 | 本地资产乱了或装坏了，想回到干净状态 | 卸载按全量清单清理，再重新安装 |
+| **降级**到 Skill 平铺安装的旧版本（0.3.3 及以前） | 旧包装到 `~/.cursor/skills/<skill>/`，不会清理新版的 `~/.cursor/skills/<分组>/<skill>/`，同一个 skill 会出现两份。要先用**新版包**的 `uninstall`（旧包的 `uninstall` 只认平铺路径），再装旧包。升级则不需要卸载：新包 `install` 会自动把平铺的旧 skill 迁到分组目录 |
 
 > 同时装多个角色（比如 TL 和 QA 两个包都装）可以直接依次覆盖安装，共用的 skill 会按后装的那个版本来。
 > 角色包卸载**不会**删除 `~/.cursor/mcp.json`（凭证保留），也不碰运行时，所以"先卸载再安装"之后不用重填凭证。

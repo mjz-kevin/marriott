@@ -19,8 +19,8 @@
 - 可用环境变量 `PROFILE_SELECT_HOME` 覆盖目录
 
 ```bash
-python .cursor/skills/profile-select/scripts/profile.py list      # 列出可用 profile
-python .cursor/skills/profile-select/scripts/profile.py resolve   # 当前 profile 的绝对路径
+python .cursor/skills/common/profile-select/scripts/profile.py list      # 列出可用 profile
+python .cursor/skills/common/profile-select/scripts/profile.py resolve   # 当前 profile 的绝对路径
 ```
 
 ## 2. 团队 profile 结构

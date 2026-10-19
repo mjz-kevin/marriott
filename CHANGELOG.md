@@ -20,7 +20,10 @@
 - profile `mcp.harness.pipelines` 新增单条可选字段 `artifact_stage`：`app-test` / `app-prod` 的 `iOS_Dragon_App_Testflight_Dev` 填 `TestFlight_Metadata`；其余流水线（含 CMS）不填即按「执行成功」判定，故 CMS profile 未改。
 - profile `mcp.jira.figma_embed` 新增 `max_height_px: 2400`（4 份 profile 同步）：待导出 Figma 节点高度超过此值视为整页长图，不直接导出，改推荐卡片 / 屏级子节点给用户确认。
 
-### 变更（需求线 / 发布提速）
+### 变更
+- **Skill 按分组文件夹存放（仓库、安装包、用户机器三处一致）**：33 个 Skill 从平铺的 `.cursor/skills/<skill>/` 移到 `.cursor/skills/<分组>/<skill>/`，分组与 `AGENTS.md` §3 一致：`common`（公共 5 个）/ `requirement`（PO 5 个）/ `tech-solution`（4 个）/ `dev`（8 个）/ `code-review`（4 个）/ `cicd`（`harness-invoke`）/ `test`（QA 6 个）。Cursor 官方支持 skill 嵌套目录（递归扫描 `SKILL.md`，skill 身份取 `SKILL.md` 所在目录名，分组目录只起组织作用），frontmatter `name` 不变。`roles.json` 仍只写 skill 名，分组只由磁盘目录决定：`build.py` 递归发现 skill 并按分组路径打包，manifest 的 skills 增加 `path` 字段，卸载清单改为 `<分组>/<skill>`；`install.sh` / `install.ps1` 按分组落到 `~/.cursor/skills/<分组>/<skill>/`，安装前把旧版平铺（或上个版本在其它分组下）的同名 skill 合并进新位置后删除，避免同名 skill 出现两份，用户在 skill 目录里自建的文件（如 `sensitive-data-guard/whitelists/` 下的白名单）会保留；`uninstall.*` 同时清理分组路径、旧平铺残留与空分组目录。按固定层数定位的脚本改为「向上找最近的 `.cursor` 目录」，与分组深度无关：`upload_confluence_v2.py`（`mcp.json`）、`ai-sdlc-info/version.py`（cursor home，且按 manifest 的 `path` 核对安装完整性，兼容旧记录）、`sensitive-data-guard/platform_paths.py`（兜底仓库根）、`test-page-elements/collect_page.py`（仓库根）；`harness-invoke/stage_run.py` 改为在任意分组下查找 `profile-select`。`check.py` 改为递归发现 skill，新增 `layout` 检查（必须位于 `<分组>/<skill>/`、跨分组不得重名）。全仓库 `skills/<skill>` 形式的路径引用（Skill 正文中的脚本命令、`test-agent` 路由表、`AGENTS.md`、`init/README.md`、`doc/maintenance/`）已统一改为带分组的路径；`../<skill>/references/` 形式的跨 skill 相对引用两端同组，仍然有效。Agent 不分组（Cursor 文档未说明 `agents/` 支持子目录），保持平铺。设计文档里只有示意性的 `skills/` 目录，未改。
+- **技术方案按需增加图表，提升可读性**：反馈三档技术方案文字过多、不便阅读。新增三档共用的图表规范 `tech-solution-detail/references/diagram-guide.md`（放在 TL / Dev 都会安装的 `tech-solution-detail` 下，`tech-solution-prd` / `tech-solution-spike` 用 `../tech-solution-detail/references/diagram-guide.md` 引用）：保留模板原有的基础图（PRD 级架构图、Spike 各方案示意图、Detail 主流程图 / CMS 架构图，仍可用 Confluence 链接替代），其余按需增加——某段内容在描述结构 / 调用顺序 / 分支 / 状态 / 数据关系、用图比文字更清楚时，加对应的时序图 / 流程图 / 状态图 / ER 图 / 任务依赖图 / timeline·gantt / quadrantChart；规范给出按内容选图的对照、各档常见加图位置（建议而非清单）、图旁文字不复述图、单图约 15 节点以内、不为加图而加图，以及 mermaid 语法规范（只用稳定图类型，已用内置 mermaid-cli 12 实测渲染）。三个 Skill 各加一节「Diagrams on demand」及对应强制规则 / 质量门禁（门禁只要求「长段纯文字已考虑配图」与 mermaid 可渲染，不新增必须出现的图）；「忠于模板」规则明确放在已有章节内的图（可带一行图注）不算模板外内容；四份模板的引导块补了按需配图提示（引导块不进成品）。`tech-solution-agent` 的 T4 以 Skill 质量门禁为准，未改；`tech-solution-publish` / `md-to-pdf` 已支持全部 mermaid 类型与本地图片，未改；`prd-authoring` 自带的 Diagram spec 属 PO 包，未改。
+- **Spike 方案 PoC 范围按方案个数决定**：`tech-solution-spike` S5 新增规则——第 3 章方案 ≤ 2 个（含只有 1 个并说明为何无备选）时，自动为每个方案生成 PoC，不询问；> 2 个时先暂停，由 TL 多选要做 PoC 的方案（按对比矩阵推荐最多 2 个排在前面，另提供「本轮不做 PoC」），回答原文记入 `sessions/`，第 4 章只写入选方案的 PoC 块，未入选方案的落选理由仍写在第 5 章；同时明确 PoC 实测数据不得编造，未实际运行时只写预期测量项，并在第 6 章登记待跑。同步：Skill 强制规则 / 质量门禁、模板第 4 章引导块、`tech-solution-agent` T3 第 4 步（spike 模式暂停询问 TL，记录 `sessions/{timestamp}_poc-scope.md`）、设计文档 §4 `tech-solution-spike` 一行。`doc/maintenance/` 与 `init/` 未涉及，未改。
 - **发布脚本 `upload_confluence_v2.py` 提速**（PRD / 技术方案 / 测试线发布共用）：
   - mermaid **整批一次渲染**：所有要渲的图拼进一个临时 md，只起一次 node / Chromium；整批失败（某张图语法错）再逐张渲染隔离坏图（有离线包时最多 3 并发，`npx` 回退时串行）。本机 `npx` 回退实测：逐张 3 张图 146s → 整批 4 张图约 10s。
   - **未变化的附件跳过**：更新已有页面时一次列出全部附件，按附件 comment 中的内容指纹（`sha256:`）比对——没改的 mermaid 图不重渲染也不重传，没改的本地图片不重传，改了的直接覆盖同名附件（不再「先 POST 撞 400 → GET 查 id → 再 POST」）。结果 JSON 新增 `attachments`（`uploaded` / `skipped_unchanged` / `mermaid_rendered`）。
@@ -36,8 +39,6 @@
   - `userstory-agent` S4 签核改为**选项按钮**（确认同步 / 调整计划 / Story 内容要改），由主对话渲染；「调整 + 明确执行词」（如「只建 S4，直接建」）视为对调整后计划的签核，直接执行；只有调整没有执行词时生成新小版本并在同一轮给出选项。
 - **多来源读取按需分层**（`requirement-clarify`、`prd-authoring`、`eval-agent` E2）：Jira 只取 type / summary / status / parent；Epic 兄弟 Story 只列清单，只对与本需求重叠的 1–3 条读正文；他队 Confluence 页先看大纲再读相关章节；Figma 必带 `nodeId` + 浅 `depth`，只读本需求涉及的屏。澄清结论新增「Sources read」一行（来源、版本、读到哪一层），`prd-authoring` 据此复用、只补缺口，不再重读。
 - 文档：`confluence-publish` SKILL（body handling / mermaid 前置 / 输出字段）同步；设计文档只描述到职责层，本次未涉及职责、MCP 权限或人工确认点增减，未改。
-
-### 变更
 - **防重复触发（cncms t5 一次确认出了 #184 / #185 两条执行）**：同一条 `stage_run.py --execute --wait` 命令被 Cursor 工具层原样执行了两次（15:52 / 16:05，同一终端服务进程），脚本当时不检查结果文件，于是又发了一次部署。现在：
   - `--execute` **必须带 `--result-json`**，该文件即触发的幂等锁：开跑时（读 Harness 之前）若已存在即拒绝；发送前用 `O_EXCL` 独占创建，两个并发调用只有一个能发。被拒绝时**什么都不发**，退出码 **6**、打印 `TERMINAL: already_triggered` 与已记录的执行 id / Build 号 / URL，并给出 `--wait-execution` 续等命令。
   - 结果文件新增 `trigger_outcome`（`sent` / `unknown` / `not_sent`）。Harness 明确拒绝（HTTP 错误）或根本没连上时记 `not_sent`，这种文件下次 `--execute` 会被挪到 `*.not_sent.<时间>` 后重新占用；其它任何已存在的文件都拒绝。新部署用新路径 `t{n}_result.json`，禁止删文件绕过。
@@ -56,14 +57,28 @@
 - **等待部署结果改为「后台启动 + 分段 await」，修子 agent 部署完不返回**：实测 cncms #186（test，main）16:56 已结束、`--result-json` 已写入终态 `success_with_ignored`，但 `cicd-agent` 把 `--wait-execution` 作为一次 35 分钟的前台调用并挂了 `notify_on_output`，这次调用的完成信号一直没回到 Agent，Agent 停在 `polling` 直到 17:16 被人工打断；日志里还能看到等待被工具层重跑了一次（只读，无重复部署）。`harness-invoke` S5「Deliver the result」第 1–3 条改写：step 2 前台阻塞设为 0 立即转后台，用 `AwaitShell`（pattern `^TERMINAL:`，每段 ≤ 20 分钟）分段等，**每段结束都读 `--result-json`，`terminal` 有值立即收尾**；不再要求单次前台预算覆盖 `expected_duration_s`（改为各段累计覆盖），并明确禁止对等待挂 `notify_on_output`。Rules / Quality gates / 排障表同步，排障表新增本次症状一行。`cicd-agent` §3.4 第 1 条、`wait_handle` 注释、C4 第 2 条、禁止项同步。`stage_run.py` 只改两处注释，行为不变。设计文档与 `doc/maintenance/` 未写到等待托管细节，未改。
 
 ### 升级方式
-- 直接覆盖。
+- **直接覆盖**：新包的 `install` 会自动把 `~/.cursor/skills/<skill>/` 下的旧版平铺 skill 迁到 `~/.cursor/skills/<分组>/<skill>/`，无需先卸载。注意命令行里直接调用 skill 脚本的路径变了，如 `~/.cursor/skills/common/confluence-publish/scripts/upload_confluence_v2.py`、`~/.cursor/skills/common/ai-sdlc-info/scripts/version.py`。
+  - 升级后**卸载请用本版及以后的包**：0.3.3 及以前包的 `uninstall` 只认平铺路径，删不掉分组目录。**降级**到 0.3.3 及以前，要先用本版包 `uninstall`，再装旧包——否则旧包平铺安装一份，加上分组目录里的一份，同一个 skill 会出现两份。
+- 技术方案图表：仅新增一个 reference 文件并修改 Skill 正文，无资产删改名、无 profile 字段变化。
+- Spike PoC 范围：只改 Skill / Agent 正文与模板引导块，直接覆盖安装即可。
+- CI/CD 查最新 build / 防重复触发 / 发布提速：无资产删改名，直接覆盖。
+
+---
+
+## [0.3.3] - 2026-10-16
+
+### 变更
+- **CI/CD Agent 改为后台运行，不再把父对话挂住**：实测一次 `Android_Adhoc_Build`（dev 分支，18m37s）时，子 agent 23:13:27 已 `turn_ended: success`、`state.md` 23:12:44 已是完整终态，但结果在 Cursor 子 agent 回传层滞留约 10 分钟未送达；父对话因 `is_background: false` 只能前台干等，用户看不到任何进展，只能手动中断。回传滞留属 Cursor 框架层，仓库内无法修复，本次只消除「被拖住」：`cicd-agent` frontmatter `is_background` 改为 `true`；§6 给父对话的说明补充「启动后告知在跑及预计耗时并结束本轮、不阻塞不轮询；问进展或疑似已完成却没收到卡片时直接读 `.ai-sdlc/cicd/{run_id}/state.md` 作答；没收到卡片绝不是重新触发的理由」；C4 第 2 条注明后台运行只影响父对话，Agent 内部「收齐判决才返回」（§3.4）不变。`harness-invoke` 讲的是 Agent 内部如何托住 wait，与父对话是否阻塞无关，未改。其他 6 个 Agent 交互密、无长时间纯等待，保持 `false`。**待实测**：后台模式下 Auto-review 原生审批卡能否正常弹出（若不能则改回 `false`）；另据论坛反馈 CLI / ACP 与第 2 层以下嵌套子 agent 会忽略该字段。设计文档与 `doc/maintenance/` 未涉及该字段，未改。另发现 Cursor 列出子 agent 时 7 个 Agent 的 description 均显示为字面量 `>-`（疑似 Agent 加载器不解析折叠块，Skill 正常），影响父对话据 description 判断委派，未在本次处理。（该条此前误记在 0.3.2 下，实际在 0.3.2 tag 之后提交，0.3.2 包不含。）
+- **md-to-pdf 导出提速：mermaid 改为一次批量渲染**：`export_pdf.py` 预处理改为「先收集全部 mermaid 块 → 一次 mmdc 调用（markdown 模式）渲染全部 → 回填」三趟结构，整篇只付一次 node / Chromium 冷启动（原先每张图一次），超时按图数放宽（上限 900s）。mmdc markdown 模式对任一坏图「全有或全无」，故批处理失败时自动回退逐图渲染，坏图仍单独退化为代码块、不静默丢图。mmdc 调用前缀与 puppeteer 配置（离线 Chromium、无沙箱）抽为共用函数，离线包优先 / npx 回退的顺序不变。`SKILL.md` 用法与参数未变，未改。
+
+### 升级方式
+- **直接覆盖**：无资产增删改名、无 profile 字段变化。
 
 ---
 
 ## [0.3.2] - 2026-10-15
 
 ### 变更
-- **CI/CD Agent 改为后台运行，不再把父对话挂住**：实测一次 `Android_Adhoc_Build`（dev 分支，18m37s）时，子 agent 23:13:27 已 `turn_ended: success`、`state.md` 23:12:44 已是完整终态，但结果在 Cursor 子 agent 回传层滞留约 10 分钟未送达；父对话因 `is_background: false` 只能前台干等，用户看不到任何进展，只能手动中断。回传滞留属 Cursor 框架层，仓库内无法修复，本次只消除「被拖住」：`cicd-agent` frontmatter `is_background` 改为 `true`；§6 给父对话的说明补充「启动后告知在跑及预计耗时并结束本轮、不阻塞不轮询；问进展或疑似已完成却没收到卡片时直接读 `.ai-sdlc/cicd/{run_id}/state.md` 作答；没收到卡片绝不是重新触发的理由」；C4 第 2 条注明后台运行只影响父对话，Agent 内部「收齐判决才返回」（§3.4）不变。`harness-invoke` 讲的是 Agent 内部如何托住 wait，与父对话是否阻塞无关，未改。其他 6 个 Agent 交互密、无长时间纯等待，保持 `false`。**待实测**：后台模式下 Auto-review 原生审批卡能否正常弹出（若不能则改回 `false`）；另据论坛反馈 CLI / ACP 与第 2 层以下嵌套子 agent 会忽略该字段。设计文档与 `doc/maintenance/` 未涉及该字段，未改。另发现 Cursor 列出子 agent 时 7 个 Agent 的 description 均显示为字面量 `>-`（疑似 Agent 加载器不解析折叠块，Skill 正常），影响父对话据 description 判断委派，未在本次处理。
 - **技术方案模式不再擅自判断**：`tech-solution-agent` T0 改为「用户原话没点名级别（prd / spike / detail）就先问、再走后续流程」——仅凭贴了什么链接 / key 不算点名。提问在读 profile、读 PRD、建目录、写状态之前进行，单选三项、推荐项置首并标 `(Recommended)`：**只有 PRD 链接 → 推荐 `prd`（high level）**；spike 单 / 调研类措辞 → `spike`；有 Story key → `detail`；其它按用户输入推荐（推荐前允许只读查一次 Jira issue type）。原「给了 spike 单就 spike、给了 Story 就 detail、只给 PRD 就 prd」的自动判定删除；§2 执行顺序与 §7 禁止项同步。resume 已有方案时沿用 `state.md` 的 mode，不再问。设计文档未写模式判定细节，未改。
 - **CI/CD 首轮提问不再空转**：实测「部署cms」这类信息不全的请求，Agent 先读完 700 行 Agent/Skill 正文、解析 profile、扫描其它 run、写 24KB `state.md`（约 20 分钟、13 轮工具调用），**产出只是一句「9 个 CMS app 指哪个？」**——而这个判断只需看一眼用户原话。根因是节点顺序矛盾：`C0` 要求用目标拼 run_id 可读 slug，但「目标是否齐备」的校验排在其后的 `C1`，只能先用 `cms-pending` 占位名兜。`cicd-agent` 新增前置节点 `C-pre`（Pre-flight: is the request actionable yet?）：全新请求进来先只对照 C1 前置条件（能唯一定位流水线的目标选择 + 分支/tag）检查原话，缺了立刻问并返回，**不读 profile、不建目录、不写状态**；同时要求首轮把已知会用到的信息（环境、分支、以及「如果流水线需要镜像 tag 就一并给」）一次问全，少一个往返。只有可枚举的选项清单（有哪些 app / 端）才读那一处配置。注意仍不得把推测性提问的答案当权威入参——真实入参规格依旧按 `harness-invoke` S3 在触发时从 Harness 读。resume 一律跳过 `C-pre`。
 - **CI/CD 触发结果「不丢、即时送达」**：实测发现一次 `cncms` test 部署已终态 10 分钟，`state.md` 仍停在 `polling`、无人播报。根因不在脚本（`--wait` 工作正常，滞后 < 1 个轮询间隔），而在「脚本已知结果 → Agent 播报」的交接：等待被放进一个前台预算 150s 的 shell（该流水线实测 `expected_duration_s=1545`），必然被转后台；输出又只重定向进文件（`> log`），既无人观察也无法触发输出通知；Agent 随后查了等待工具的用法却没真正调用就返回了。按「等待」与「交付结果」是两件事来收口：
