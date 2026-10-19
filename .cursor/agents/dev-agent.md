@@ -343,6 +343,10 @@ flowchart TD
 4. Commit on the Feature branch, using the profile-compliant message from step 2 (references the Story key per the repo's convention, summarizes the change, and ends with the AI-provenance trailer). If the commit is still rejected by a hook, treat the hook output as a failed check -> fix within scope and retry, do **not** `--no-verify` to bypass it. **Never force-push.** Record `commit.message`, `commit.committed_sha`, `repo.head_sha`.
 5. **Ask the DEV before pushing (mandatory).** Pushing to the remote **always** requires the DEV's explicit approval in this turn — this holds for the very first push of the branch and for every subsequent push, with no exception. Do **not** push automatically, and do **not** treat a `pass` verdict, an earlier "create branch", or any prior push as standing consent.
    - Set node=`D6_push`, `status: waiting_user`, persist, and prompt the DEV to confirm the push (spell out the branch, the commit SHA about to be pushed, and the target remote in the status card). Record the request in `sessions/`.
+   - **Offer the change summary as an option (opt-in).** In the same prompt, present these choices (via the ask-question tool when available, otherwise in the status card): **① Approve push** · **② Review change summary first** · **③ Not now**. Do **not** output the change summary unless the DEV selects ②.
+     - **② selected** -> present the change summary per §4.1 (display-only, not persisted), then re-offer **① Approve push** · **③ Not now** in the same turn. Reviewing the summary does not constitute push approval.
+     - If, after the review, the DEV requests changes or removals -> treat it as a new fix attempt (bump `attempt`, return to D4 scoped to the DEV's feedback, then re-run D5 and D6).
+     - The DEV may also request the change summary at any later node (e.g. D7, "show the change summary"); generate it the same way.
    - **Approved this turn** -> `git push -u origin {feature_branch}` (never force-push). Record `repo.pushed_sha`, then continue to step 6. Persist the approval verbatim to `sessions/`.
    - **Not approved / no answer** -> stay `waiting_user`, leave the commit local-only (do not push), and note "committed, awaiting push approval" in the status card. An earlier "not now" is honored and never silently overridden on a later run — re-prompt instead.
    - **Push failure / auth failure** after approval -> `blocked`, report the reason (do not fall back to force-push).
@@ -366,6 +370,31 @@ The auto verify<->fix loop has passed all four automated checks, but **those are
 5. 👤 **Another DEV / TL — trigger the code review.** Once the PR is up, a *different* person (not the author) runs `/code-review-agent` on it (standards + security baseline), followed by the human architecture / business second check before merge.
 6. 👤 QA: the Test Agent can generate functional cases from the Story once development is stable.
 7. Note that CI/CD (Harness) is triggered by `/cicd-agent`, not this Agent.
+
+### 4.1 Change summary (on demand)
+
+Presented **only when the DEV requests it** (the "Review change summary first" option at D6, or an explicit request at any later node). It is **display-only output**: render it in the response / status card and do **not** persist it under `.ai-sdlc/` or anywhere else.
+
+**Data sources**: `git diff --stat {repo.baseline_sha}..HEAD`, the `tasks` checklist in `state.md`, and the `IMPL-NOTE` files — always derived from the actual diff, **never reconstructed from memory**. Changes are grouped by task so each one traces back to the Story / tech solution.
+
+```markdown
+### Change summary · {story_key} (baseline {baseline_ref}@{short sha} -> {feature_branch}@{short sha})
+**Total**: {n} files changed, +{added} / -{deleted}
+
+#### T1 {task desc} — {acceptance in one line}
+1. `{path}` (modified | added | deleted, +a/-d): {what changed and why, one line}
+2. ...
+- Unit tests: `{test file}` — {UT ids / cases covered}
+
+#### Out-of-scope changes (not tied to a task)
+- `{path}`: {e.g. pre-commit hook formatting, generated files, config} — or "none"
+```
+
+**Rules**
+- One line per change point; no code dumps (quote at most a signature).
+- Completeness: every changed file appears exactly once.
+- Transparency: anything outside the task checklist goes under "Out-of-scope changes", never omitted.
+- No real sensitive data.
 
 ---
 
@@ -401,7 +430,7 @@ The auto verify<->fix loop has passed all four automated checks, but **those are
 {👤 role ▸ specific action; number each question / decision / escalation}
 
 ### ▶️ How to continue afterward
-- Same conversation: just reply (e.g. answer a question / approve the push / "raise retry cap to N")
+- Same conversation: just reply (e.g. answer a question / approve the push / "show the change summary" / "raise retry cap to N")
 - New conversation / next day: `/dev-agent continue {story_key}: {answer / "raise retry cap to N" / approve push}`
 
 > [For the main conversation] This Agent runs verification and drives the verify<->fix loop itself. When the user replies within the same conversation, prefer resuming this subagent and pass the reply through verbatim; if resume fails, re-invoke `/dev-agent` with `{story_key}` and the reply.

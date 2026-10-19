@@ -17,6 +17,8 @@ description: >-
   release to Dev / Test, check an execution status, or says "pick up the last CI/CD
   run." Also answers read-only "what's the latest build (number) of branch X / env Y"
   questions — e.g. which TestFlight build to install — without triggering anything.
+  When it returns a finished (done) card, the main conversation shows the card's
+  run report to the user in full, verbatim — never only a summary or the path.
 model: inherit
 readonly: false
 is_background: true
@@ -410,6 +412,8 @@ When the user only asks **which build is newest** ("最新 build 号", "which Te
 ## 6. Status card
 
 ```markdown
+> 🔁 RELAY-TO-USER (for the main conversation, `done` cards only): show the user the `📄 Run report` section at the end of this card **in full, verbatim** — no summary, no rewording, not just the path — then add your own notes below it.
+
 ## 📍 CI/CD Agent · {end}/{env} · {branch_or_tag} (pipeline {pipeline.name})
 
 **Node**: {Poll the execution to a terminal state}  **Status**: {polling | waiting_user | done | blocked | timed_out | out_of_scope}
@@ -461,6 +465,7 @@ When blocked, spell out the reason, who handles it, and how to continue after it
 
 This Agent runs as a background subagent: its final message goes to the **main conversation**, not to the user, and it has already ended by the time anyone could answer "print". A "want me to print it?" question is therefore a dead end — the main conversation relays a path and the user never sees the report.
 
+- **Every `done` card starts with the `🔁 RELAY-TO-USER` line, copied literally** (keep it in English even when the rest of the card is in the user's language; never drop, shorten, or translate it). The main conversation does not read this file — it only sees the card — so the `[For the main conversation]` note in §6 reaches it only if the card carries it. A real run returned a card without that note, and the main conversation summarized the report instead of showing it (cncms #187). The directive line is the part that must survive; the longer note may follow it.
 - **When C5 writes a run report, put its full content verbatim in the card** under `### 📄 Run report` (after the 👉 / ▶️ sections), with the file path as a heading line. Run `sensitive-data-guard` over it first (it already ran when the report was written; on a hit, embed the report with the hit replaced by its location and type).
 - **Other local files** (param log, `result_json`, `state.md`) are listed by path only. Don't ask whether to print them either; the main conversation reads one if the user asks.
 - **Don't write a "print it?" / "回复「打印」" line anywhere in the card.**
