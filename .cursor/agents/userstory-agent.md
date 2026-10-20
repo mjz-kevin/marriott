@@ -243,10 +243,10 @@ flowchart TD
 
 ### S2 Query current Jira state
 
-1. Query (read-only) via `user-story-publish`:
-   - For entries in `stories` that already have a `key` -> query the ticket's current content and status;
-   - For those without a `key` -> search for an existing one per the Skill's dedup rules;
-   - For entries not in this round's PRD but with a `key` in `stories` -> query their current status.
+1. Query (read-only) via `user-story-publish`, **in batch, not one call per Story**:
+   - One JQL for all children of the Epic (`parent = {Epic}`, fields `summary` / `status` / `issuetype` only) — covers dedup for entries without a `key` (matched locally per the Skill's S2) and the current state of entries already mapped;
+   - Entries with a `key` that are not under that Epic (moved, or `removed_in_prd`) -> one `key in (…)` query with the same minimal fields;
+   - Read a ticket's description / AC only for entries whose `content_sha256` changed (`update` candidates) and only when needed to detect a manual-edit `conflict`.
 2. Jira auth failure -> `blocked`, prompt the user to re-authorize the Jira MCP in Cursor.
 
 ### S3 Generate the sync plan
@@ -262,7 +262,9 @@ flowchart TD
 | `removed_in_prd` | the Story is gone from the PRD but a Jira ticket exists | **don't delete**; write to `manual_actions` and prompt the PO to close it manually in Jira or note which Stories replaced it |
 
 2. Links: list the PRD URL (for a local PRD, ask the PO whether there's a published Confluence URL available), Figma (taken from the PRD), and the tech solution URLs in `link_inputs` into the plan, and let the Skill decide how to build them.
-3. Generate a new version's `docs/SYNC-PLAN_{us_id}_v{version}_{timestamp}.md` per §3.1, including: the PRD and version it's based on, each Story's action and reason, the `conflict` options, `manual_actions`, and the links to build.
+   - **Design image source per Story** (when the profile's `figma_embed.mode` is `embed`): resolve it now, per `user-story-publish` S5 (reuse the PRD's local design PNG → precise node id → file-level link ⇒ recommended board), including the size gate (`max_height_px`; a long-page node ⇒ recommended child frames). Write the result into the plan per Story (`reuse: <path>` / `node: <id> (<w>×<h>)` / `recommend: <ids + reason>` / `link only`), so every node choice is confirmed in the single S4 sign-off and S5 never stops mid-run to ask.
+   - List the Skill's "possible duplicate" near matches next to the affected Story.
+3. Generate a new version's `docs/SYNC-PLAN_{us_id}_v{version}_{timestamp}.md` per §3.1, including: the PRD and version it's based on, each Story's action and reason, the `conflict` options, `manual_actions`, the links to build, and each Story's design image source.
 4. Append an entry to `versions` (`status: draft`) and mark the previous unexecuted plan as `superseded`.
 5. All Stories are `unchanged` with no links to add -> tell the PO directly "Jira is already consistent with the PRD," `done`.
 6. Otherwise `waiting_confirm`, node=`S4_confirm`.
@@ -271,12 +273,31 @@ flowchart TD
 
 Summarize the plan in the status card (create n / update m / conflict c / removed from PRD d / unchanged u), and ask the PO to:
 
-- make a choice for each `conflict`;
+- make a choice for each `conflict` (and each design-image `recommend` node, when present);
 - reply explicitly with "confirm sync," or propose adjustments (e.g. skip certain Stories this round).
+
+**Present the sign-off as clickable options, not a free-text prompt (mandatory).** Whoever holds the dialog control renders one structured question (the same rule as the Eval Agent's clarification questions; a sub-agent returns it in the status card as a machine-readable block and the main conversation **must** turn it into option controls, not narrate it):
+
+```json
+{
+  "id": "S4_signoff",
+  "prompt": "Sync plan v{version}: create {n} / update {m} / skip {k}. How to proceed?",
+  "allow_multiple": false,
+  "options": [
+    { "id": "confirm", "label": "Confirm sync — execute plan v{version} as listed", "recommended": true },
+    { "id": "adjust", "label": "Adjust the plan (e.g. only some Stories) — I'll describe it" },
+    { "id": "edit_story", "label": "Story content itself needs changes — go back to /eval-agent" }
+  ]
+}
+```
+
+Each `conflict` / `recommend` choice is its own option question in the same batch. "Other (custom)" is appended automatically.
 
 Handling the reply:
 
-- Adjust the plan -> record it to `sessions/{timestamp}_review-v{version}.md`, go back to S3 to generate a minor version.
+- `confirm` (or an equivalent explicit "confirm sync") -> sign-off, see below.
+- Adjust the plan -> record it to `sessions/{timestamp}_review-v{version}.md`, go back to S3 to generate a minor version, then present the same options again for the new version.
+  - **Adjustment plus an explicit execute instruction in the same reply** (e.g. "only create S4, go ahead" / "只建 S4，直接建") counts as sign-off **of the adjusted plan**: generate the minor version, record the reply as its confirmation, and proceed to S5 without another round. A bare adjustment without an execute word (e.g. "新建 不存在的 一个即可") is not sign-off—generate the minor version and ask with the options above in the same turn.
 - Change the Story content itself -> don't change it here; prompt the PO to use `/eval-agent` to fix the PRD, publish, and come back to sync.
 - Explicit sign-off -> mark the current version `status: confirmed`, backfill the confirmer, time, and the plan file's `sha256`, and proceed to S5. There must be explicit sign-off before bulk-creating / updating.
 
@@ -287,10 +308,12 @@ Handling the reply:
 3. Run the content to be written to Jira through `sensitive-data-guard`; on a hit -> `blocked`, report only location and type.
 4. Mark the current version `status: executing`, set `in_progress`, and persist.
 5. Invoke `user-story-publish` one entry at a time per the plan, **processing only entries whose `result` is `pending` / `failed`**:
-   - `create` -> create it, backfill `key` and `url`;
+   - `create` -> create it (the description already carries the PRD / Figma back-link subsection, so no follow-up edit), backfill `key` and `url`;
    - `update` / a `conflict` where "update per the PRD" was chosen -> update the fields the Skill owns;
    - hand any links to build to the Skill together; also hand the write-back content in `link_inputs.writebacks` to the Skill at this step;
+   - design images: use the source confirmed in the plan (reused PNG / confirmed node); export all nodes that need exporting in one batch before the per-Story loop;
    - backfill `result`, `synced_prd_version`, and `content_sha256` immediately after each one.
+   - **Don't re-read tickets to verify** after a successful call (no per-ticket `getJiraIssue` / rendering check); the call results are the evidence, per the Skill's "Verify from returned results" rule.
 6. Outcomes:
    - All complete -> proceed to S6;
    - Any `failed` -> `blocked`, list done / not done / failure reason / who handles it; once cleared, resume only the unfinished items;

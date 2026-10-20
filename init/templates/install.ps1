@@ -76,19 +76,61 @@ function Copy-Contents($src, $dst) {
 Write-Host "--> 安装 agents"
 Copy-Contents (Join-Path $PkgDir "agents") (Join-Path $CursorHome "agents")
 
-Write-Host "--> 安装 skills"
-Copy-Contents (Join-Path $PkgDir "skills") (Join-Path $CursorHome "skills")
+Write-Host "--> 安装 skills（按分组：skills\<分组>\<skill>\）"
+# 迁移：旧版平铺安装（skills\<skill>\）或上个版本放在别的分组下的同名 AI SDLC skill，
+# 会让 Cursor 同时识别到两份同名 skill。先把旧目录并入新分组路径（保留用户在 skill 目录里
+# 新增的文件，如 sensitive-data-guard\whitelists\ 下自建的白名单），再删掉旧目录。
+$skillsSrc = Join-Path $PkgDir "skills"
+$skillsDst = Join-Path $CursorHome "skills"
+if (Test-Path $skillsSrc) {
+    Get-ChildItem -Path $skillsSrc -Recurse -File -Filter "SKILL.md" | ForEach-Object {
+        $skillDir = $_.Directory
+        $rel = $skillDir.FullName.Substring($skillsSrc.Length).TrimStart('\', '/')   # <分组>\<skill>
+        if ($rel -notmatch '[\\/]') { return }                                        # 只处理分组下的 skill
+        $name = $skillDir.Name
+        $dst = Join-Path $skillsDst $rel
+        $olds = @(Join-Path $skillsDst $name)
+        if (Test-Path $skillsDst) {
+            $olds += Get-ChildItem -Path $skillsDst -Directory -ErrorAction SilentlyContinue |
+                     ForEach-Object { Join-Path $_.FullName $name }
+        }
+        foreach ($old in $olds) {
+            if (-not (Test-Path (Join-Path $old "SKILL.md"))) { continue }
+            if ((Resolve-Path $old).Path -eq [System.IO.Path]::GetFullPath($dst)) { continue }
+            New-Item -ItemType Directory -Force -Path $dst | Out-Null
+            Get-ChildItem -Path $old -Force | ForEach-Object {
+                Copy-Item -Path $_.FullName -Destination $dst -Recurse -Force
+            }
+            Remove-Item -LiteralPath $old -Recurse -Force
+            Write-Host "    已迁移旧位置的 skill：$old → $dst"
+            $parent = Split-Path -Parent $old
+            if ($parent -ne $skillsDst -and -not (Get-ChildItem -Force -Path $parent -ErrorAction SilentlyContinue)) {
+                Remove-Item -LiteralPath $parent -Force -ErrorAction SilentlyContinue
+            }
+        }
+    }
+}
+Copy-Contents $skillsSrc $skillsDst
+# 分组目录本身若是用户自己的 skill（如 ~\.cursor\skills\test\SKILL.md），AI SDLC 的 skill 会被装进它的目录里，
+# Cursor 识别结果不可预期；不擅自改动用户资产，只提示。
+if (Test-Path $skillsSrc) {
+    Get-ChildItem -Path $skillsSrc -Directory | ForEach-Object {
+        if (Test-Path (Join-Path $skillsDst "$($_.Name)\SKILL.md")) {
+            Write-Warning "$skillsDst\$($_.Name)\ 是你自己的 skill，与 AI SDLC 分组目录同名；建议把它改名后重跑本脚本。"
+        }
+    }
+}
 
 Write-Host "--> 安装 profiles"
 # profile 的 *.yaml 无条件覆盖（团队统一配置，无用户修改场景）；
-# setup.json 是用户本地运行时路径配置，已存在则保留，不覆盖。
+# setup.json 是用户本地运行时路径配置，已存在则先保留，后面「修正 setup.json」一步再合并新字段、修正失效路径。
 $profilesSrc = Join-Path $PkgDir "profiles"
 $profilesDst = Join-Path $CursorHome "profiles"
 if (Test-Path $profilesSrc) {
     New-Item -ItemType Directory -Force -Path $profilesDst | Out-Null
     Get-ChildItem -Path $profilesSrc -Force | ForEach-Object {
         if ($_.Name -eq "setup.json" -and (Test-Path (Join-Path $profilesDst "setup.json"))) {
-            Write-Host "    保留已有 setup.json（用户本地运行时配置，未覆盖）"
+            Write-Host "    已有 setup.json，先保留，稍后与新版合并（保留有效自定义路径、补新字段、改写失效路径）"
         } else {
             Copy-Item -Path $_.FullName -Destination $profilesDst -Recurse -Force
         }
@@ -131,6 +173,72 @@ $nodeInfo = Resolve-Node
 Write-Host "--> 自检 node：$($nodeInfo.path) [$($nodeInfo.source)]"
 if ($nodeInfo.source -eq "default") {
     Write-Warning "未能定位 node.exe。请确认 C:\AI-SDLC\runtime\node-*\node.exe 存在，或设环境变量 AI_SDLC_RUNTIME 指向运行时根目录后重跑本脚本。"
+}
+
+# ---- 修正 ~\.cursor\profiles\setup.json：让 AI 能找到离线运行时 ----
+# 以本包 setup.json 为骨架（带最新说明与 runtime_root 等新字段），合并用户已有文件里仍然有效的自定义值；
+# 再把当前平台（windows）段里为空或已失效的路径改写为本机实测的运行时路径。
+function Test-SetupValue([string]$key, $val) {
+    if (-not ($val -is [string]) -or [string]::IsNullOrWhiteSpace($val)) { return $false }
+    $p = $val.Trim()
+    if ($p.StartsWith("~")) { $p = Join-Path $env:USERPROFILE $p.Substring(1).TrimStart('/','\') }
+    if ($key -eq "runtime_root") { return (Test-Path $p -PathType Container) }
+    return (Test-Path $p -PathType Leaf)
+}
+function Find-RuntimeExe([string]$prefix, [string]$exe) {
+    if (-not (Test-Path $runtimeRoot)) { return "" }
+    $dir = Get-ChildItem -Path $runtimeRoot -Directory -Filter "$prefix-*" -ErrorAction SilentlyContinue |
+           Sort-Object Name | Select-Object -Last 1
+    if ($dir) {
+        $p = Join-Path $dir.FullName $exe
+        if (Test-Path $p) { return ($p -replace '\\','/') }
+    }
+    return ""
+}
+$setupTemplate = Join-Path $PkgDir "profiles\setup.json"
+$setupTarget = Join-Path $profilesDst "setup.json"
+if (Test-Path $setupTemplate) {
+    try {
+        $setup = Get-Content $setupTemplate -Raw -Encoding UTF8 | ConvertFrom-Json
+        $old = $null
+        if (Test-Path $setupTarget) {
+            try { $old = Get-Content $setupTarget -Raw -Encoding UTF8 | ConvertFrom-Json } catch { $old = $null }
+        }
+        # 1) 合并用户已有的有效自定义值（非 _ 开头字段，路径存在才保留）
+        foreach ($sec in $setup.PSObject.Properties) {
+            if ($sec.Name.StartsWith("_") -or -not ($sec.Value -is [System.Management.Automation.PSCustomObject])) { continue }
+            $oseg = if ($old) { $old.($sec.Name) } else { $null }
+            if (-not $oseg) { continue }
+            foreach ($k in @($sec.Value.PSObject.Properties | ForEach-Object { $_.Name })) {
+                if ($k.StartsWith("_")) { continue }
+                $ov = $oseg.$k
+                if (Test-SetupValue $k $ov) { $sec.Value.$k = $ov }
+            }
+        }
+        # 2) 当前平台段：空或失效的路径改写为本机实测运行时路径
+        $detected = [ordered]@{
+            runtime_root = $(if (Test-Path $runtimeRoot) { $runtimeRoot -replace '\\','/' } else { "" })
+            python       = (Find-RuntimeExe "python" "python.exe")
+            node         = (Find-RuntimeExe "node" "node.exe")
+            npm          = (Find-RuntimeExe "node" "npm.cmd")
+            npx          = (Find-RuntimeExe "node" "npx.cmd")
+        }
+        $seg = $setup.windows
+        $fixed = @()
+        foreach ($k in $detected.Keys) {
+            $v = $detected[$k]
+            if ($v -and -not (Test-SetupValue $k $seg.$k)) {
+                if ($seg.PSObject.Properties[$k]) { $seg.$k = $v } else { $seg | Add-Member -NotePropertyName $k -NotePropertyValue $v }
+                $fixed += $k
+            }
+        }
+        $setupJson = $setup | ConvertTo-Json -Depth 10
+        [System.IO.File]::WriteAllText($setupTarget, $setupJson, (New-Object System.Text.UTF8Encoding($false)))
+        if ($fixed.Count -gt 0) { Write-Host "    setup.json 已更新（按本机运行时改写：$($fixed -join ', ')）" }
+        else { Write-Host "    setup.json 已更新（路径均有效，无需改写）" }
+    } catch {
+        Write-Warning "修正 setup.json 失败（不影响 mcp.json 生成）：$($_.Exception.Message)"
+    }
 }
 
 # 离线 MCP 包入口（随运行时铺开在 runtime\mcp-offline\ 下），转正斜杠供 JSON 使用
@@ -227,4 +335,4 @@ Write-Host "     - Harness: HARNESS_ACCOUNT_ID + HARNESS_API_KEY  marriott.harne
 Write-Host "  2) 在 Cursor 的 MCP 设置里确认 Atlassian / figma / marriott-github / harness 四个 server 已连接"
 Write-Host "     （agents / skills 已放入 ~/.cursor/，Cursor 会自动识别，无需重启）"
 Write-Host "  3) 之后想查看当前安装的版本：在 Cursor 对话里问「当前 AI SDLC 是什么版本」，"
-Write-Host "     或运行 python $CursorHome\skills\ai-sdlc-info\scripts\version.py"
+Write-Host "     或运行 python $CursorHome\skills\common\ai-sdlc-info\scripts\version.py"

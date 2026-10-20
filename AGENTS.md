@@ -30,7 +30,7 @@ ai-sdlc/
 │   └── 万豪敏捷流程.drawio        # 敏捷流程图
 ├── .cursor/
 │   ├── agents/               # 7 个 Agent 定义（<name>.md，YAML frontmatter: name / description）
-│   ├── skills/               # 全部 Skill（<name>/SKILL.md + references/ scripts/ template/ tests/ 等）
+│   ├── skills/               # 全部 Skill，按分组文件夹存放：<group>/<name>/SKILL.md（+ references/ scripts/ template/ tests/ 等）
 │   ├── profiles/             # 团队 profile 与公共配置（随角色包分发到 ~/.cursor/profiles/）
 │   ├── mcp.example.macos.json    # MCP 配置示例（无凭证）
 │   └── mcp.example.windows.json
@@ -52,28 +52,31 @@ ai-sdlc/
 | `tech-solution-agent` | TL / Dev | 技术方案（PRD 级 / Spike 调研 / Story 级详细方案）→ 确认 → 发布 → 回写 |
 | `dev-agent` | TL / Dev | Story → 检出基线 → 唯一 AI Feature 分支 → 实现代码与单测 → 验证 → 提 PR |
 | `code-review-agent` | TL / Dev | 拉 PR diff → 按规范与安全基线逐条审核 → 汇总为一条 PR review → 合并门禁（不自动 approve / 合并，人工拍板） |
-| `cicd-agent` | TL / Dev / QA | 选定并触发现有 Harness 流水线，**仅限低环境（dev / test）**；高环境（Staging / Prod）不在工具链范围，由人在 Harness UI 操作 |
+| `cicd-agent` | TL / Dev / QA | 选定并触发现有 Harness 流水线，**仅限低环境（dev / test）**；触发前必须展示运行入参并等人确认；高环境（Staging / Prod）不在工具链范围，由人在 Harness UI 操作 |
 | `test-agent` | QA | 需求 / Jira 用例 → 伪代码 → pytest + pytest-bdd + Appium 可执行脚本 → 运行报告 / 提 Bug |
 
-## 3. Skills（`.cursor/skills/`）
+## 3. Skills（`.cursor/skills/<分组>/<skill>/`）
 
-| 分组 | Skills |
+Skill 按分组文件夹存放，Cursor 会递归识别 `SKILL.md`；安装包与用户机器 `~/.cursor/skills/` 下保持同样的分组结构。
+分组只由磁盘目录决定（`roles.json` 只写 skill 名），skill 名跨分组必须唯一。
+
+| 分组（目录） | Skills |
 | --- | --- |
-| 公共（所有角色） | `sensitive-data-guard`、`profile-select`、`confluence-publish`、`md-to-pdf`、`ai-sdlc-info` |
-| 需求（PO） | `requirement-clarify`、`prd-authoring`、`prd-publish`、`user-story-authoring`、`user-story-publish` |
-| 技术方案 | `tech-solution-prd`（仅 TL）、`tech-solution-spike`、`tech-solution-detail`、`tech-solution-publish` |
-| 开发与验证 | `baseline-checkout`、`feature-branch`、`unit-test-authoring`、`build-verify`、`unit-test-runner`、`contract-diff`、`acceptance-check`、`create-pr` |
-| Code Review | `diff-fetch`、`code-review-rules`、`review-comment`、`merge-gate` |
-| CI/CD | `harness-invoke` |
-| 测试（仅 QA） | `jira-to-test-case`、`test-case-authoring`、`test-case-to-script`、`test-debug-script`、`test-page-elements`、`test-run-report-bug` |
+| 公共（所有角色）`common/` | `sensitive-data-guard`、`profile-select`、`confluence-publish`、`md-to-pdf`、`ai-sdlc-info`、`kb-query` |
+| 需求（PO）`requirement/` | `requirement-clarify`、`prd-authoring`、`prd-publish`、`user-story-authoring`、`user-story-publish` |
+| 技术方案 `tech-solution/` | `tech-solution-prd`（仅 TL）、`tech-solution-spike`、`tech-solution-detail`、`tech-solution-publish` |
+| 开发与验证 `dev/` | `baseline-checkout`、`feature-branch`、`unit-test-authoring`、`build-verify`、`unit-test-runner`、`contract-diff`、`acceptance-check`、`create-pr` |
+| Code Review `code-review/` | `diff-fetch`、`code-review-rules`、`review-comment`、`merge-gate` |
+| CI/CD `cicd/` | `harness-invoke` |
+| 测试（仅 QA）`test/` | `jira-to-test-case`、`test-case-authoring`、`test-case-to-script`、`test-debug-script`、`test-page-elements`、`test-run-report-bug` |
 
 角色与资产的权威对应关系以 [`init/roles.json`](init/roles.json) 为准（上表只是索引）。
 
-> `kb-query`（知识库检索）是**规划中、尚未实现**的公共 Skill：多个 Agent 已预留调用位置，设计见 `doc/AI-Toolchain-Design.md` §4.1 / §9。它登记在 `init/check.py` 的 `PLANNED_SKILLS` 里，落地时建目录、登记 `roles.json` 并从 `PLANNED_SKILLS` 移除。
+> `kb-query`（知识库检索）本期只实现**仓库级**：读取当前代码仓库的 `.kb/`（OKF bundle），按「索引 → 元数据 → 按需全文」渐进读取，并按设计方案执行生命周期 / 信任等级 / 豁免规则；企业级（L0）、领域级（L1）、知识 MCP、`kb pull`、`kb_report` 不在本期范围。依据：`doc/AI-Toolchain-Design.md` §4.1 / §9 与仓库外的《SDLC 企业知识库设计方案》（v4.7）。
 
 ## 4. Profiles（`.cursor/profiles/`）
 
-- `<team>-<env>.yaml`（`app-test` / `app-prod` / `cms-test` / `cms-prod`）承载两队全部差异；另有运行时路径 `setup.json`。测试记忆存在 Confluence 页（profile 的 `mcp.confluence.test.memory_pages`，仅经用户确认后写入）。
+- `<team>-<env>.yaml`（`app-test` / `app-prod` / `cms-test` / `cms-prod`）承载两队全部差异；另有 `setup.json`：离线运行时根目录（`runtime_root`）与 python / node 路径，是 AI 找离线 python / node / mmdc / md-to-pdf / Chromium 的唯一出处（说明见 `profile-select` 的「Offline runtime & tools」，`profile.py runtime` 打印本机解析结果）。测试记忆存在 Confluence 页（profile 的 `mcp.confluence.test.memory_pages`，仅经用户确认后写入）。
 - 字段含义以 yaml 行内注释为准；当前选中哪个 profile 由 `profile-select` 记在本地（按仓库），不入库。结构规则与改动流程见 [`doc/maintenance/profiles.md`](doc/maintenance/profiles.md)。
 
 ## 5. 编写约定
@@ -89,7 +92,7 @@ ai-sdlc/
 
 ### Agent / Skill 文件格式
 - Agent：`.cursor/agents/<name>.md`，frontmatter 含 `name`、`description`（`>-` 多行，写清使用角色、主流程与触发场景）。
-- Skill：`.cursor/skills/<name>/SKILL.md`，frontmatter 含 `name`（与目录名一致）、`description`（**必须用 `>-` 折叠块**，单行值含「: 」会解析失败；写清用途与 `triggers:` 中英文触发词）；参考资料放 `references/`，脚本放 `scripts/`。
+- Skill：`.cursor/skills/<group>/<name>/SKILL.md`（必须放在分组目录下，`check.py` 校验深度与跨分组重名），frontmatter 含 `name`（与 `SKILL.md` 所在目录名一致，不是分组名）、`description`（**必须用 `>-` 折叠块**，单行值含「: 」会解析失败；写清用途与 `triggers:` 中英文触发词）；参考资料放 `references/`，脚本放 `scripts/`。
 - Agent / Skill / 设计文档正文用**英文**；profile 注释、`init/` 文档、`doc/maintenance/`、`CHANGELOG.md` 和 commit message 目前用中文。
 - 新增 / 重命名 / 删除 Agent 或 Skill 时，**同步修改 `init/roles.json`**（否则不会被打包，卸载清单也不完整），并视情况更新 `doc/AI-Toolchain-Design.md` 第 2、4、5、6 章与 `init/README.md` 的对照表。
  改了 X 还要同步哪里的完整清单见 [`doc/maintenance/change-checklist.md`](doc/maintenance/change-checklist.md)；删除 / 改名属于破坏性变更，须在 `CHANGELOG.md` 标注「先卸载再安装」。
@@ -97,13 +100,13 @@ ai-sdlc/
 ### Python 脚本
 - 仅用标准库（`pyproject.toml` 无依赖），需同时兼容 **macOS 与 Windows**（路径处理参考各 skill 下的 `platform_paths.py`）。
 - **上传 Confluence 一律走公共 skill `confluence-publish`**：`upload_confluence_v2.py` 在仓库内只有
- 这一份（`.cursor/skills/confluence-publish/scripts/`），需求线（PRD / 技术方案 / Story）与测试线
+ 这一份（`.cursor/skills/common/confluence-publish/scripts/`），需求线（PRD / 技术方案 / Story）与测试线
  （用例 / 运行报告 / page_doc 页面元素文档 / 导航页）的发布环节共用。**不要在其它 skill 下复制副本**，也不要另写发布脚本或自拼 REST 调用。
  **也禁止用 MCP 写页**（`createConfluencePage` / `updateConfluencePage` / `createConfluenceContent` /
  `updateConfluenceContent`，含 Cursor Atlassian 插件自带的同类工具）：新建和更新（哪怕只改一个单元格）
  都走脚本——改本地 Markdown 后用相同 `--title` 前缀 + 相同 `--parent` 重跑即原地更新；MCP 只读（查页、列目录、回读校验）不受限。
  若用户同时装了 Cursor 的 Atlassian 插件，会出现两套重复的 Jira / Confluence MCP，应提示其禁用插件，只保留 `Atlassian-MCP-Server`。
- 脚本靠自身位置向上三级定位 `mcp.json`，改动目录深度会导致凭证解析失效。
+ 脚本靠自身位置向上找最近的 `.cursor` 目录定位 `mcp.json`（不依赖固定层数，分组调整不影响凭证解析）。
 - 多个 Skill 各自带一份 `platform_paths.py`，**它们是独立副本且当前内容不完全一致**，改动时逐个确认，不要假设同步。
 
 ## 6. 构建与验证
@@ -111,7 +114,8 @@ ai-sdlc/
 ```bash
 python init/check.py                    # 仓库一致性检查（每次提交前；发版前加 --strict）
 python init/build.py --no-zip --yes     # 确认能正常组装（只出目录不打 zip）
-python .cursor/skills/sensitive-data-guard/tests/run_tests.py   # 改安全规则时
+python .cursor/skills/common/sensitive-data-guard/tests/run_tests.py   # 改安全规则时
+python .cursor/skills/common/kb-query/tests/run_tests.py               # 改 kb-query 脚本时
 ```
 
 完整构建参数（指定角色 / 版本、运行时包）见 [`init/README.md`「构建」](init/README.md#构建) 或 `python init/build.py --help`；发版构建见 [`doc/maintenance/release.md`](doc/maintenance/release.md)。

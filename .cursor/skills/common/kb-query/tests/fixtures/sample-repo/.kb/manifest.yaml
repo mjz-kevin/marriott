@@ -1,0 +1,6 @@
+manifest_version: 1
+bundle: repo-sample-app               # synthetic fixture for kb-query tests
+domain: loyalty
+systems: [loyalty/member-app]
+tech_stack: [swift, swiftui]
+owner: team:sample-mobile

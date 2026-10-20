@@ -14,6 +14,83 @@
 
 ---
 
+## [0.4.0] - 2026-10-20
+
+### 新增
+- **公共 Skill `kb-query`（知识库检索，本期仅仓库级）**：此前只是登记在 `PLANNED_SKILLS` 的占位，现按《SDLC 企业知识库设计方案》（v4.7）实现仓库级（L2）部分。它读取当前代码仓库的 OKF bundle `.kb/`（`manifest.yaml` + 各目录 `index.md` + 条目 md），脚本 `scripts/kb_query.py` 纯标准库实现，只读，提供 5 个子命令，对应设计中知识 MCP 的同名能力：
+  - `status`：定位仓库、`.kb/` 和 manifest，统计条目，列出解析问题；
+  - `list`：导航层，读目录的 `index.md`；缺失或过期时按条目现场生成；
+  - `search`：只返回元数据；
+  - `get`：取全文，或用 `--section` 只取某章，如 `Rules`；
+  - `context`：按 SDLC 阶段组装任务知识包，阶段默认预算，上限 8K。mandatory 条目只给 `# Rules`，最多占 40%；其次是高相关条目的正文，最后是其余条目的标题。
+
+  规则按设计方案的本地读取规则执行：草稿 / 已废弃默认不返回；过期分宽限期和降级两档；信任等级由 `verified` 推导，unverified 只作线索；同 bundle 内的 `overrides` 去重；豁免在本地一律不自动生效，只给「候选 / 失效」提示（判定依据：到期、被豁免条目已改或已废弃、未合入默认分支），由用户确认；产出物须列「引用知识」KID。企业级（L0）、领域级（L1）、知识 MCP、`kb pull`、`kb_report` 不在本期范围，遇到这些 KID 时返回退出码 4，并标为范围外。自带虚构 fixture 与 `tests/run_tests.py`（34 项）。同步：`roles.json` `common.skills`；`check.py` 的 `PLANNED_SKILLS` 清空；`AGENTS.md` §3 / §6；设计文档 §4.1 / §5；`doc/maintenance/README.md`、`testing.md`。已引用 `kb-query` 的 5 个 Agent 调用位置不变，未改。升级方式：直接覆盖。
+- **通用「查最新 build 号」（只读）**：QA / 开发问「某分支（或某环境）最新的 build 号是多少、在哪下载」时，`cicd-agent` 新增只读入口 **Q**，调 `harness-invoke` 新脚本 `scripts/latest_build.py` 直接查，不触发、不建 run、不受 `allowed_envs` 限制（仍只限 profile 已登记的流水线）。对任意团队的 profile 通用：`--pipeline <id>` 和/或任意 `--match 标签=值`（APP 的 platform / usage、CMS 的 app），按 `--branch`（代码分支）或 `--deployed-env`（CD 流水线部署到的环境）过滤。实测 iOS TestFlight（分支 `mark/CNAPP-6676-…` → #3279）、Android Adhoc（`dev` → #1168）、cncms（test → #182，带镜像 tag）。脚本内置三条实测踩到的规则：
+  - 只认**代码分支**（branch 构建的 CI 分支 / PR 构建的源分支），不认 `gitDetails.branch`（流水线 YAML 所在分支，常为 `develop`）和 PR 目标分支；Harness 自带的 branch 过滤会漏单，改为本地匹配。
+  - 「可用」= 执行 `Success` / `IgnoreFailed`，且（若 profile 声明）`artifact_stage` 成功。PR 自动触发的 iOS 构建也是 Success 但跳过 TestFlight 上传，不能报给测试去下载。
+  - 报的号是 Harness 的 `runSequence`（界面上的 Build Id / Execution Id）。iOS 模板用 `<+pipeline.sequenceId>` 作 `CURRENT_PROJECT_VERSION` / `--bundle-version`，所以它就是 TestFlight build 号；其它流水线是否同号以其定义为准。
+- profile `mcp.harness.pipelines` 新增单条可选字段 `artifact_stage`：`app-test` / `app-prod` 的 `iOS_Dragon_App_Testflight_Dev` 填 `TestFlight_Metadata`；其余流水线（含 CMS）不填即按「执行成功」判定，故 CMS profile 未改。
+- profile `mcp.jira.figma_embed` 新增 `max_height_px: 2400`（4 份 profile 同步）：待导出 Figma 节点高度超过此值视为整页长图，不直接导出，改推荐卡片 / 屏级子节点给用户确认。
+- **`dev-agent` 推送前可选查看「变更摘要」（Change summary）**：D6 请求 push 确认时给 DEV 三个选项「确认推送 / 先查看变更摘要 / 暂不推送」，只有选了第二项才在对话中展示变更摘要（仅展示、不落盘；按 task 分组，逐文件一行，基于 `git diff --stat {baseline_sha}..HEAD` + 任务清单 + IMPL-NOTE，任务外改动单列），随后再次询问是否推送；查看摘要不等于同意推送，看完要改则按新一轮 attempt 回到 D4。后续节点也可随时请求查看。格式见 agent §4.1。只改 Agent，未新增 Skill；设计文档 §2 只写到「push 需 DEV 明确同意」这一粒度，未改。
+
+### 变更
+- **CI/CD 触发前强制确认运行入参（修「没问就触发」）**：Skill S3 从 0.2.7 起就要求「展示入参并等待」，但 `cicd-agent` 流程图是 C2 低环境通过后直接进 C3 触发，`waiting_user` 只在**缺必填**时才停。结果：请求里已经有目标 + 分支、或 Harness 默认值 / input set 能填满 payload 时，Agent 会直接触发，用户看不到参数表。实测里能停下来，往往是因为缺了 `customtag` / `LOCALCMS_PREVIEWSECRET` 这类无默认必填项，或主对话额外写了「先别触发」。本次把确认收成独立节点 **`C3_confirm`（Confirm runtime inputs）**：每个 in-scope 触发都必须先从 Harness 现读入参、摊开必填 / 带默认的可选 / 有风险的默认值，`waiting_user` 等到**本 trigger `t{n}`** 的确认才写 param log、才触发。原请求里的目标、Harness 默认、input set、C-pre 推测性回答、上一 trigger 的确认，都只是预填候选，不是本次确认。「go ahead」而本轮没展示过参数表也不算。`state.md` 新增 `input_confirmation` 块；C3 触发前硬校验 `granted`。主对话收到 `waiting_user` 时必须把参数表转给用户（优先 AskQuestion），不得说「已经在跑」。`harness-invoke` S3 / 规则 / 质量门禁 / 排障表同步；`AGENTS.md` §2、设计文档 §2.1 一行同步。这是入参完整性确认，不是部署授权，高环境仍不能靠确认放行。
+- **Skill 按分组文件夹存放（仓库、安装包、用户机器三处一致）**：33 个 Skill 从平铺的 `.cursor/skills/<skill>/` 移到 `.cursor/skills/<分组>/<skill>/`，分组与 `AGENTS.md` §3 一致：`common`（公共 5 个）/ `requirement`（PO 5 个）/ `tech-solution`（4 个）/ `dev`（8 个）/ `code-review`（4 个）/ `cicd`（`harness-invoke`）/ `test`（QA 6 个）。Cursor 官方支持 skill 嵌套目录（递归扫描 `SKILL.md`，skill 身份取 `SKILL.md` 所在目录名，分组目录只起组织作用），frontmatter `name` 不变。`roles.json` 仍只写 skill 名，分组只由磁盘目录决定：`build.py` 递归发现 skill 并按分组路径打包，manifest 的 skills 增加 `path` 字段，卸载清单改为 `<分组>/<skill>`；`install.sh` / `install.ps1` 按分组落到 `~/.cursor/skills/<分组>/<skill>/`，安装前把旧版平铺（或上个版本在其它分组下）的同名 skill 合并进新位置后删除，避免同名 skill 出现两份，用户在 skill 目录里自建的文件（如 `sensitive-data-guard/whitelists/` 下的白名单）会保留；`uninstall.*` 同时清理分组路径、旧平铺残留与空分组目录。按固定层数定位的脚本改为「向上找最近的 `.cursor` 目录」，与分组深度无关：`upload_confluence_v2.py`（`mcp.json`）、`ai-sdlc-info/version.py`（cursor home，且按 manifest 的 `path` 核对安装完整性，兼容旧记录）、`sensitive-data-guard/platform_paths.py`（兜底仓库根）、`test-page-elements/collect_page.py`（仓库根）；`harness-invoke/stage_run.py` 改为在任意分组下查找 `profile-select`。`check.py` 改为递归发现 skill，新增 `layout` 检查（必须位于 `<分组>/<skill>/`、跨分组不得重名）。全仓库 `skills/<skill>` 形式的路径引用（Skill 正文中的脚本命令、`test-agent` 路由表、`AGENTS.md`、`init/README.md`、`doc/maintenance/`）已统一改为带分组的路径；`../<skill>/references/` 形式的跨 skill 相对引用两端同组，仍然有效。Agent 不分组（Cursor 文档未说明 `agents/` 支持子目录），保持平铺。设计文档里只有示意性的 `skills/` 目录，未改。
+- **技术方案按需增加图表，提升可读性**：反馈三档技术方案文字过多、不便阅读。新增三档共用的图表规范 `tech-solution-detail/references/diagram-guide.md`（放在 TL / Dev 都会安装的 `tech-solution-detail` 下，`tech-solution-prd` / `tech-solution-spike` 用 `../tech-solution-detail/references/diagram-guide.md` 引用）：保留模板原有的基础图（PRD 级架构图、Spike 各方案示意图、Detail 主流程图 / CMS 架构图，仍可用 Confluence 链接替代），其余按需增加——某段内容在描述结构 / 调用顺序 / 分支 / 状态 / 数据关系、用图比文字更清楚时，加对应的时序图 / 流程图 / 状态图 / ER 图 / 任务依赖图 / timeline·gantt / quadrantChart；规范给出按内容选图的对照、各档常见加图位置（建议而非清单）、图旁文字不复述图、单图约 15 节点以内、不为加图而加图，以及 mermaid 语法规范（只用稳定图类型，已用内置 mermaid-cli 12 实测渲染）。三个 Skill 各加一节「Diagrams on demand」及对应强制规则 / 质量门禁（门禁只要求「长段纯文字已考虑配图」与 mermaid 可渲染，不新增必须出现的图）；「忠于模板」规则明确放在已有章节内的图（可带一行图注）不算模板外内容；四份模板的引导块补了按需配图提示（引导块不进成品）。`tech-solution-agent` 的 T4 以 Skill 质量门禁为准，未改；`tech-solution-publish` / `md-to-pdf` 已支持全部 mermaid 类型与本地图片，未改；`prd-authoring` 自带的 Diagram spec 属 PO 包，未改。
+- **Spike 方案 PoC 范围按方案个数决定**：`tech-solution-spike` S5 新增规则——第 3 章方案 ≤ 2 个（含只有 1 个并说明为何无备选）时，自动为每个方案生成 PoC，不询问；> 2 个时先暂停，由 TL 多选要做 PoC 的方案（按对比矩阵推荐最多 2 个排在前面，另提供「本轮不做 PoC」），回答原文记入 `sessions/`，第 4 章只写入选方案的 PoC 块，未入选方案的落选理由仍写在第 5 章；同时明确 PoC 实测数据不得编造，未实际运行时只写预期测量项，并在第 6 章登记待跑。同步：Skill 强制规则 / 质量门禁、模板第 4 章引导块、`tech-solution-agent` T3 第 4 步（spike 模式暂停询问 TL，记录 `sessions/{timestamp}_poc-scope.md`）、设计文档 §4 `tech-solution-spike` 一行。`doc/maintenance/` 与 `init/` 未涉及，未改。
+- **发布脚本 `upload_confluence_v2.py` 提速**（PRD / 技术方案 / 测试线发布共用）：
+  - mermaid **整批一次渲染**：所有要渲的图拼进一个临时 md，只起一次 node / Chromium；整批失败（某张图语法错）再逐张渲染隔离坏图（有离线包时最多 3 并发，`npx` 回退时串行）。本机 `npx` 回退实测：逐张 3 张图 146s → 整批 4 张图约 10s。
+  - **未变化的附件跳过**：更新已有页面时一次列出全部附件，按附件 comment 中的内容指纹（`sha256:`）比对——没改的 mermaid 图不重渲染也不重传，没改的本地图片不重传，改了的直接覆盖同名附件（不再「先 POST 撞 400 → GET 查 id → 再 POST」）。结果 JSON 新增 `attachments`（`uploaded` / `skipped_unchanged` / `mermaid_rendered`）。
+  - mermaid 附件改为**内容寻址命名** `mermaid-<hash12>.png`（源码 + 渲染倍率），不再按 md 文件名 `…-diagram-N`：PRD 换版本号后没改的图仍能命中复用。老页面上旧名附件保留不删。
+  - **dry-run 不再跑 Chromium 探针**，只做「离线包 / npx 是否存在」的便宜检查；正式发布在任何写页之前预渲染，只有要渲的图一张都没用 mmdc 出成功时才跑一次探针，区分「工具链坏了」（阻断、不写页）和「图语法错」（照常发布、记 `mermaid_pending`）。
+  - `prd-publish` / `tech-solution-publish`：正式上传把 dry-run 确认的 `target.initiative` 用 `--initiative` 回传，省掉一次 Jira 查父级。
+- **写入 Jira Story 提速**（`user-story-publish`、`userstory-agent`）：
+  - 去重改为**每个 Epic 一次 JQL**（`parent = EPIC`，只取 summary / status / issuetype），本地按归一化 summary 匹配；不再每个 Story 发一条 `summary ~` 查询。近似命中列为「possible duplicate」供 PO 判断，不算命中。
+  - PRD / Figma 回链小节**建单时直接写进 description**，新单不再追加一次 `editJiraIssue`。
+  - 写入成功后**不再逐单回读校验**（不做 `getJiraIssue` / renderedFields 渲染检查），以调用返回为证据；仅报错或用户反馈渲染问题时回读。
+  - Figma 内嵌：有 PRD 已产出的设计图时**必须复用**，不再重新导出；导出前按 `max_height_px` 做尺寸闸门；文件级链接只用 `depth: 1` 读画板列表；同一文件的多张图一次 `download_figma_images` 导出。`png_scale` 4 份 profile 由 2 改为 1（工单内嵌 1x 足够；需要看细节可改回 2）。
+  - `userstory-agent` S3 同步计划里**逐 Story 写明设计图来源**（复用路径 / 节点 + 尺寸 / 推荐节点），所有节点选择在一次签核里确认，执行阶段不再中途停下来问。
+  - `userstory-agent` S4 签核改为**选项按钮**（确认同步 / 调整计划 / Story 内容要改），由主对话渲染；「调整 + 明确执行词」（如「只建 S4，直接建」）视为对调整后计划的签核，直接执行；只有调整没有执行词时生成新小版本并在同一轮给出选项。
+- **多来源读取按需分层**（`requirement-clarify`、`prd-authoring`、`eval-agent` E2）：Jira 只取 type / summary / status / parent；Epic 兄弟 Story 只列清单，只对与本需求重叠的 1–3 条读正文；他队 Confluence 页先看大纲再读相关章节；Figma 必带 `nodeId` + 浅 `depth`，只读本需求涉及的屏。澄清结论新增「Sources read」一行（来源、版本、读到哪一层），`prd-authoring` 据此复用、只补缺口，不再重读。
+- 文档：`confluence-publish` SKILL（body handling / mermaid 前置 / 输出字段）同步；设计文档只描述到职责层，本次未涉及职责、MCP 权限或人工确认点增减，未改。
+- **防重复触发（cncms t5 一次确认出了 #184 / #185 两条执行）**：同一条 `stage_run.py --execute --wait` 命令被 Cursor 工具层原样执行了两次（15:52 / 16:05，同一终端服务进程），脚本当时不检查结果文件，于是又发了一次部署。现在：
+  - `--execute` **必须带 `--result-json`**，该文件即触发的幂等锁：开跑时（读 Harness 之前）若已存在即拒绝；发送前用 `O_EXCL` 独占创建，两个并发调用只有一个能发。被拒绝时**什么都不发**，退出码 **6**、打印 `TERMINAL: already_triggered` 与已记录的执行 id / Build 号 / URL，并给出 `--wait-execution` 续等命令。
+  - 结果文件新增 `trigger_outcome`（`sent` / `unknown` / `not_sent`）。Harness 明确拒绝（HTTP 错误）或根本没连上时记 `not_sent`，这种文件下次 `--execute` 会被挪到 `*.not_sent.<时间>` 后重新占用；其它任何已存在的文件都拒绝。新部署用新路径 `t{n}_result.json`，禁止删文件绕过。
+  - `harness-invoke` SKILL（S4 说明、情形表、S5 退出码、排障表）与 `cicd-agent` C3 同步退出码 6 的处理。
+  - **触发与等待拆成两次调用**（根治）：`stage_run.py --execute` 只发请求、记句柄、打印 `TRIGGERED: execution=… build=… expected_duration_s=…` 后几秒内返回；等待一律用只读的 `--wait-execution <id>`（可安全重跑，永不触发）。`--execute --wait` 现在**直接拒绝**。这样被工具层重放的长命令只可能是等待，不可能再发一次部署。`--wait-execution` 若与 `--result-json` 已记录的执行 id 不一致也拒绝，避免覆盖别的触发记录。`harness-invoke` S4 / S5 / Rules / Quality gates / 排障表与 `cicd-agent` §3.4、C3、C4 同步改为两步；等待日志改用 `tee -a` 追加。**破坏性提示**：自己写过 `--execute --wait` 调用的需改成两步。
+- **触发结果带 Build 号**：`stage_run.py` 触发后读取 `runSequence`，打印 `build number`，写入 `--result-json` 的 `build_number`，`TERMINAL:` 行追加 `build=`，成功提示带 `Build #N`；`cicd-agent` 的 `state.md` `execution` / `history` 新增 `build_number`，运行报告、状态卡、Jira 回写都带 Build 号；`harness-invoke` S4 / S6 / 输出模板同步。
+- `stage_run.py` 只读请求（执行历史等）遇响应截断 / 断连自动重试 3 次（上次 cncms t3 触发前就因 `IncompleteRead` 中断过一次）；**触发请求本身不重试**，以免重复部署。profile 解析拆出 `load_harness_section()` 供两个脚本共用。
+- **CI/CD 不再临时写脚本**（cncms t4 触发响应被截断后，agent 手写了 `tmp/t4_continue_wait.py` 才等到 #183 结束，t1 也有过 `t1_continue_wait.py`）：
+  - `stage_run.py` 触发响应读不全（`IncompleteRead` / 断连 / 读超时 / 非 JSON）时**不重发**，改为只读从执行历史找回句柄：仅当恰好一条执行「发送后开始 + 同一 stage 子集 + `MANUAL` + 触发人是本 API key 身份」时认领并继续等待（`--result-json` 记 `handle_recovered: true`）；找不到 / 多条 / 读不到身份 → 退出码 **5**、`TERMINAL: trigger_unknown`，列出候选，交人判断。发送前先在结果文件记 `trigger_sent_at`。`--check` 增加打印 API key 对应身份。
+  - 新增 `--wait-execution <id>`：只等不触发，接着等已触发的执行（shell 断开 / 会话中断 / 超时后），输出、结果文件、退出码与 `--execute --wait` 一致；id 不属于 `--app` 对应流水线时拒绝。
+  - 结果文件新增 `stage_statuses` / `started_at` / `ended_at` / `duration_s`，报告直接读，不用再自己算。
+  - `harness-invoke` SKILL（S4 情况表、S5、规则、排障）与 `cicd-agent`（§3.4 第 6 条、C3、C4、§5）明确：触发 / 找回 / 等待只用 skill 脚本，**禁止手写等待循环、内联 `python3 -` 导入脚本函数或在 `tmp/` 放脚本**；遇到脚本不覆盖的情况报 `blocked`、修脚本。
+  - 用 #183 实测：`--wait-execution` 输出正确；找回逻辑回放事故现场能唯一认领 #183，换身份 / 无身份 / 换 dev 子集都拒绝认领。
+- **`cicd-agent` 完成后报告直接返回给用户，不再问「要不要打印」**：它是后台子 agent，最后一条消息只给主对话，问「回复『打印』」时自己已结束，用户看不到报告。§6.1 改为：C5 写了运行报告就把**全文**原样嵌入状态卡片（新增 `### 📄 Run report` 小节），卡片里不再出现「打印？」；§6 给主对话的说明同步：收到 `done` 卡片时同一条回复里把报告全文展示给用户，卡片里没有就按 `state.md` 的 `report` 路径读文件展示，不只给路径。其它前台 Agent（eval / userstory / tech-solution / code-review）的 §6.1 未改，它们直接面对用户，「问是否打印」仍可用。
+- **`cicd-agent` 完成卡片强制带「转述指令」行，修主对话只给摘要**：实测 cncms #187（test，main）子 agent 已把报告全文嵌进卡片，但卡片没带 §6 里那段「给主对话的说明」，主对话不读 agent 文件、只看卡片，于是把报告压缩成摘要给了用户。§6 卡片模板第一行新增固定的 `🔁 RELAY-TO-USER` 指令（要求原样完整展示 `📄 Run report`，不摘要、不只给路径）；§6.1 规定每张 `done` 卡片必须逐字带这一行（保持英文，不得省略或翻译）；frontmatter `description` 末尾补一句同义说明。只改 Agent；`harness-invoke`、设计文档、`doc/maintenance/` 不涉及卡片转述，未改。
+- 文档同步：`doc/AI-Toolchain-Design.md` §4 `harness-invoke` 一行、`doc/maintenance/profiles.md` `mcp.harness` 一行。
+- **等待部署结果改为「后台启动 + 分段 await」，修子 agent 部署完不返回**：实测 cncms #186（test，main）16:56 已结束、`--result-json` 已写入终态 `success_with_ignored`，但 `cicd-agent` 把 `--wait-execution` 作为一次 35 分钟的前台调用并挂了 `notify_on_output`，这次调用的完成信号一直没回到 Agent，Agent 停在 `polling` 直到 17:16 被人工打断；日志里还能看到等待被工具层重跑了一次（只读，无重复部署）。`harness-invoke` S5「Deliver the result」第 1–3 条改写：step 2 前台阻塞设为 0 立即转后台，用 `AwaitShell`（pattern `^TERMINAL:`，每段 ≤ 20 分钟）分段等，**每段结束都读 `--result-json`，`terminal` 有值立即收尾**；不再要求单次前台预算覆盖 `expected_duration_s`（改为各段累计覆盖），并明确禁止对等待挂 `notify_on_output`。Rules / Quality gates / 排障表同步，排障表新增本次症状一行。`cicd-agent` §3.4 第 1 条、`wait_handle` 注释、C4 第 2 条、禁止项同步。`stage_run.py` 只改两处注释，行为不变。设计文档与 `doc/maintenance/` 未写到等待托管细节，未改。
+- **告诉 AI 离线运行时 / 工具在哪，修 macOS 离线渲染失效**：
+  - **修 bug**：`upload_confluence_v2.py` / `export_pdf.py` 定位离线 mmdc / md-to-pdf / Chromium 时，运行时根目录写死为 `C:/AI-SDLC/runtime`（只认 `AI_SDLC_RUNTIME` 覆盖，安装脚本又不设这个变量），macOS 上一律找不到，发布 PRD / 技术方案、导出 PDF 都回退 `npx -y` 联网，断网直接阻断。现按 `AI_SDLC_RUNTIME` → `setup.json` 的 `runtime_root` → 平台默认（Windows `C:/AI-SDLC/runtime`，macOS / Linux `~/.cursor/AI-SDLC/runtime`）解析，本机 arm64 实测三件离线工具均命中。
+  - **`setup.json` 成为离线运行时的唯一出处**：各平台段新增 `runtime_root` 字段，新增 `_layout` 说明运行时根目录下 `node-*` / `python-*` / `mcp-offline/` / `tools/{mermaid-cli,md-to-pdf,chromium}` 的布局。
+  - **安装时修正 `setup.json`**：`install.sh` / `install.ps1` 以包内 `setup.json` 为骨架，保留用户已有文件里仍有效的自定义路径，并把当前平台段里为空或失效的路径改写为本机实测运行时路径（Intel Mac 不再拿到 `darwin-arm64` 的死路径；旧安装重跑也会补上 `runtime_root`）。此前「已存在则不动」的行为改为「合并 + 修正」。
+  - **`profile.py runtime`**（`profile-select` 新子命令，只读）：以 JSON 打印本机 python / node / npm / npx、离线工具、离线 MCP 包各自解析到的路径和来源，`missing` 列出缺失项；运行时根目录不存在时退出码 2。
+  - **Skill 正文**：`profile-select` 新增「Offline runtime & tools」一节，作为其它 skill 统一引用的出处（含布局表、解释器解析规则、禁止自行 `npx -y` / `npm install` / `pip install` 兜底）；`sensitive-data-guard` 把 `setup.json` 位置从错误的「仓库内 `.cursor/profiles/`」改为 `~/.cursor/profiles/`；`md-to-pdf` 配置表与命令改用安装后路径；`confluence-publish` / `prd-publish` / `tech-solution-publish` 的解释器说明改指 `~/.cursor/profiles/setup.json`；此前缺解释器说明的 `harness-invoke`、`user-story-publish`、`jira-to-test-case`、`test-run-report-bug`、`test-page-elements`（仅发布命令，采集脚本仍用项目 `.venv`）补上。
+  - 文档：`init/README.md` 安装步骤与「升级与重装」表、`doc/maintenance/profiles.md` `setup.json` 一行、`doc/maintenance/README.md` 权威来源表、`change-checklist.md` §8（新增「运行时根目录 / 布局」一行，注明三份解析逻辑副本须逐个改）、`testing.md`（离线运行时定位的验证方法）、`troubleshooting.md`（mermaid 联网 / AI 自行装工具两条）、`AGENTS.md` §4、`ai-sdlc-info` SKILL（无运行时记录时指向 `profile.py runtime`）同步；安装日志里「保留已有 setup.json，未覆盖」改为合并说明。Agent 正文未写死解释器路径，未改；设计文档只到职责层，未改。
+- `jira-to-test-case` 用例表的 **`Domain` 列改为详细业务模块枚举**（对齐图片 CN Bonvoy App Test Case Repository 目录树），由 4 顶层值扩成 **19 个单级叶子值**：`Commerce / Shop / Book / iOS-Local Payment / Android-Local Payment / Payment Console / PMS-MARSHA / Content / LaunchAds / Homepage / Discover / NCP / Loyalty / Compliance / Trips / Platform / Umeng / MK / Android-Saflok`（无子项的顶层组用组名本身作值）；AI 按用例功能性质就近判到最贴近的叶子，判不准时回退到顶层组并在 Notes 注明。落点：`references/app-case-template.md`（Domain 列定义 + §5 整段重写为 19 值枚举表 + 判定规则 + 示例行示范细叶子）、`jira-to-test-case/SKILL.md` 字段助记列表。
+- **用例 Domain 是用例线独有字段，不改 Jira 单**：详细叶子枚举只用于 `jira-to-test-case` 的 Confluence 用例表 `Domain` 列（纯表格文本）。**明确不动** PO 建 Story 的 `labels.business_domain.values`（CNAPP 过滤硬门禁，4 值）与建 bug 的 `mcp.jira.bug.domain_values`（4 值）——两者仍保持 **Commerce / Loyalty / Trips / Platform**。模板 §5 的「关系说明」改为：用例 Domain = 详细叶子（用例独有）；Story label / bug Domain = 顶层 4 组；需要关联时按枚举表的「owning top-level group」上卷（如 Shop/Book → Commerce）。本轮未改任何 profile、`test-run-report-bug/SKILL.md`、`app-bug-template.md` 的 Domain 取值（曾一度改为 19 值，应用户要求已全部回退为 4 值）。
+- `test-run-report-bug` 统一两个建 Bug 入口的确认规则：**无论「自动化失败建单」还是「用户主动提单」，建单前都必须先用 `AskQuestion` 卡片把 `references/app-bug-template.md` 模板里的必填字段（Domain / Page·Feature / Summary 一行 / Severity / Priority / Environments）+ Labels 过一遍让用户确认/修改，确认后才 `createJiraIssue`**。原「自动化入口用默认值直接建、只有一个裸的『确认创建』门禁」特例取消：自动化入口把跑测推断值作为卡片的**预填推荐**，仍需用户过目确认（用户在正文明确说"直接建/不用问"时才可跳过卡片）。落点：`references/app-bug-template.md`（§3 表头 + §4 两个创建模式，新增 BOTH 共用硬规则）、`SKILL.md`（frontmatter description、§6「Two creation entries」改为 SAME confirmation rule、§6「(5) Confirmation gate」门禁要求卡片展示必填字段 + Labels、工作流第 9 步）、`test-agent.md` 的 Command routing 表（点明两个 bug 入口建单前都需卡片确认必填字段 + Labels）。设计文档对本 skill 只是功能概述、不涉及建单确认细节，未改。
+
+### 升级方式
+- **直接覆盖**：新包的 `install` 会自动把 `~/.cursor/skills/<skill>/` 下的旧版平铺 skill 迁到 `~/.cursor/skills/<分组>/<skill>/`，无需先卸载。注意命令行里直接调用 skill 脚本的路径变了，如 `~/.cursor/skills/common/confluence-publish/scripts/upload_confluence_v2.py`、`~/.cursor/skills/common/ai-sdlc-info/scripts/version.py`。
+  - 升级后**卸载请用本版及以后的包**：0.3.3 及以前包的 `uninstall` 只认平铺路径，删不掉分组目录。**降级**到 0.3.3 及以前，要先用本版包 `uninstall`，再装旧包——否则旧包平铺安装一份，加上分组目录里的一份，同一个 skill 会出现两份。
+- 技术方案图表：仅新增一个 reference 文件并修改 Skill 正文，无资产删改名、无 profile 字段变化。
+- Spike PoC 范围：只改 Skill / Agent 正文与模板引导块，直接覆盖安装即可。
+- CI/CD 查最新 build / 防重复触发 / 发布提速：无资产删改名，直接覆盖。
+- 离线运行时定位：直接覆盖安装角色包即可，`install` 会自动给已有的 `~/.cursor/profiles/setup.json` 补 `runtime_root`、修正失效路径（不再需要为更新 `setup.json` 先卸载）。装完可运行 `python ~/.cursor/skills/common/profile-select/scripts/profile.py runtime` 确认 `missing` 为空。
+
+---
+
 ## [0.3.3] - 2026-10-16
 
 ### 变更

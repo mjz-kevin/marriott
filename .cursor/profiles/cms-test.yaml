@@ -20,7 +20,8 @@ mcp:
     links: [prd, figma, tech_solution]
     figma_embed:                     # Figma UI 设计在工单里的落地方式：link=仅可点击链接（历史默认）；embed=链接 + 把设计节点导出为 PNG 作附件内嵌进描述
       mode: embed                    # embed=建单时导出 Figma 节点为 PNG、上传为 Jira 附件、以 ADF media 内嵌进描述（经 Jira REST，MCP-only 的受控例外）；link=退回仅链接
-      png_scale: 2                   # 导出 PNG 的缩放倍数（download_figma_images 的 pngScale）；越大越清晰、文件越大
+      png_scale: 1                   # 导出 PNG 的缩放倍数（download_figma_images 的 pngScale）；工单内嵌 1x 已够看清，2x 体积约 4 倍、上传更慢
+      max_height_px: 2400            # 待导出节点高度（Figma 设计稿尺寸，单位 px）上限；超过即判定为整页长图，不导出，改为推荐卡片 / 屏级子节点让用户确认
       heading: "UI Design"           # 内嵌图片前插入的描述标题段文字
     bug:                             # test-run-report-bug 建 Bug 配置（自动化失败建单 / 手动建单共用）
       project_key: CNAPP             # Bug 所在项目（与顶层 project_key 一致，显式留存便于演进）

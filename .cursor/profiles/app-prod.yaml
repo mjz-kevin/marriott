@@ -49,7 +49,8 @@ mcp:
     links: [prd, figma, tech_solution]
     figma_embed:                     # Figma UI 设计在工单里的落地方式：link=仅可点击链接（历史默认）；embed=链接 + 把设计节点导出为 PNG 作附件内嵌进描述
       mode: embed                    # embed=建单时导出 Figma 节点为 PNG、上传为 Jira 附件、以 ADF media 内嵌进描述（经 Jira REST，MCP-only 的受控例外）；link=退回仅链接
-      png_scale: 2                   # 导出 PNG 的缩放倍数（download_figma_images 的 pngScale）；越大越清晰、文件越大
+      png_scale: 1                   # 导出 PNG 的缩放倍数（download_figma_images 的 pngScale）；工单内嵌 1x 已够看清，2x 体积约 4 倍、上传更慢
+      max_height_px: 2400            # 待导出节点高度（Figma 设计稿尺寸，单位 px）上限；超过即判定为整页长图，不导出，改为推荐卡片 / 屏级子节点让用户确认
       heading: "UI Design"           # 内嵌图片前插入的描述标题段文字
     bug:                             # test-run-report-bug 建 Bug 配置（自动化失败建单 / 手动建单共用）
       project_key: CNAPP             # Bug 所在项目（与顶层 project_key 一致，显式留存便于演进）
@@ -137,7 +138,10 @@ mcp:
                                        # 各类 *_Test / *_Sandbox 共 13 条，以及全部高环境流水线
                                        # （iOS_Dragon_App_Testflight_Prod / Android_Gold_Build /
                                        # Mobile_s3_upload_Prod）都刻意不列在此处。
-      - { id: iOS_Dragon_App_Testflight_Dev,  platform: ios,     env: dev,  usage: testflight, repo: ios-dragon-app }
+      - { id: iOS_Dragon_App_Testflight_Dev,  platform: ios,     env: dev,  usage: testflight, repo: ios-dragon-app, artifact_stage: TestFlight_Metadata }
+                                       # ↑ artifact_stage：判定「这次 build 已可下载」的 stage（harness-invoke 查最新 build 用）。
+                                       #   只有入参 uploadTo 含 TestFlight 才会上传；PR 自动触发的运行也会 Success 但跳过该 stage，
+                                       #   TestFlight 上没有这个包。build 号 = Harness Build Id（runSequence = <+pipeline.sequenceId>）。
       - { id: Android_Adhoc_Build,            platform: android, env: test, usage: adhoc,      repo: android-dragon-app }
                                        # ↑ 注意：该流水线的 flavor 输入才决定包连哪套后端
                                        # （Harness 取值域 Tst/Tst2/Uat2/Stg/Perf/Prod，默认 Tst），

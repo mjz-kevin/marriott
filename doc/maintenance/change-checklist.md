@@ -10,7 +10,8 @@
 
 > 编写约定（三层职责、差异进 profile、frontmatter 格式、Python 脚本规则、Confluence 发布方式）以 [`AGENTS.md` §5](../../AGENTS.md#5-编写约定) 为准，这里只列步骤。
 
-1. **建目录**：`.cursor/skills/<name>/SKILL.md`（目录名即 skill 名，kebab-case），按需加 `references/`、`scripts/`、`template/`、`tests/`。按 `AGENTS.md` §5 写 frontmatter 与正文；`check.py` 会校验 frontmatter。
+1. **建目录**：`.cursor/skills/<group>/<name>/SKILL.md`——放进现有分组（`common` / `requirement` / `tech-solution` / `dev` / `code-review` / `cicd` / `test`，见 `AGENTS.md` §3），确实不属于任何分组再新建分组目录；目录名即 skill 名（kebab-case，跨分组唯一，`name` 与之一致）。按需加 `references/`、`scripts/`、`template/`、`tests/`。按 `AGENTS.md` §5 写 frontmatter 与正文；`check.py` 会校验 frontmatter 与分组深度。`roles.json` 只写 skill 名，分组由目录决定，打包 / 安装自动沿用。
+   - 把已有 skill **换分组**属于移动安装路径：安装脚本会自动把用户机器上旧分组 / 旧平铺位置的同名 skill 迁到新位置，无需「先卸载」；但仓库内 `skills/<group>/<name>` 形式的路径引用要一起改（`rg -n 'skills/<旧分组>/<name>'`）。
 2. **团队常量**放 profile，不写进 Skill（加字段流程见 [profiles.md §4](profiles.md#4-改动流程)）。
 3. **必须**：登记到 [`init/roles.json`](../../init/roles.json)——所有角色都要用放 `common.skills`，否则放对应 `roles.<PO|TL|Dev|QA>.skills`（TL 与 Dev 基本相同，记得两边都加）。
 4. **按需**：在编排它的 `.cursor/agents/<agent>.md` 里写明在哪一步调用、顺序、人工确认点。
@@ -27,7 +28,7 @@
 | Agent 调用顺序 / 人工确认点 | 设计文档 §5（装配）是否仍成立；涉及外部写入的确认点不得删除（`AGENTS.md` §7）；CI/CD 的低环境范围收口（`allowed_envs`）属安全边界，不得改成「人工确认后放行」 |
 | Agent 的 MCP 权限 / 外部写入范围 | 先对照被调用 Skill 的实际流程（Skill 为准），再同步 Agent 的 `MCP permissions` 行、禁止项与设计文档 §3 / §6.1 |
 | Agent 调用了尚未实现的 Skill | 登记到 `init/check.py` 的 `PLANNED_SKILLS`（否则 `[agent-refs]` ERROR）；落地后移除并登记 `roles.json` |
-| 安全相关（`sensitive-data-guard` 规则、白名单） | 跑 `python .cursor/skills/sensitive-data-guard/tests/run_tests.py`，和改动前的基线对比；新规则补用例到 `tests/cases.json`（入库）+ `tests/fixtures/`（**不入库**，见 [testing.md](testing.md) §2） |
+| 安全相关（`sensitive-data-guard` 规则、白名单） | 跑 `python .cursor/skills/common/sensitive-data-guard/tests/run_tests.py`，和改动前的基线对比；新规则补用例到 `tests/cases.json`（入库）+ `tests/fixtures/`（**不入库**，见 [testing.md](testing.md) §2） |
 
 ## 3. 改名 / 删除 Agent 或 Skill（破坏性）
 
@@ -37,7 +38,7 @@
    ```
    重点：其他 Skill / Agent 正文里的调用、`roles.json`、各文档表格。
 2. **必须**：更新 `init/roles.json`（删除 / 改名）。
-3. **CHANGELOG** 在「删除 / 改名」小节写明，标注「先卸载再安装」，并**给出旧资产的手动删除路径**（如 `~/.cursor/skills/<old-name>/`）——新包的卸载清单已不含旧名，原因见 [`init/README.md`「升级与重装」](../../init/README.md#升级与重装直接覆盖-vs-先卸载)。
+3. **CHANGELOG** 在「删除 / 改名」小节写明，标注「先卸载再安装」，并**给出旧资产的手动删除路径**（如 `~/.cursor/skills/<group>/<old-name>/`）——新包的卸载清单已不含旧名，原因见 [`init/README.md`「升级与重装」](../../init/README.md#升级与重装直接覆盖-vs-先卸载)。
 4. 文档同第 1 节第 5 步。
 
 ## 4. 新增 / 修改 Agent
@@ -75,6 +76,7 @@
 | node / python 版本 | ① `init/res/AI-SDLC-*.zip` 三个平台载荷；② `.cursor/profiles/setup.json`；③ `.cursor/mcp.example.macos.json` / `.windows.json`；④ `init/README.md` 版本表（`check.py` 校验 ②③④ 版本号一致） |
 | 离线 MCP 包（`init/res/mcp-offline/*.zip`） | 入口路径若变化 → `init/templates/install.sh` / `install.ps1` 中的 `*_ENTRY`；`init/README.md` 入口说明 |
 | 离线工具包（`init/res/tools/*.zip`） | 同类多版本时 `build.py` 取文件名排序最大者，旧版本 zip 及时删除；Chromium 文件名固定（见 `build.py` 的 `CHROMIUM_ZIPS`） |
+| 运行时根目录位置 / 目录布局（`node-*` / `python-*` / `mcp-offline/` / `tools/` 下的入口路径） | 运行时根目录与离线工具的解析逻辑有**三份独立副本**，须逐个改：① `confluence-publish/scripts/upload_confluence_v2.py`、② `md-to-pdf/scripts/export_pdf.py`（`_runtime_root` / `_offline_*`）、③ `profile-select/scripts/profile.py`（`runtime_report`）；另需同步 `setup.json` 的 `runtime_root` / `_layout`、`install*.sh` / `install*.ps1`、`profile-select` SKILL「Offline runtime & tools」布局表。改完用 `profile.py runtime` 确认 `missing` 为空 |
 
 CHANGELOG 需写明用户侧操作（升级方式取自 [`init/README.md`「升级与重装 → 运行时包」](../../init/README.md#运行时包)）。
 

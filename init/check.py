@@ -10,6 +10,8 @@ AI SDLC 仓库一致性检查（维护用，不随包分发）。
   frontmatter   每个 Skill / Agent 的 frontmatter：存在、name 与目录/文件名一致、description 非空；
                 description 若为未加引号的单行值且含「: 」→ ERROR（Cursor 会报 Invalid frontmatter，
                 历史上踩过两次：requirement-clarify、jira-to-test-case 等 3 个 skill）；未用 >- 折叠块 → WARN（团队约定）。
+  layout        Skill 必须按分组存放：.cursor/skills/<group>/<skill>/SKILL.md（深度不对 → ERROR）；
+                skill 名跨分组重复 → ERROR；分组目录下没有 skill → WARN。
   roles         init/roles.json 引用的 agent / skill / profile / 公共文件都存在；
                 磁盘上存在但 roles.json 未引用的 agent / skill → WARN（不会被打包，卸载清单也不含）。
   docs          每个 agent / skill 名在 AGENTS.md 中被提及、每个 skill 名在 doc/AI-Toolchain-Design.md
@@ -35,6 +37,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -51,7 +54,7 @@ BLOCK_SCALAR = re.compile(r"^[>|][+-]?\s*$")
 
 # 规划中、尚未实现的 Skill：Agent 可以先引用（运行时缺失会按 Agent 规则停下或跳过），不算悬空引用。
 # 落地后从这里删掉，并登记到 roles.json。
-PLANNED_SKILLS = {"kb-query"}
+PLANNED_SKILLS: set[str] = set()
 
 # 设计文档里 Agent 用展示名；与 .cursor/agents/<name>.md 的对应关系（同设计文档 §2.1 的说明）。
 AGENT_DISPLAY_NAMES = {
@@ -134,19 +137,48 @@ def disk_agents() -> list[str]:
     return sorted(p.stem for p in AGENTS_DIR.glob("*.md"))
 
 
+_SKILL_MAP: dict[str, Path] | None = None
+_SKILL_DUPS: list[str] = []
+
+
+def skill_map() -> dict[str, Path]:
+    """{skill 名: 目录}。Skill 按分组存放：.cursor/skills/<group>/<skill>/SKILL.md（与 build.py 同一规则）。
+
+    含 SKILL.md 的目录即一个 skill，不再向下扫描；不含 SKILL.md 的目录视为分组继续往下找。
+    """
+    global _SKILL_MAP
+    if _SKILL_MAP is None:
+        _SKILL_MAP = {}
+        for dirpath, dirnames, filenames in os.walk(SKILLS_DIR):
+            dirnames[:] = sorted(d for d in dirnames if not d.startswith((".", "__")))
+            if "SKILL.md" in filenames:
+                p = Path(dirpath)
+                if p.name in _SKILL_MAP:
+                    _SKILL_DUPS.append(f"{p.name}：{rel(_SKILL_MAP[p.name])} / {rel(p)}")
+                _SKILL_MAP[p.name] = p
+                dirnames[:] = []
+    return _SKILL_MAP
+
+
 def disk_skills() -> list[str]:
-    return sorted(p.name for p in SKILLS_DIR.iterdir() if p.is_dir())
+    return sorted(skill_map())
 
 
 def check_frontmatter(r: Report) -> None:
     for a in disk_agents():
         check_frontmatter_file(r, AGENTS_DIR / f"{a}.md", a)
-    for s in disk_skills():
-        md = SKILLS_DIR / s / "SKILL.md"
-        if not md.is_file():
-            r.error("frontmatter", f"{rel(SKILLS_DIR / s)}/：缺少 SKILL.md")
-            continue
-        check_frontmatter_file(r, md, s)
+    for s, d in sorted(skill_map().items()):
+        check_frontmatter_file(r, d / "SKILL.md", s)
+        depth = len(d.relative_to(SKILLS_DIR).parts)
+        if depth != 2:
+            r.error("layout", f"{rel(d)}/：skill 须放在分组目录下（.cursor/skills/<group>/<skill>/SKILL.md），"
+                              f"当前深度 {depth}")
+    for dup in _SKILL_DUPS:
+        r.error("layout", f"skill 名跨分组重复（Cursor 以目录名识别 skill，必须唯一）：{dup}")
+    # 分组目录下不含任何 skill 的空目录 / 残留目录
+    for g in sorted(p for p in SKILLS_DIR.iterdir() if p.is_dir() and not p.name.startswith(".")):
+        if not (g / "SKILL.md").is_file() and not any(sd.parent == g for sd in skill_map().values()):
+            r.warn("layout", f"{rel(g)}/：分组目录下没有任何 skill")
 
 
 # ---------------------------------------------------------------- roles.json
@@ -167,7 +199,7 @@ def check_roles(r: Report) -> tuple[set[str], set[str]]:
             else:
                 r.error("roles", f"roles.json 引用的 agent『{a}』不存在")
     for s in sorted(ref_skills):
-        if not (SKILLS_DIR / s).is_dir():
+        if s not in skill_map():
             r.error("roles", f"roles.json 引用的 skill『{s}』不存在")
     for p in common.get("profiles", []):
         if not (PROFILES_DIR / p).is_file():
@@ -311,10 +343,11 @@ SCRIPT_REF = re.compile(r"(?:([\w-]+)/)?scripts/([\w.-]+\.py)")
 
 
 def check_script_refs(r: Report) -> None:
-    all_scripts = {p.relative_to(SKILLS_DIR).as_posix() for p in SKILLS_DIR.glob("*/scripts/*.py")}
-    skills = set(disk_skills())
+    smap = skill_map()
+    all_scripts = {f"{name}/scripts/{p.name}" for name, d in smap.items() for p in d.glob("scripts/*.py")}
+    skills = set(smap)
     for s in disk_skills():
-        md = SKILLS_DIR / s / "SKILL.md"
+        md = smap[s] / "SKILL.md"
         if not md.is_file():
             continue
         seen: set[str] = set()
@@ -331,7 +364,9 @@ def check_script_refs(r: Report) -> None:
 # ---------------------------------------------------------------- confluence uploader
 def check_confluence_uploader(r: Report) -> None:
     copies = sorted(rel(p) for p in CURSOR_DIR.rglob("upload_confluence_v2.py"))
-    expected = ".cursor/skills/confluence-publish/scripts/upload_confluence_v2.py"
+    owner = skill_map().get("confluence-publish")
+    expected = rel(owner / "scripts" / "upload_confluence_v2.py") if owner else \
+        ".cursor/skills/<group>/confluence-publish/scripts/upload_confluence_v2.py"
     if copies != [expected]:
         r.error("confluence", f"upload_confluence_v2.py 应只有 {expected} 一份，实际：{copies or '无'}")
 

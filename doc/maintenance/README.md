@@ -10,13 +10,13 @@
 
 | 想知道 | 权威来源（以它为准） | 不要以它为准 |
 | --- | --- | --- |
-| 有哪些 Agent / Skill | `.cursor/agents/*.md`、`.cursor/skills/*/` | 任何文档里的表格 |
+| 有哪些 Agent / Skill | `.cursor/agents/*.md`、`.cursor/skills/<group>/<skill>/`（分组目录只做组织，skill 名取 `SKILL.md` 所在目录） | 任何文档里的表格 |
 | 哪个角色装哪些 Agent / Skill / profile | [`init/roles.json`](../../init/roles.json) | `AGENTS.md` §3、`init/README.md` 角色表、设计文档 §5 / §6 |
-| Agent / Skill 做什么、何时触发 | 各自 frontmatter 的 `description` 与正文 | 设计文档 §2 / §4（是设计意图，可能领先或落后实现，如 `kb-query` 仅为规划） |
+| Agent / Skill 做什么、何时触发 | 各自 frontmatter 的 `description` 与正文 | 设计文档 §2 / §4（是设计意图，可能领先或落后实现，如 `kb-query` 目前只实现了仓库级） |
 | 团队差异（Jira / Confluence / 仓库 / 命令 / 流水线） | `.cursor/profiles/<team>-<env>.yaml`（字段含义写在 yaml 注释里） | Skill 正文里的示例值 |
 | 打包内容、包结构、manifest 字段 | [`init/build.py`](../../init/build.py) | `init/README.md` |
 | 安装 / 卸载行为 | `init/templates/*.sh` / `*.ps1` | `init/README.md` |
-| 运行时版本与路径 | `.cursor/profiles/setup.json`、`.cursor/mcp.example.*.json`、`init/res/` 下的载荷文件名 | — |
+| 运行时版本与路径 | `.cursor/profiles/setup.json`（含 `runtime_root` / `_layout`）、`.cursor/mcp.example.*.json`、`init/res/` 下的载荷文件名 | `profile-select` SKILL「Offline runtime & tools」（给 AI 看的说明） |
 | 当前版本号 | git tag + `pyproject.toml` 的 `version` | — |
 | 哪些文件入库 / 走 LFS | `.gitignore`（根、`.cursor/`、`init/`）、`.gitattributes`、`git ls-files` | — |
 
@@ -44,7 +44,7 @@ python init/check.py --strict  # 发版前用：WARN 也算失败
 flowchart LR
     subgraph Repo["本仓库（源）"]
         A[".cursor/agents/*.md"]
-        S[".cursor/skills/*/"]
+        S[".cursor/skills/{group}/{skill}/"]
         P[".cursor/profiles/*"]
         M[".cursor/mcp.example.*.json"]
         R["init/roles.json"]
@@ -84,7 +84,7 @@ flowchart LR
 1. 读 [`AGENTS.md`](../../AGENTS.md) 全文（约 10 分钟）。
 2. 读本页 + [change-checklist.md](change-checklist.md)。
 3. 打开 `init/roles.json`，对照 `.cursor/agents/` 与 `.cursor/skills/` 看一遍；挑一个 Agent（推荐 `dev-agent`）读完它调用的 Skill 链。
-4. 本地跑：`python init/check.py`、`python init/build.py --no-zip --yes`、`python .cursor/skills/sensitive-data-guard/tests/run_tests.py`，看懂输出。
+4. 本地跑：`python init/check.py`、`python init/build.py --no-zip --yes`、`python .cursor/skills/common/sensitive-data-guard/tests/run_tests.py`，看懂输出。
 5. 读一份 profile（`app-test.yaml`）的注释，理解 `mcp` / `code` / `review` / `test` / `doc` 五段分别给谁用。
 6. 读 [`CHANGELOG.md`](../../CHANGELOG.md) 了解演进历史和踩过的坑。
 7. 按 [testing.md](testing.md) §3 在本机装一次自己构建的角色包，跑通一个 Agent。

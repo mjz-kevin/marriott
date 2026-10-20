@@ -1,15 +1,18 @@
 {
-    "_comment": "AI SDLC 工具链可执行文件路径配置。windows / macos 段已按固定运行时布局写死绝对路径（win 以 C:/AI-SDLC/runtime、macOS 以 ~/.cursor/AI-SDLC/runtime 为准，node v26.9.0 / python 3.13.15）。若你的运行时版本或位置不同，改这里对应字段即可；留空则回退到系统 PATH。",
-    "_usage": "路径统一用正斜杠 /（Windows 下也有效）。macOS 用 ~ 表示用户主目录，脚本会自动展开。填了绝对路径=最高优先级；留空=按 平台段→common→系统PATH→扫描运行时目录 的顺序回退。",
+    "_comment": "AI SDLC 工具链离线运行时与可执行文件路径配置（AI 找离线 node / python / MCP / 工具的唯一出处）。windows / macos 段已按固定运行时布局写死绝对路径（win 以 C:/AI-SDLC/runtime、macOS 以 ~/.cursor/AI-SDLC/runtime 为准，node v26.9.0 / python 3.13.15）；角色包安装脚本会按本机实际架构 / 运行时把失效的路径改写为真实路径。若你的运行时版本或位置不同，改这里对应字段即可；留空则回退到系统 PATH。查看本机实际解析结果：python ~/.cursor/skills/common/profile-select/scripts/profile.py runtime",
+    "_usage": "路径统一用正斜杠 /（Windows 下也有效）。macOS 用 ~ 表示用户主目录，脚本会自动展开。填了且存在的绝对路径=最高优先级；留空或不存在=按 平台段→common→系统PATH→扫描 runtime_root 的顺序回退。runtime_root 的解析顺序：环境变量 AI_SDLC_RUNTIME → 本字段 → 平台默认。",
+    "_layout": "runtime_root 下的固定布局（由运行时初始化包 install-runtime.sh / .ps1 铺开）：node-v<ver>-<plat>/（node / npm / npx）；python-<ver>-<plat>/（python3，Windows 为 embed 版 python.exe）；mcp-offline/{figma,github,harness}/node_modules/...（离线 MCP 包，入口已由角色包安装脚本写进 ~/.cursor/mcp.json）；tools/mermaid-cli/（mmdc，cli.js 在 node_modules/@mermaid-js/mermaid-cli/src/）；tools/md-to-pdf/（cli.js 在 node_modules/md-to-pdf/dist/）；tools/chromium/chrome/<plat>-<ver>/chrome-*/（无头 Chromium，供 mmdc / md-to-pdf 使用）。发布 / 导出脚本会自动使用这些离线工具，不要另行 npx -y 联网安装。",
     "windows": {
         "_comment": "Windows 绿色版运行时解压到 C:/AI-SDLC/runtime/。以下为该布局下的固定路径（node v26.9.0-win-x64 / python 3.13.15-embed-amd64）。",
+        "runtime_root": "C:/AI-SDLC/runtime",
         "python": "C:/AI-SDLC/runtime/python-3.13.15-embed-amd64/python.exe",
         "node": "C:/AI-SDLC/runtime/node-v26.9.0-win-x64/node.exe",
         "npm": "C:/AI-SDLC/runtime/node-v26.9.0-win-x64/npm.cmd",
         "npx": "C:/AI-SDLC/runtime/node-v26.9.0-win-x64/npx.cmd"
     },
     "macos": {
-        "_comment": "macOS（Apple Silicon）绿色版运行时铺到 ~/.cursor/AI-SDLC/runtime/。以下为该布局下的固定路径（node v26.9.0-darwin-arm64 / python 3.13.15-darwin-arm64）。Intel 机型请把 arm64 改为 x64。",
+        "_comment": "macOS 绿色版运行时铺到 ~/.cursor/AI-SDLC/runtime/。以下为 Apple Silicon 布局下的默认路径（node v26.9.0-darwin-arm64 / python 3.13.15-darwin-arm64）；Intel 机型由安装脚本自动改写为 x64 路径。",
+        "runtime_root": "~/.cursor/AI-SDLC/runtime",
         "python": "~/.cursor/AI-SDLC/runtime/python-3.13.15-darwin-arm64/bin/python3",
         "node": "~/.cursor/AI-SDLC/runtime/node-v26.9.0-darwin-arm64/bin/node",
         "npm": "~/.cursor/AI-SDLC/runtime/node-v26.9.0-darwin-arm64/bin/npm",
@@ -17,6 +20,7 @@
     },
     "linux": {
         "_comment": "Linux 通常走 PATH，留空即可。",
+        "runtime_root": "",
         "python": "",
         "node": "",
         "npm": "",
@@ -24,6 +28,7 @@
     },
     "common": {
         "_comment": "跨平台通用回退（当上面对应平台段留空时使用）。一般无需填写。",
+        "runtime_root": "",
         "python": "",
         "node": "",
         "npm": "",

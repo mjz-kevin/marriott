@@ -8,9 +8,9 @@
 | --- | --- | --- |
 | `app-test.yaml` / `app-prod.yaml` | APP 团队（iOS / Android）的全部差异 | 维护者 |
 | `cms-test.yaml` / `cms-prod.yaml` | CMS 团队（cncms / 前端 monorepo）的全部差异 | 维护者 |
-| `setup.json` | node / python / npm / npx 可执行路径（按运行时布局写死，留空回退系统 PATH） | 维护者（随运行时版本） |
+| `setup.json` | 离线运行时根目录 `runtime_root` 与 node / python / npm / npx 可执行路径（按运行时布局写死，留空回退系统 PATH；`_layout` 说明运行时下离线 MCP / 工具的位置）。AI 找离线东西的唯一出处，`profile-select` 的「Offline runtime & tools」一节引用它，`profile.py runtime` 打印本机解析结果 | 维护者（随运行时版本）；安装脚本按本机实测改写失效路径 |
 
-全部文件都在 `init/roles.json` 的 `common.profiles` 中登记，随**每个**角色包安装到 `~/.cursor/profiles/`。团队 profile 每次安装都会覆盖，`setup.json` 已存在则保留；对升级的影响见 [`init/README.md`「升级与重装」](../../init/README.md#升级与重装直接覆盖-vs-先卸载)。
+全部文件都在 `init/roles.json` 的 `common.profiles` 中登记，随**每个**角色包安装到 `~/.cursor/profiles/`。团队 profile 每次安装都会覆盖，`setup.json` 已存在则合并（保留仍有效的自定义路径、补新字段、改写失效路径）；对升级的影响见 [`init/README.md`「升级与重装」](../../init/README.md#升级与重装直接覆盖-vs-先卸载)。
 
 当前选中哪个 profile 由 `profile-select` 记在用户本机（按仓库根路径），不入库：
 
@@ -19,8 +19,8 @@
 - 可用环境变量 `PROFILE_SELECT_HOME` 覆盖目录
 
 ```bash
-python .cursor/skills/profile-select/scripts/profile.py list      # 列出可用 profile
-python .cursor/skills/profile-select/scripts/profile.py resolve   # 当前 profile 的绝对路径
+python .cursor/skills/common/profile-select/scripts/profile.py list      # 列出可用 profile
+python .cursor/skills/common/profile-select/scripts/profile.py resolve   # 当前 profile 的绝对路径
 ```
 
 ## 2. 团队 profile 结构
@@ -32,7 +32,7 @@ python .cursor/skills/profile-select/scripts/profile.py resolve   # 当前 profi
 | `mcp.jira` | 项目 key、Issue 类型、工作流、标签 / Component / 标题前缀规则、链接集、Figma 内嵌 | `rg -l 'mcp\.jira' .cursor` |
 | `mcp.confluence` | 空间、根目录 / 父页 ID、文件夹层级、标题命名 | `rg -l 'mcp\.confluence' .cursor` |
 | `mcp.github` | GHES host / org、各交付仓库及其**基线分支** | `rg -l 'mcp\.github' .cursor` |
-| `mcp.harness` | org / project、可触发的流水线清单、**低环境白名单 `allowed_envs`**、禁止触发清单 `deny_list`（CMS）、轮询口径 | `rg -l 'mcp\.harness' .cursor` |
+| `mcp.harness` | org / project、可触发的流水线清单（单条可选 `artifact_stage`：判定「这次 build 已发布 / 可安装」的 stage，查最新 build 用）、**低环境白名单 `allowed_envs`**、禁止触发清单 `deny_list`（CMS）、轮询口径 | `rg -l 'mcp\.harness' .cursor` |
 | `code` | 语言栈、分支命名、构建命令语义、git hooks、commit 约定、AI 溯源标识、契约比对口径 | `rg -l 'code\.' .cursor` |
 | `review` | 编码规范来源、免审文件、合并门禁策略 | `rg -l 'review\.' .cursor` |
 | `test` | 单测命令语义、覆盖率门槛、测试范围（含部分「预留，暂无消费方」字段） | `rg -l 'test\.' .cursor` |

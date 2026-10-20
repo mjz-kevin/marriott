@@ -178,14 +178,41 @@ def resolve_agent(name: str, warnings: list[str]) -> tuple[Path, bool]:
     )
 
 
-def copy_skill(name: str, dst_skills: Path, warnings: list[str]) -> bool:
-    """复制一个 skill 目录，返回是否成功（缺失则跳过并告警）。"""
-    src = SKILLS_SRC / name
-    if not src.is_dir():
-        warnings.append(f"skill『{name}』在 .cursor/skills 不存在，已跳过")
-        return False
-    shutil.copytree(src, dst_skills / name, ignore=IGNORE, dirs_exist_ok=True)
-    return True
+def discover_skills() -> dict[str, str]:
+    """扫描 .cursor/skills，返回 {skill 名: 相对 skills 根的路径（posix，如 common/profile-select）}。
+
+    Skill 按分组文件夹存放：.cursor/skills/<group>/<skill>/SKILL.md（Cursor 会递归识别）。
+    含 SKILL.md 的目录即一个 skill，不再向下扫描（skill 内部的 references/ 等不会被误判）。
+    skill 名 = SKILL.md 所在目录名（Cursor 要求 frontmatter name 与之一致），跨分组必须唯一。
+    分组只来自磁盘目录，roles.json 仍只写 skill 名——不在两处重复维护。
+    """
+    found: dict[str, str] = {}
+    dups: list[str] = []
+    for dirpath, dirnames, filenames in os.walk(SKILLS_SRC):
+        dirnames[:] = sorted(d for d in dirnames if not d.startswith((".", "__")))
+        if "SKILL.md" in filenames:
+            p = Path(dirpath)
+            rel = p.relative_to(SKILLS_SRC).as_posix()
+            if p.name in found:
+                dups.append(f"{p.name}（{found[p.name]} / {rel}）")
+            found[p.name] = rel
+            dirnames[:] = []  # skill 内部不再扫描
+    if dups:
+        raise SystemExit(f"[build] skill 名重复（跨分组必须唯一）：{'; '.join(dups)}")
+    return found
+
+
+SKILL_PATHS: dict[str, str] = {}  # main() 里填充：skill 名 → 分组相对路径
+
+
+def copy_skill(name: str, dst_skills: Path, warnings: list[str]) -> str | None:
+    """按分组路径复制一个 skill 目录，返回相对路径（缺失则跳过并告警，返回 None）。"""
+    rel = SKILL_PATHS.get(name)
+    if not rel:
+        warnings.append(f"skill『{name}』在 .cursor/skills 下不存在，已跳过")
+        return None
+    shutil.copytree(SKILLS_SRC / rel, dst_skills / rel, ignore=IGNORE, dirs_exist_ok=True)
+    return rel
 
 
 def _copy_runtime_dir(src: Path, dst: Path) -> None:
@@ -240,7 +267,8 @@ def collect_all_assets(data: dict) -> dict:
     """从 roles.json 汇总【所有角色 + 公共】的全量资产清单，供卸载脚本内置使用。
 
     卸载与角色无关：任一角色包的 uninstall 脚本都按这份全量清单删除，彻底卸载工具链。
-    返回 {agents, skills, profiles, mcp_examples}，各为去重保序的名字列表。
+    返回 {agents, skills, profiles, mcp_examples}，各为去重保序的名字列表；
+    skills 为分组相对路径（<group>/<skill>），卸载脚本据此删分组路径、旧平铺路径与空分组目录。
     """
     common = data.get("common", {})
     roles = data.get("roles", {})
@@ -260,7 +288,7 @@ def collect_all_assets(data: dict) -> dict:
 
     return {
         "agents": _dedup(agents),
-        "skills": _dedup(skills),
+        "skills": [SKILL_PATHS.get(s, s) for s in _dedup(skills)],
         "profiles": _dedup(common.get("profiles", [])),
         "mcp_examples": _dedup(common.get("files", [])),
     }
@@ -341,8 +369,10 @@ def build_role(role: str, cfg: dict, common: dict, version: str, assets: dict) -
             all_skills.append(s)
     skill_report = []
     for s in all_skills:
-        ok = copy_skill(s, role_dir / "skills", warnings)
-        skill_report.append({"name": s, "present": ok})
+        rel = copy_skill(s, role_dir / "skills", warnings)
+        # path：安装后相对 ~/.cursor/skills 的分组路径；install 脚本据此清理旧平铺目录，
+        # ai-sdlc-info 据此核对安装完整性。
+        skill_report.append({"name": s, "path": rel or s, "present": bool(rel)})
 
     # 3) profiles
     for p in common.get("profiles", []):
@@ -420,7 +450,8 @@ def _write_role_readme(role_dir: Path, role: str, cfg: dict, manifest: dict) -> 
     a(".\\install.ps1")
     a("```\n")
     a("安装脚本会：")
-    a("- 把 agents 复制到 `~/.cursor/agents/`，skills 复制到 `~/.cursor/skills/`；")
+    a("- 把 agents 复制到 `~/.cursor/agents/`，skills 按分组复制到 `~/.cursor/skills/<分组>/<skill>/`"
+      "（Cursor 递归识别；旧版平铺安装的同名 skill 会被迁移到分组目录，避免重复）；")
     a("- 把 profiles 复制到 `~/.cursor/profiles/`，mcp 示例复制到 `~/.cursor/`；")
     a("- 自检 node（运行时优先，回退系统 PATH）并生成 `~/.cursor/mcp.json`：figma / marriott-github / harness "
       "用 node 绝对路径直跑运行时里的离线 MCP 包入口（凭证字段留空，已存在则保留已填凭证）。\n")
@@ -432,7 +463,7 @@ def _write_role_readme(role_dir: Path, role: str, cfg: dict, manifest: dict) -> 
     a("安装脚本会把本包版本记录到 `~/.cursor/ai-sdlc-installed/role-<角色>.json`"
       "（运行时包记录在同目录 `runtime.json`），重装时会提示「旧版本 → 新版本」。查询方式：\n")
     a("- 在 Cursor 对话里直接问：「当前 AI SDLC 是什么版本」（由公共 skill `ai-sdlc-info` 回答）；")
-    a("- 或命令行：`python ~/.cursor/skills/ai-sdlc-info/scripts/version.py`。\n")
+    a("- 或命令行：`python ~/.cursor/skills/common/ai-sdlc-info/scripts/version.py`。\n")
     a("## 一键卸载\n")
     a("在包目录内执行（与角色无关，会清除**所有角色**的 agents/skills/profiles(含 setup.json)/mcp 示例；"
       "**保留** `~/.cursor/mcp.json` 与你自己的 agent/skill；运行时另用运行时包的卸载脚本）：\n")
@@ -451,7 +482,7 @@ def _write_role_readme(role_dir: Path, role: str, cfg: dict, manifest: dict) -> 
     a("\n## 本包包含的 Skill\n")
     for item in manifest["skills"]:
         flag = "" if item["present"] else " ⚠️（源缺失，未打入）"
-        a(f"- `{item['name']}`{flag}")
+        a(f"- `{item['path']}`{flag}")
     a("\n## 说明\n")
     a("- 标注「占位」的 Agent / 「源缺失」的 Skill 表示该能力尚未在工具链落地，属预留；")
     a("  正式版本发布后重新运行安装脚本覆盖即可。")
@@ -659,6 +690,7 @@ def main() -> int:
     data = load_roles()
     common = data["common"]
     roles = data["roles"]
+    SKILL_PATHS.update(discover_skills())
     # 卸载脚本与角色无关：汇总所有角色 + 公共的全量资产清单，注入每个包的 uninstall 脚本
     assets = collect_all_assets(data)
 
