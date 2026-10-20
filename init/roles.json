@@ -13,7 +13,8 @@
       "profile-select",
       "confluence-publish",
       "md-to-pdf",
-      "ai-sdlc-info"
+      "ai-sdlc-info",
+      "kb-query"
     ],
     "profiles": [
       "app-test.yaml",

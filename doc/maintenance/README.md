@@ -12,7 +12,7 @@
 | --- | --- | --- |
 | 有哪些 Agent / Skill | `.cursor/agents/*.md`、`.cursor/skills/<group>/<skill>/`（分组目录只做组织，skill 名取 `SKILL.md` 所在目录） | 任何文档里的表格 |
 | 哪个角色装哪些 Agent / Skill / profile | [`init/roles.json`](../../init/roles.json) | `AGENTS.md` §3、`init/README.md` 角色表、设计文档 §5 / §6 |
-| Agent / Skill 做什么、何时触发 | 各自 frontmatter 的 `description` 与正文 | 设计文档 §2 / §4（是设计意图，可能领先或落后实现，如 `kb-query` 仅为规划） |
+| Agent / Skill 做什么、何时触发 | 各自 frontmatter 的 `description` 与正文 | 设计文档 §2 / §4（是设计意图，可能领先或落后实现，如 `kb-query` 目前只实现了仓库级） |
 | 团队差异（Jira / Confluence / 仓库 / 命令 / 流水线） | `.cursor/profiles/<team>-<env>.yaml`（字段含义写在 yaml 注释里） | Skill 正文里的示例值 |
 | 打包内容、包结构、manifest 字段 | [`init/build.py`](../../init/build.py) | `init/README.md` |
 | 安装 / 卸载行为 | `init/templates/*.sh` / `*.ps1` | `init/README.md` |

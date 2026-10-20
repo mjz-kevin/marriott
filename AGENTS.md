@@ -62,7 +62,7 @@ Skill 按分组文件夹存放，Cursor 会递归识别 `SKILL.md`；安装包�
 
 | 分组（目录） | Skills |
 | --- | --- |
-| 公共（所有角色）`common/` | `sensitive-data-guard`、`profile-select`、`confluence-publish`、`md-to-pdf`、`ai-sdlc-info` |
+| 公共（所有角色）`common/` | `sensitive-data-guard`、`profile-select`、`confluence-publish`、`md-to-pdf`、`ai-sdlc-info`、`kb-query` |
 | 需求（PO）`requirement/` | `requirement-clarify`、`prd-authoring`、`prd-publish`、`user-story-authoring`、`user-story-publish` |
 | 技术方案 `tech-solution/` | `tech-solution-prd`（仅 TL）、`tech-solution-spike`、`tech-solution-detail`、`tech-solution-publish` |
 | 开发与验证 `dev/` | `baseline-checkout`、`feature-branch`、`unit-test-authoring`、`build-verify`、`unit-test-runner`、`contract-diff`、`acceptance-check`、`create-pr` |
@@ -72,7 +72,7 @@ Skill 按分组文件夹存放，Cursor 会递归识别 `SKILL.md`；安装包�
 
 角色与资产的权威对应关系以 [`init/roles.json`](init/roles.json) 为准（上表只是索引）。
 
-> `kb-query`（知识库检索）是**规划中、尚未实现**的公共 Skill：多个 Agent 已预留调用位置，设计见 `doc/AI-Toolchain-Design.md` §4.1 / §9。它登记在 `init/check.py` 的 `PLANNED_SKILLS` 里，落地时建目录、登记 `roles.json` 并从 `PLANNED_SKILLS` 移除。
+> `kb-query`（知识库检索）本期只实现**仓库级**：读取当前代码仓库的 `.kb/`（OKF bundle），按「索引 → 元数据 → 按需全文」渐进读取，并按设计方案执行生命周期 / 信任等级 / 豁免规则；企业级（L0）、领域级（L1）、知识 MCP、`kb pull`、`kb_report` 不在本期范围。依据：`doc/AI-Toolchain-Design.md` §4.1 / §9 与仓库外的《SDLC 企业知识库设计方案》（v4.7）。
 
 ## 4. Profiles（`.cursor/profiles/`）
 
@@ -115,6 +115,7 @@ Skill 按分组文件夹存放，Cursor 会递归识别 `SKILL.md`；安装包�
 python init/check.py                    # 仓库一致性检查（每次提交前；发版前加 --strict）
 python init/build.py --no-zip --yes     # 确认能正常组装（只出目录不打 zip）
 python .cursor/skills/common/sensitive-data-guard/tests/run_tests.py   # 改安全规则时
+python .cursor/skills/common/kb-query/tests/run_tests.py               # 改 kb-query 脚本时
 ```
 
 完整构建参数（指定角色 / 版本、运行时包）见 [`init/README.md`「构建」](init/README.md#构建) 或 `python init/build.py --help`；发版构建见 [`doc/maintenance/release.md`](doc/maintenance/release.md)。

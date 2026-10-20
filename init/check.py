@@ -54,7 +54,7 @@ BLOCK_SCALAR = re.compile(r"^[>|][+-]?\s*$")
 
 # 规划中、尚未实现的 Skill：Agent 可以先引用（运行时缺失会按 Agent 规则停下或跳过），不算悬空引用。
 # 落地后从这里删掉，并登记到 roles.json。
-PLANNED_SKILLS = {"kb-query"}
+PLANNED_SKILLS: set[str] = set()
 
 # 设计文档里 Agent 用展示名；与 .cursor/agents/<name>.md 的对应关系（同设计文档 §2.1 的说明）。
 AGENT_DISPLAY_NAMES = {

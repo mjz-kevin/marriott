@@ -13,6 +13,14 @@
 ## [Unreleased]
 
 ### 新增
+- **公共 Skill `kb-query`（知识库检索，本期仅仓库级）**：此前只是登记在 `PLANNED_SKILLS` 的占位，现按《SDLC 企业知识库设计方案》（v4.7）实现仓库级（L2）部分。它读取当前代码仓库的 OKF bundle `.kb/`（`manifest.yaml` + 各目录 `index.md` + 条目 md），脚本 `scripts/kb_query.py` 纯标准库实现，只读，提供 5 个子命令，对应设计中知识 MCP 的同名能力：
+  - `status`：定位仓库、`.kb/` 和 manifest，统计条目，列出解析问题；
+  - `list`：导航层，读目录的 `index.md`；缺失或过期时按条目现场生成；
+  - `search`：只返回元数据；
+  - `get`：取全文，或用 `--section` 只取某章，如 `Rules`；
+  - `context`：按 SDLC 阶段组装任务知识包，阶段默认预算，上限 8K。mandatory 条目只给 `# Rules`，最多占 40%；其次是高相关条目的正文，最后是其余条目的标题。
+
+  规则按设计方案的本地读取规则执行：草稿 / 已废弃默认不返回；过期分宽限期和降级两档；信任等级由 `verified` 推导，unverified 只作线索；同 bundle 内的 `overrides` 去重；豁免在本地一律不自动生效，只给「候选 / 失效」提示（判定依据：到期、被豁免条目已改或已废弃、未合入默认分支），由用户确认；产出物须列「引用知识」KID。企业级（L0）、领域级（L1）、知识 MCP、`kb pull`、`kb_report` 不在本期范围，遇到这些 KID 时返回退出码 4，并标为范围外。自带虚构 fixture 与 `tests/run_tests.py`（34 项）。同步：`roles.json` `common.skills`；`check.py` 的 `PLANNED_SKILLS` 清空；`AGENTS.md` §3 / §6；设计文档 §4.1 / §5；`doc/maintenance/README.md`、`testing.md`。已引用 `kb-query` 的 5 个 Agent 调用位置不变，未改。升级方式：直接覆盖。
 - **通用「查最新 build 号」（只读）**：QA / 开发问「某分支（或某环境）最新的 build 号是多少、在哪下载」时，`cicd-agent` 新增只读入口 **Q**，调 `harness-invoke` 新脚本 `scripts/latest_build.py` 直接查，不触发、不建 run、不受 `allowed_envs` 限制（仍只限 profile 已登记的流水线）。对任意团队的 profile 通用：`--pipeline <id>` 和/或任意 `--match 标签=值`（APP 的 platform / usage、CMS 的 app），按 `--branch`（代码分支）或 `--deployed-env`（CD 流水线部署到的环境）过滤。实测 iOS TestFlight（分支 `mark/CNAPP-6676-…` → #3279）、Android Adhoc（`dev` → #1168）、cncms（test → #182，带镜像 tag）。脚本内置三条实测踩到的规则：
   - 只认**代码分支**（branch 构建的 CI 分支 / PR 构建的源分支），不认 `gitDetails.branch`（流水线 YAML 所在分支，常为 `develop`）和 PR 目标分支；Harness 自带的 branch 过滤会漏单，改为本地匹配。
   - 「可用」= 执行 `Success` / `IgnoreFailed`，且（若 profile 声明）`artifact_stage` 成功。PR 自动触发的 iOS 构建也是 Success 但跳过 TestFlight 上传，不能报给测试去下载。
