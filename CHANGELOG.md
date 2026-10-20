@@ -12,6 +12,10 @@
 
 ## [Unreleased]
 
+---
+
+## [0.4.0] - 2026-10-20
+
 ### 新增
 - **公共 Skill `kb-query`（知识库检索，本期仅仓库级）**：此前只是登记在 `PLANNED_SKILLS` 的占位，现按《SDLC 企业知识库设计方案》（v4.7）实现仓库级（L2）部分。它读取当前代码仓库的 OKF bundle `.kb/`（`manifest.yaml` + 各目录 `index.md` + 条目 md），脚本 `scripts/kb_query.py` 纯标准库实现，只读，提供 5 个子命令，对应设计中知识 MCP 的同名能力：
   - `status`：定位仓库、`.kb/` 和 manifest，统计条目，列出解析问题；
