@@ -123,7 +123,7 @@ python ~/.cursor/skills/common/confluence-publish/scripts/upload_confluence_v2.p
 | Empty placeholder after `• Jira link:` | `inject_epic_link` fills `<a href=…/browse/EPIC>EPIC</a>` per `--epic` |
 | Chinese list `- **Jira link**：[KEY](url)` | Same as markdown link (list + `<strong>` format supported) |
 
-- **Jira Epic injection (`--epic`)**: auto-fills the appendix `Jira link` item (English `• Jira link:` paragraph or Chinese `**Jira link**` list item). Idempotent only when a **proper anchor** already exists (`<a href=…/browse/EPIC>EPIC</a>`); bare text URL or `<a>full-url</a>` is still normalized. If no standard appendix item exists, falls back to a top-of-body info banner. `--no-epic-link` disables injection. Report `epic_link_injected` / `epic_url`.
+- **Jira Epic injection (`--epic`)**: auto-fills the appendix `Jira link` item (English `• Jira link:` paragraph or Chinese `**Jira link**` list item). Idempotent only when a **proper anchor** already exists (`<a href=…/browse/EPIC>EPIC</a>`); bare text URL or `<a>full-url</a>` is still normalized. If no standard appendix item exists, nothing is injected (no top-of-body info banner). `--no-epic-link` disables injection. Report `epic_link_injected` / `epic_url`.
 - **Other appendix links** (Reference document / Technical solution / Figma): write as markdown `[title](url)` when possible; bare URLs are also auto-linked. Technical solution back-fill is done later by `tech-solution-publish` into `Technical solution links`.
 
 ### Step 7: Verify and report
@@ -137,7 +137,7 @@ python ~/.cursor/skills/common/confluence-publish/scripts/upload_confluence_v2.p
 | Image attachments | `image_pending` is empty | Locate by record: missing path -> fix the relative path or add the file; unsupported extension -> convert to png / jpg / jpeg / gif / svg / webp; upload failure -> fix and rerun |
 | Call channel | Everything goes through the script over REST | On non-zero exit or JSON containing `error`, fix per HTTP status (401 credentials / 403 permission / 404 parent/space) and rerun; falling back to MCP `updateConfluencePage` / `createConfluencePage` is forbidden |
 
-**Report**: page title, URL, version, whether this was a create or update, the `stats` completeness check result, the `mermaid_pending` and `image_pending` status, and the list of back-links established in the body (including whether the Epic top back-link was injected as reflected by `epic_link_injected` / `epic_url`).
+**Report**: page title, URL, version, whether this was a create or update, the `stats` completeness check result, the `mermaid_pending` and `image_pending` status, and the list of back-links established in the body (including whether the Epic link was filled into the appendix `Jira link` item, as reflected by `epic_link_injected` / `epic_url`).
 
 ## 3. Related
 

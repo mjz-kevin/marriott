@@ -160,7 +160,7 @@ an error.
 | `--dry-run` | Parse and report only — writes nothing, prints the resolved target and `storage_chars` |
 | `--check-env` | Environment pre-check only (credentials, plus Node/npx when the document contains mermaid), then exit |
 | `--allow-degraded-diagrams` | Permit diagram degradation (see "mermaid hard prerequisite"); off by default |
-| `--no-epic-link` | Do not auto-inject the Jira Epic back-link (injected by default, skipped when a proper anchor already exists) |
+| `--no-epic-link` | Do not auto-fill the Jira Epic back-link into the appendix `Jira link` item (filled by default; skipped when a proper anchor already exists; when the document has no `Jira link` item nothing is injected — no top-of-page info bar) |
 | `--mcp` | Path to `mcp.json` (defaults to three levels up from the script) |
 
 Title rule: the actual page title is the `--title` prefix plus a readable tail. **Dedup matches the

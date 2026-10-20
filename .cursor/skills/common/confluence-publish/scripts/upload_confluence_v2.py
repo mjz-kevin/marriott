@@ -544,7 +544,7 @@ def inject_epic_link(body, epic, epic_url):
 
     幂等：仅当已存在规范锚点（href 指向该 Epic 且显示文本为 Epic key）时跳过。
     仅有裸文本 URL 或 href 正确但显示全文 URL 时仍会规范化。
-    找不到「Jira link」项时回退到正文顶部注入信息条。
+    找不到「Jira link」项时不注入（不再在正文顶部加信息条）。
     返回 (body, injected)。
     """
     if not epic:
@@ -572,9 +572,8 @@ def inject_epic_link(body, epic, epic_url):
     if pat_li.search(body):
         new_body = pat_li.sub(lambda mm: mm.group(1) + anchor + mm.group(3), body, count=1)
         return new_body, True
-    # 回退：无标准附录项时，在正文顶部加一条信息条，保证 Epic 回链不丢
-    bar = (f'<p><strong>Jira Epic：</strong>{anchor}</p>')
-    return bar + body, True
+    # 无标准附录项时不再注入顶部信息条（Jira↔页面关联以 Jira Web remote link 为准）
+    return body, False
 
 
 # ============================= mermaid flowchart -> SVG（纯标准库、跨平台） =============================
@@ -1813,8 +1812,8 @@ def main():
                     help="放行图表降级：不强制 mmdc，缺失时回退纯标准库自绘（flowchart 低质量、"
                          "sequenceDiagram 等无法出图）。默认不允许，缺 mmdc 直接阻断发布。")
     ap.add_argument("--no-epic-link", action="store_true",
-                    help="不在页面正文顶部自动注入指向 Jira Epic 的链接。默认注入（正文已含指向该 "
-                         "Epic 的链接时自动跳过，不重复）。")
+                    help="不向附录「Jira link」项自动填入 Jira Epic 链接。默认填入（附录无该项时不注入、"
+                         "不再在正文顶部加信息条；已含规范锚点时自动跳过，不重复）。")
     ap.add_argument("--check-env", action="store_true",
                     help="仅环境预检：检查凭证与（文档含 mermaid 时）Node.js/npx 是否就绪，"
                          "报告结果后退出，不发布。缺失时打印按操作系统的安装指引。")
