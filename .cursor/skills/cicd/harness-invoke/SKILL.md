@@ -116,6 +116,8 @@ When a value is ambiguous — it doesn't name an environment and you cannot tell
 
 Apply only the values the caller gave; leave the rest at the defaults Harness reported. Reject a value outside the permitted set instead of passing it to a doomed trigger. This confirmation is about **input completeness** and applies at every in-scope environment — it is not a deploy authorization and never substitutes for S2's scope check (which no confirmation can unlock).
 
+**Always wait, even when every required input already has a value.** A branch/tag in the original request, a Harness default, an input-set fill, C-pre speculative answers, or a previous trigger's confirmation are **candidates to show, not consent to run**. Present the table and return; trigger only after the caller has confirmed **this** trigger's set (an explicit "use these defaults" after seeing the table counts). Skipping the wait because "nothing is missing" is how a pipeline fires without the caller seeing the parameters.
+
 When a saved **input set** covers the target environment, prefer it as the base and override only what differs per run. Two cautions, both learned from real pipelines:
 
 - A per-environment input set often fills only *its* environment's stages and leaves the others as `<+input>` — by design it must be paired with a stage subset. Supplying it alone will fail to plan; don't fill the other environments' stages to make it plan.
@@ -125,6 +127,7 @@ When a saved **input set** covers the target environment, prefer it as the base 
 
 | Gap | Handling |
 |------|------|
+| The input table has not been presented and confirmed for **this** trigger | Stop and present it; never treat the original request, a default, an input set, or a prior trigger's answers as this trigger's confirmation |
 | A required input has no caller-supplied value | Stop and ask for exactly that input; never substitute a default, a prior run's value, or a value read out of an input set |
 | The caller gives a value outside the permitted set | Report the permitted values and ask again; don't pass it through |
 | An input's value (or its default) resolves the target to a non-allowlisted environment | Stop and report it as out of scope per S2; don't "ask whether to proceed" |
@@ -243,7 +246,7 @@ Report the latest available build — build number, branch, commit, who triggere
 | Low environments only | The resolved target environment must be in `mcp.harness.allowed_envs` (`dev` / `test`). Staging / stg / uat / prod and anything unresolved are out of scope: stop and hand to a human in the Harness UI. **No confirmation, insistence, or prior approval unlocks it** |
 | Unique match, no reaching past the list | The target must match `mcp.harness.pipelines` uniquely; unlisted → stop, including pipelines left out because of what they *can do* (K8sDelete, arbitrary run-time YAML) — pointing one at a low environment does not make it safe, and no confirmation unlocks it. A `deny_list` entry, where a profile defines one, stops the run the same way |
 | Read inputs from Harness, never from memory | The input spec, defaults, and permitted values come from the pipeline's runtime-input template at trigger time — never from config or recollection |
-| Present inputs before triggering | Show required vs. optional-with-default (flagging risky defaults) and wait for answers; reject a value outside the permitted set |
+| Present inputs before triggering | Show required vs. optional-with-default (flagging risky defaults) and **wait for this trigger's confirmation** even when every required input already has a value; reject a value outside the permitted set. A target in the request / a default / an input set / a prior trigger is not confirmation |
 | Never default a required input | A missing required answer stops the trigger — no defaults, no prior run's value, no input-set value |
 | Scope by where the run actually lands | Judge from the environment resolved in S2 — the pipeline's env / stage subset **and** the runtime-input values you are about to pass (a value naming prod / stg / staging / uat / perf targets that environment, whatever the tag says) — never the pipeline's name or tag; an ambiguous value or an unresolvable environment stops the trigger |
 | Confine a promotion chain | Restrict execution to that environment's stage subset, recovered from execution history; unknown → don't trigger; a subset reaching outside `allowed_envs` → out of scope |
@@ -263,7 +266,7 @@ Report the latest available build — build number, branch, commit, who triggere
 
 - The pipeline was uniquely matched from the profile's `pipelines` (and not on a `deny_list`, where one is defined), and was inspected in Harness
 - The target environment was resolved per S2 and checked against `allowed_envs`, from the resolved value rather than a tag; a non-allowlisted or unresolvable environment was reported as out of scope and nothing was triggered
-- The input spec came from Harness at trigger time; every required input was answered and no value violates its permitted set
+- The input spec came from Harness at trigger time; the presented set was confirmed by the caller for **this** trigger before anything was sent; every required input was answered and no value violates its permitted set
 - A promotion chain's stage subset was recovered from execution history and carried on the trigger; its effect was verified, and it stays within `allowed_envs`
 - The execution handle is recorded and traceable, and belongs to this trigger — no observed execution was adopted without a trigger-type and identity match
 - The terminal-state wait rode on the MCP trigger call under `server_wait`, or — on the stage-subset fallback — trigger (`--execute`) and wait (`--wait-execution`) were two separate calls; any fallback polling used `interval_seconds` and did not overshoot the expected finish
@@ -314,6 +317,7 @@ Pipeline: {id}  ·  Resolved target environment: {target_env} (resolved from {en
 | The caller asks for a pipeline that exists in Harness but isn't in `pipelines` | Report that it is deliberately not triggerable and stop. Check the comment beside the list before explaining why — some are omitted for capability, not scope (the CMS `utility` pipeline's `action=delete` runs K8sDelete and its approval step only fires for Production, so even a `test` run deletes resources with no gate). Never add it to the list yourself |
 | The target is on a profile's `deny_list` | Report the recorded reason verbatim and stop; forbidden by team decision, not by capability. A low-environment target does not clear it, and neither does a confirmation |
 | A required input wasn't supplied | Stop and ask for exactly that input; don't default it or reuse a prior run's value |
+| The caller already named a branch / env, so you triggered without presenting inputs | Defect. S3 always waits. A target in the request is not this trigger's confirmation — present the table even when nothing looks missing |
 | The caller gives a value outside the permitted set | Report the permitted values and ask again |
 | A promotion chain's stage subset is unknown for this environment | Recover it from execution history; if no execution ever targeted it, stop and ask — don't infer from stage names |
 | Harness MCP auth fails | Authenticate first; if it still fails, report the auth/permission issue, don't blind re-trigger |

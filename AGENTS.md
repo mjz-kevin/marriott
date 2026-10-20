@@ -52,7 +52,7 @@ ai-sdlc/
 | `tech-solution-agent` | TL / Dev | 技术方案（PRD 级 / Spike 调研 / Story 级详细方案）→ 确认 → 发布 → 回写 |
 | `dev-agent` | TL / Dev | Story → 检出基线 → 唯一 AI Feature 分支 → 实现代码与单测 → 验证 → 提 PR |
 | `code-review-agent` | TL / Dev | 拉 PR diff → 按规范与安全基线逐条审核 → 汇总为一条 PR review → 合并门禁（不自动 approve / 合并，人工拍板） |
-| `cicd-agent` | TL / Dev / QA | 选定并触发现有 Harness 流水线，**仅限低环境（dev / test）**；高环境（Staging / Prod）不在工具链范围，由人在 Harness UI 操作 |
+| `cicd-agent` | TL / Dev / QA | 选定并触发现有 Harness 流水线，**仅限低环境（dev / test）**；触发前必须展示运行入参并等人确认；高环境（Staging / Prod）不在工具链范围，由人在 Harness UI 操作 |
 | `test-agent` | QA | 需求 / Jira 用例 → 伪代码 → pytest + pytest-bdd + Appium 可执行脚本 → 运行报告 / 提 Bug |
 
 ## 3. Skills（`.cursor/skills/<分组>/<skill>/`）
