@@ -19,7 +19,7 @@ to a whitelist.
 ## Cross-platform notes (macOS / Windows)
 
 - The scripts depend only on the **Python 3 standard library** and run on both macOS and Windows.
-- **Resolve the Python interpreter from `setup.json` first (same source as `upload_confluence_v2.py`).** Before running any command below, read the repo file `.cursor/profiles/setup.json` (it's short), and take the `python` field from the section matching the current platform (`windows` / `macos` / `linux`), falling back to the `common` section. Use that absolute path as the `python` in every command (expand a leading `~` to the user's home). Only if both the platform section and `common` leave `python` empty (or the file is missing), fall back to the `python` / `python3` on your system `PATH`. This keeps the interpreter consistent with the portable runtime layout (e.g. `~/.cursor/AI-SDLC/runtime/python-*/bin/python3` on macOS, `C:/AI-SDLC/runtime/python-*/python.exe` on Windows).
+- **Resolve the Python interpreter from `setup.json` first (same source as `upload_confluence_v2.py`).** Before running any command below, read `setup.json` beside the installed profiles — `~/.cursor/profiles/setup.json` (Windows: `%USERPROFILE%\.cursor\profiles\setup.json`; in a dev checkout `<repo>/.cursor/profiles/setup.json`; it is **not** in the user's business repo) — and take the `python` field from the section matching the current platform (`windows` / `macos` / `linux`), falling back to the `common` section. Use that absolute path as the `python` in every command (expand a leading `~` to the user's home) if it exists. Only if both the platform section and `common` leave `python` empty (or the file / path is missing), fall back to the `python` / `python3` on your system `PATH`. Full offline-runtime layout and a one-shot locator (`profile.py runtime`): see `profile-select` → "Offline runtime & tools".
 - **Prefer `--file` or `--text` for scanning** to avoid relying on shell pipes (Windows cmd/PowerShell
   handle pipes inconsistently).
 - Paths can use forward slashes `/` in Python, which also work on Windows.
@@ -29,7 +29,7 @@ to a whitelist.
 
 The examples below assume the skill root `.cursor/skills/common/sensitive-data-guard` as the working directory
 and write the command as `python`; `python` is a placeholder for the interpreter resolved from
-`.cursor/profiles/setup.json` (see "Cross-platform notes")—substitute that absolute path, and fall
+`~/.cursor/profiles/setup.json` (see "Cross-platform notes")—substitute that absolute path, and fall
 back to system `python` / `python3` only when `setup.json` leaves it empty.
 
 ## When to enable

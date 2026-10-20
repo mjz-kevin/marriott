@@ -143,6 +143,8 @@ Trigger via the Harness MCP using S1's scope + the matched pipeline and the S3 i
 
 **A promotion chain's trigger must carry its stage subset.** The MCP's run action may have no stage-selection parameter — confirm that from the MCP's own operation metadata rather than from failed attempts (a run action lacking it while its retry action has one is positive evidence). When it is genuinely absent and `allow_stage_execution_fallback` is true, use this skill's `scripts/stage_run.py`, which wraps the one REST endpoint the MCP omits:
 
+> `python` / `python3` in commands below is a placeholder for the AI SDLC interpreter: read `~/.cursor/profiles/setup.json` (Windows `%USERPROFILE%\.cursor\profiles\setup.json`) and use the `python` of the current platform section (fallback `common`, expand `~`) if that path exists, otherwise the `python3` / `python` on `PATH`. Layout of the offline runtime and the one-shot locator `profile.py runtime`: `profile-select` → "Offline runtime & tools".
+
 ```bash
 python3 scripts/stage_run.py --check                       # verify it resolved the right Harness
 python3 scripts/stage_run.py --app <app> --env <env> ...    # dry run (default): shows stages, input set, expected duration

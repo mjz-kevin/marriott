@@ -170,6 +170,8 @@ First establish the Parent (Epic, hierarchy), then go through the team-configure
 
   Idempotent: same filename reuses the attachment, same media id is not re-inlined. When `figma_embed` is absent or `mode: link`, skip this and keep link-only. If no image source resolves, or export / upload fails, keep the clickable Figma link and note the image gap in the report — do not block ticket creation.
 
+> `python` / `python3` in commands below is a placeholder for the AI SDLC interpreter: read `~/.cursor/profiles/setup.json` (Windows `%USERPROFILE%\.cursor\profiles\setup.json`) and use the `python` of the current platform section (fallback `common`, expand `~`) if that path exists, otherwise the `python3` / `python` on `PATH`. Layout of the offline runtime and the one-shot locator `profile.py runtime`: `profile-select` → "Offline runtime & tools".
+
 ```bash
 python ~/.cursor/skills/common/confluence-publish/scripts/upload_confluence_v2.py --jira-attach-image --issue "<ticket key>" --image "<local PNG path>" --embed-heading "UI Design"
 ```

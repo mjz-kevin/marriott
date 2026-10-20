@@ -123,14 +123,14 @@ if (Test-Path $skillsSrc) {
 
 Write-Host "--> 安装 profiles"
 # profile 的 *.yaml 无条件覆盖（团队统一配置，无用户修改场景）；
-# setup.json 是用户本地运行时路径配置，已存在则保留，不覆盖。
+# setup.json 是用户本地运行时路径配置，已存在则先保留，后面「修正 setup.json」一步再合并新字段、修正失效路径。
 $profilesSrc = Join-Path $PkgDir "profiles"
 $profilesDst = Join-Path $CursorHome "profiles"
 if (Test-Path $profilesSrc) {
     New-Item -ItemType Directory -Force -Path $profilesDst | Out-Null
     Get-ChildItem -Path $profilesSrc -Force | ForEach-Object {
         if ($_.Name -eq "setup.json" -and (Test-Path (Join-Path $profilesDst "setup.json"))) {
-            Write-Host "    保留已有 setup.json（用户本地运行时配置，未覆盖）"
+            Write-Host "    已有 setup.json，先保留，稍后与新版合并（保留有效自定义路径、补新字段、改写失效路径）"
         } else {
             Copy-Item -Path $_.FullName -Destination $profilesDst -Recurse -Force
         }
@@ -173,6 +173,72 @@ $nodeInfo = Resolve-Node
 Write-Host "--> 自检 node：$($nodeInfo.path) [$($nodeInfo.source)]"
 if ($nodeInfo.source -eq "default") {
     Write-Warning "未能定位 node.exe。请确认 C:\AI-SDLC\runtime\node-*\node.exe 存在，或设环境变量 AI_SDLC_RUNTIME 指向运行时根目录后重跑本脚本。"
+}
+
+# ---- 修正 ~\.cursor\profiles\setup.json：让 AI 能找到离线运行时 ----
+# 以本包 setup.json 为骨架（带最新说明与 runtime_root 等新字段），合并用户已有文件里仍然有效的自定义值；
+# 再把当前平台（windows）段里为空或已失效的路径改写为本机实测的运行时路径。
+function Test-SetupValue([string]$key, $val) {
+    if (-not ($val -is [string]) -or [string]::IsNullOrWhiteSpace($val)) { return $false }
+    $p = $val.Trim()
+    if ($p.StartsWith("~")) { $p = Join-Path $env:USERPROFILE $p.Substring(1).TrimStart('/','\') }
+    if ($key -eq "runtime_root") { return (Test-Path $p -PathType Container) }
+    return (Test-Path $p -PathType Leaf)
+}
+function Find-RuntimeExe([string]$prefix, [string]$exe) {
+    if (-not (Test-Path $runtimeRoot)) { return "" }
+    $dir = Get-ChildItem -Path $runtimeRoot -Directory -Filter "$prefix-*" -ErrorAction SilentlyContinue |
+           Sort-Object Name | Select-Object -Last 1
+    if ($dir) {
+        $p = Join-Path $dir.FullName $exe
+        if (Test-Path $p) { return ($p -replace '\\','/') }
+    }
+    return ""
+}
+$setupTemplate = Join-Path $PkgDir "profiles\setup.json"
+$setupTarget = Join-Path $profilesDst "setup.json"
+if (Test-Path $setupTemplate) {
+    try {
+        $setup = Get-Content $setupTemplate -Raw -Encoding UTF8 | ConvertFrom-Json
+        $old = $null
+        if (Test-Path $setupTarget) {
+            try { $old = Get-Content $setupTarget -Raw -Encoding UTF8 | ConvertFrom-Json } catch { $old = $null }
+        }
+        # 1) 合并用户已有的有效自定义值（非 _ 开头字段，路径存在才保留）
+        foreach ($sec in $setup.PSObject.Properties) {
+            if ($sec.Name.StartsWith("_") -or -not ($sec.Value -is [System.Management.Automation.PSCustomObject])) { continue }
+            $oseg = if ($old) { $old.($sec.Name) } else { $null }
+            if (-not $oseg) { continue }
+            foreach ($k in @($sec.Value.PSObject.Properties | ForEach-Object { $_.Name })) {
+                if ($k.StartsWith("_")) { continue }
+                $ov = $oseg.$k
+                if (Test-SetupValue $k $ov) { $sec.Value.$k = $ov }
+            }
+        }
+        # 2) 当前平台段：空或失效的路径改写为本机实测运行时路径
+        $detected = [ordered]@{
+            runtime_root = $(if (Test-Path $runtimeRoot) { $runtimeRoot -replace '\\','/' } else { "" })
+            python       = (Find-RuntimeExe "python" "python.exe")
+            node         = (Find-RuntimeExe "node" "node.exe")
+            npm          = (Find-RuntimeExe "node" "npm.cmd")
+            npx          = (Find-RuntimeExe "node" "npx.cmd")
+        }
+        $seg = $setup.windows
+        $fixed = @()
+        foreach ($k in $detected.Keys) {
+            $v = $detected[$k]
+            if ($v -and -not (Test-SetupValue $k $seg.$k)) {
+                if ($seg.PSObject.Properties[$k]) { $seg.$k = $v } else { $seg | Add-Member -NotePropertyName $k -NotePropertyValue $v }
+                $fixed += $k
+            }
+        }
+        $setupJson = $setup | ConvertTo-Json -Depth 10
+        [System.IO.File]::WriteAllText($setupTarget, $setupJson, (New-Object System.Text.UTF8Encoding($false)))
+        if ($fixed.Count -gt 0) { Write-Host "    setup.json 已更新（按本机运行时改写：$($fixed -join ', ')）" }
+        else { Write-Host "    setup.json 已更新（路径均有效，无需改写）" }
+    } catch {
+        Write-Warning "修正 setup.json 失败（不影响 mcp.json 生成）：$($_.Exception.Message)"
+    }
 }
 
 # 离线 MCP 包入口（随运行时铺开在 runtime\mcp-offline\ 下），转正斜杠供 JSON 使用

@@ -26,9 +26,14 @@ import argparse, base64, glob, json, mimetypes, os, re, shutil, subprocess, sys,
 # 与发布脚本口径一致。解析 npx 的优先级：
 #   1) <repo>/.cursor/profiles/setup.json 当前平台段/common 段的绝对路径
 #   2) 系统 PATH
-#   3) 自动扫描固定运行时目录 C:/AI-SDLC/runtime（可用环境变量 AI_SDLC_RUNTIME 覆盖）下的 node-*
+#   3) 自动扫描运行时根目录（见 _runtime_root）下的 node-*
 #   4) 默认名 "npx"
-_DEFAULT_RUNTIME_ROOT = "C:/AI-SDLC/runtime"
+#
+# 运行时根目录（离线 node/python + mcp-offline/ + tools/{mermaid-cli,md-to-pdf,chromium}）按以下顺序解析：
+#   1) 环境变量 AI_SDLC_RUNTIME
+#   2) setup.json 当前平台段 / common 段的 runtime_root（目录存在才用）
+#   3) 平台默认：Windows C:/AI-SDLC/runtime；macOS / Linux <CURSOR_HOME 或 ~/.cursor>/AI-SDLC/runtime
+_WIN_DEFAULT_RUNTIME_ROOT = "C:/AI-SDLC/runtime"
 
 
 def _platform_key():
@@ -48,6 +53,41 @@ def _repo_root():
         if parent == cur:
             return os.path.dirname(os.path.abspath(__file__))
         cur = parent
+
+
+def _setup_json_value(key):
+    """读 setup.json 当前平台段（回退 common 段）的字段值（已展开 ~），未配置返回空串。"""
+    p = os.path.join(_repo_root(), ".cursor", "profiles", "setup.json")
+    if not os.path.isfile(p):
+        return ""
+    try:
+        with open(p, encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception:
+        return ""
+    if not isinstance(data, dict):
+        return ""
+    for section in (_platform_key(), "common"):
+        seg = data.get(section)
+        if isinstance(seg, dict):
+            val = seg.get(key)
+            if isinstance(val, str) and val.strip():
+                return os.path.expanduser(val.strip())
+    return ""
+
+
+def _runtime_root():
+    """AI SDLC 离线运行时根目录：AI_SDLC_RUNTIME → setup.json runtime_root → 平台默认。"""
+    env = os.environ.get("AI_SDLC_RUNTIME", "").strip()
+    if env:
+        return os.path.expanduser(env)
+    configured = _setup_json_value("runtime_root")
+    if configured and os.path.isdir(configured):
+        return configured
+    if sys.platform == "win32":
+        return _WIN_DEFAULT_RUNTIME_ROOT
+    cursor_home = os.environ.get("CURSOR_HOME") or os.path.join(os.path.expanduser("~"), ".cursor")
+    return os.path.join(cursor_home, "AI-SDLC", "runtime")
 
 
 def _configured_npx():
@@ -81,7 +121,7 @@ def _configured_npx():
 
 def _scan_runtime_npx():
     """扫描固定运行时目录下 node-* 的 npx（Windows: npx.cmd；*nix: bin/npx）。"""
-    root = os.environ.get("AI_SDLC_RUNTIME", _DEFAULT_RUNTIME_ROOT)
+    root = _runtime_root()
     if not root or not os.path.isdir(root):
         return ""
     dirs = sorted(d for d in glob.glob(os.path.join(root, "node-*")) if os.path.isdir(d))
@@ -133,7 +173,7 @@ def _scan_runtime_node():
         except Exception:
             pass
     # 2) 扫描运行时目录 node-*
-    root = os.environ.get("AI_SDLC_RUNTIME", _DEFAULT_RUNTIME_ROOT)
+    root = _runtime_root()
     if root and os.path.isdir(root):
         dirs = sorted(d for d in glob.glob(os.path.join(root, "node-*")) if os.path.isdir(d))
         if dirs:
@@ -154,7 +194,7 @@ def _offline_mmdc_cli():
     路径：<runtime>/tools/mermaid-cli/node_modules/@mermaid-js/mermaid-cli/src/cli.js
     找不到返回空串。允许 $AI_SDLC_RUNTIME 覆盖运行时根目录。
     """
-    root = os.environ.get("AI_SDLC_RUNTIME", _DEFAULT_RUNTIME_ROOT)
+    root = _runtime_root()
     if not root or not os.path.isdir(root):
         return ""
     cli = os.path.join(root, "tools", "mermaid-cli", "node_modules",
@@ -170,7 +210,7 @@ def _offline_chromium():
       Windows：.../chrome.exe
     用 glob 兼容版本号变化；找不到返回空串。
     """
-    root = os.environ.get("AI_SDLC_RUNTIME", _DEFAULT_RUNTIME_ROOT)
+    root = _runtime_root()
     if not root or not os.path.isdir(root):
         return ""
     base = os.path.join(root, "tools", "chromium", "chrome")
@@ -197,7 +237,7 @@ def _offline_md_to_pdf_cli():
     路径：<runtime>/tools/md-to-pdf/node_modules/md-to-pdf/dist/cli.js
     找不到返回空串。允许 $AI_SDLC_RUNTIME 覆盖运行时根目录。
     """
-    root = os.environ.get("AI_SDLC_RUNTIME", _DEFAULT_RUNTIME_ROOT)
+    root = _runtime_root()
     if not root or not os.path.isdir(root):
         return ""
     cli = os.path.join(root, "tools", "md-to-pdf", "node_modules",

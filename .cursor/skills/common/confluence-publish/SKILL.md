@@ -95,7 +95,8 @@ necessarily inside this repository.
 > **Command form (cross-platform, unified)**: write the command as **a single line with no line
 > continuations** so it runs as-is in Windows PowerShell / CMD, macOS, and Linux (a `~`-prefixed
 > forward-slash path works in PowerShell too). `python` is a placeholder for the interpreter
-> resolved from `.cursor/profiles/setup.json`: take the `python` field from the section matching
+> resolved from `~/.cursor/profiles/setup.json` (Windows `%USERPROFILE%\.cursor\profiles\setup.json`;
+> layout and `profile.py runtime` locator in `profile-select` → "Offline runtime & tools"): take the `python` field from the section matching
 > the current platform (`windows` / `macos` / `linux`), falling back to the `common` section
 > (expand a leading `~`); only when both leave it empty, or the file is missing, fall back to the
 > `python` / `python3` on your `PATH`. The script resolves the mermaid toolchain from that same

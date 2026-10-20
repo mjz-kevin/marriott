@@ -36,7 +36,7 @@ Beyond the above fixed block, append the concrete defect evidence:
 - **Expected Result** / **Actual Result** — observable, concrete.
 - **Evidence** — exception type + key traceback lines / failing step / case key (quoted verbatim from machine output when the source is an automation run); for a manual report, the user-provided repro / screenshots-as-text.
 
-## 3. Required fields / labels (confirm per source — see § 4)
+## 3. Required fields / labels (both creation modes must confirm these via an `AskQuestion` card before creating — see § 4)
 
 | Field | Value |
 | --- | --- |
@@ -51,22 +51,30 @@ Beyond the above fixed block, append the concrete defect evidence:
 | Assignee / Components | blank by default unless specified |
 | Link | every bug is linked to the regression-defect Story via a `Blocks` link (see the skill) |
 
-## 4. Two creation modes
+## 4. Two creation modes — both must confirm the required fields + labels first
+
+⛔ **Shared hard rule (applies to BOTH modes)**: before creating any APP bug, the AI **must** use an `AskQuestion` card dialog to walk the user through **this template's required fields plus Labels**, let them confirm or correct, and only `createJiraIssue` after the user confirms. The required fields to confirm are at minimum:
+
+- **Domain** (required) — present the four options **Commerce / Loyalty / Trips / Platform** for the user to pick.
+- **Page/Feature** + the one-line issue description for the Summary.
+- **Severity** (default `3-Medium`) / **Priority**.
+- **Environments** (default `Test`).
+- **Labels** — none by default; let the user add/confirm.
+- Device Info / App build/version / Scope / Occurrence / Workaround / Affected Users — carry the template defaults (or run-inferred values) as the **pre-filled recommendation**, let the user correct.
+
+The only difference between the two modes is **where the pre-filled values come from** (run evidence vs. the user's report) — neither mode skips the confirmation card.
 
 ### 4.1 Automation-triggered (from a `test-run-report-bug` run)
 
-- The AI fills the Summary + Description from the run evidence **automatically, with sensible defaults, and creates directly** (no per-field user confirmation needed beyond the skill's existing single "confirm create" gate):
-  - **Domain** — inferred from the failing feature/page; when it cannot be inferred confidently, default to **Platform** and note the assumption.
+- The AI assembles the Summary + Description from the run evidence and **pre-fills** every template field with run-inferred values / sensible defaults, but **still pops the `AskQuestion` confirmation card above before creating** — the inferred values are only the pre-filled recommendation, the user must pass over the required fields + Labels and confirm:
+  - **Domain** — inferred from the failing feature/page; when it cannot be inferred confidently, default to **Platform** and note the assumption (the user can override on the card).
   - **Page/Feature** — from the failing scenario's page.
   - **Device Info / App build/version** — from the run environment / config; `Occurrence = Always`, `Workaround = No`, `Affected Users/Properties = All`, `Scope = General` by default unless the evidence says otherwise.
   - Severity default `3-Medium`, Environments `Test`.
 - Evidence (exception type, traceback, failing step, case key) is quoted verbatim from the run artifacts.
+- When there are multiple failed cases, one card may batch-confirm them (one question per pending bug, or `allow_multiple` to tick which to create); only create the ones the user confirms.
 
 ### 4.2 User-provided ticket (manual, in conversation)
 
-- When the user asks to create a bug from their own report, the AI **must confirm the required fields and labels with the user via an `AskQuestion` dialog before creating** — do not auto-default silently. At minimum confirm:
-  - **Domain** — present the four options **Commerce / Loyalty / Trips / Platform** for the user to pick (required).
-  - **Page/Feature** and the one-line issue description for the Summary.
-  - **Severity / Priority**, and any **Labels** to attach.
-  - The Device Info / App build/version / Scope / Occurrence / Workaround / Affected Users (use the template defaults as the pre-filled recommendation, let the user correct).
+- Same confirmation card as above — the AI **must confirm the required fields and labels with the user via an `AskQuestion` dialog before creating**, with the pre-filled values coming from the user's report (and template defaults for the Device Info / Scope / Occurrence / Workaround / Affected Users block).
 - Only after the user confirms do you `createJiraIssue`; still apply the standard `Blocks` link to the regression-defect Story.

@@ -67,7 +67,9 @@ python <cursor-home>/skills/common/ai-sdlc-info/scripts/version.py --json   # st
    - `notes` about mixed versions → shared skills / profiles come from the most recently installed
      role package; reinstall all roles from the same release.
    - No runtime record → runtime not installed or installed by an older runtime package; MCP
-     servers and offline tools may fall back to system `node` / `npx`.
+     servers and offline tools may fall back to system `node` / `npx`. To see exactly which
+     offline python / node / tools / MCP packages resolve (and which are missing), run
+     `python <cursor-home>/skills/common/profile-select/scripts/profile.py runtime`.
 3. Exit code 2 → tell the user no record was found and that reinstalling the latest role package
    (and runtime package) will create one; don't guess a version from file contents.
 

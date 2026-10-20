@@ -21,12 +21,16 @@ Usage:
   python profile.py resolve              # print the current profile's absolute path (for other Skills to read)
   python profile.py clear                # clear the current repo's memory
   python profile.py path                 # print the selection file path
+  python profile.py runtime              # print where the offline AI SDLC runtime / tools / MCP live (JSON)
 
 Exit codes:
-  0 success; 2 no selection remembered / profile doesn't exist (need to ask the user); 3 usage or environment error.
+  0 success; 2 no selection remembered / profile doesn't exist (need to ask the user)
+  (for `runtime`: 2 = the runtime root doesn't exist); 3 usage or environment error.
 """
+import glob
 import json
 import os
+import shutil
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -163,6 +167,138 @@ def clear_selected(repo_root):
     return False
 
 
+# ---------------------------------------------------------------- offline runtime
+# Mirrors the resolution used by confluence-publish/upload_confluence_v2.py and
+# md-to-pdf/export_pdf.py, so what this reports is what those scripts will use.
+_WIN_DEFAULT_RUNTIME_ROOT = "C:/AI-SDLC/runtime"
+
+
+def _platform_key():
+    if sys.platform == "win32":
+        return "windows"
+    if sys.platform == "darwin":
+        return "macos"
+    return "linux"
+
+
+def _norm(p):
+    return p.replace("\\", "/") if p else p
+
+
+def _load_setup(profiles_dir):
+    p = os.path.join(profiles_dir, "setup.json") if profiles_dir else ""
+    if not p or not os.path.isfile(p):
+        return "", {}
+    try:
+        with open(p, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return p, (data if isinstance(data, dict) else {})
+    except Exception:
+        return p, {}
+
+
+def _setup_value(data, key):
+    for section in (_platform_key(), "common"):
+        seg = data.get(section)
+        if isinstance(seg, dict):
+            val = seg.get(key)
+            if isinstance(val, str) and val.strip():
+                return os.path.expanduser(val.strip())
+    return ""
+
+
+def _resolve_runtime_root(data):
+    env = os.environ.get("AI_SDLC_RUNTIME", "").strip()
+    if env:
+        return os.path.expanduser(env), "env:AI_SDLC_RUNTIME"
+    configured = _setup_value(data, "runtime_root")
+    if configured and os.path.isdir(configured):
+        return configured, "setup.json"
+    if sys.platform == "win32":
+        return _WIN_DEFAULT_RUNTIME_ROOT, "default"
+    cursor_home = os.environ.get("CURSOR_HOME") or os.path.join(os.path.expanduser("~"), ".cursor")
+    return os.path.join(cursor_home, "AI-SDLC", "runtime"), "default"
+
+
+def _scan_runtime_exe(root, prefix, names):
+    """Find <root>/<prefix>-*/{bin/}<name> (latest by name); return '' if none."""
+    if not root or not os.path.isdir(root):
+        return ""
+    for d in sorted(glob.glob(os.path.join(root, prefix + "-*")), reverse=True):
+        if not os.path.isdir(d):
+            continue
+        for n in names:
+            for c in (os.path.join(d, "bin", n), os.path.join(d, n)):
+                if os.path.isfile(c):
+                    return c
+    return ""
+
+
+def _resolve_exe(data, root, key):
+    win = sys.platform == "win32"
+    spec = {
+        "python": ("python", ["python.exe"] if win else ["python3", "python"], ["python3", "python"]),
+        "node": ("node", ["node.exe"] if win else ["node"], ["node"]),
+        "npm": ("node", ["npm.cmd"] if win else ["npm"], ["npm"]),
+        "npx": ("node", ["npx.cmd"] if win else ["npx"], ["npx"]),
+    }[key]
+    configured = _setup_value(data, key)
+    if configured and os.path.isfile(configured):
+        return configured, "setup.json"
+    scanned = _scan_runtime_exe(root, spec[0], spec[1])
+    if scanned:
+        return scanned, "runtime"
+    for n in spec[2]:
+        hit = shutil.which(n)
+        if hit:
+            return hit, "path"
+    return "", "missing"
+
+
+def _first(pattern):
+    hits = sorted(glob.glob(pattern))
+    return hits[-1] if hits else ""
+
+
+def runtime_report(profiles_dir):
+    setup_path, data = _load_setup(profiles_dir)
+    root, root_src = _resolve_runtime_root(data)
+    j = os.path.join
+    if sys.platform == "win32":
+        chrome_pat = j(root, "tools", "chromium", "chrome", "*", "chrome-*", "chrome.exe")
+    elif sys.platform == "darwin":
+        chrome_pat = j(root, "tools", "chromium", "chrome", "*", "chrome-*",
+                       "Google Chrome for Testing.app", "Contents", "MacOS", "Google Chrome for Testing")
+    else:
+        chrome_pat = j(root, "tools", "chromium", "chrome", "*", "chrome-*", "chrome")
+    tools = {
+        "mermaid_cli": j(root, "tools", "mermaid-cli", "node_modules", "@mermaid-js", "mermaid-cli", "src", "cli.js"),
+        "md_to_pdf": j(root, "tools", "md-to-pdf", "node_modules", "md-to-pdf", "dist", "cli.js"),
+    }
+    mcp = {
+        "figma": j(root, "mcp-offline", "figma", "node_modules", "figma-developer-mcp", "dist", "bin.js"),
+        "github": j(root, "mcp-offline", "github", "node_modules", "github-mcp-server-js", "dist", "cli.js"),
+        "harness": j(root, "mcp-offline", "harness", "node_modules", "harness-mcp-v2", "build", "index.js"),
+    }
+    out = {
+        "platform": _platform_key(),
+        "setup_json": _norm(setup_path) or None,
+        "runtime_root": {"path": _norm(root), "source": root_src, "exists": os.path.isdir(root)},
+        "executables": {},
+        "offline_tools": {k: (_norm(v) if os.path.isfile(v) else "") for k, v in tools.items()},
+        "offline_mcp": {k: (_norm(v) if os.path.isfile(v) else "") for k, v in mcp.items()},
+    }
+    out["offline_tools"]["chromium"] = _norm(_first(chrome_pat))
+    for key in ("python", "node", "npm", "npx"):
+        path, src = _resolve_exe(data, root, key)
+        out["executables"][key] = {"path": _norm(path), "source": src}
+    missing = [f"executables.{k}" for k, v in out["executables"].items() if not v["path"]]
+    missing += [f"offline_tools.{k}" for k, v in out["offline_tools"].items() if not v]
+    missing += [f"offline_mcp.{k}" for k, v in out["offline_mcp"].items() if not v]
+    out["missing"] = missing
+    return out
+
+
 def main():
     if len(sys.argv) < 2:
         print(__doc__)
@@ -175,6 +311,11 @@ def main():
     if cmd == "path":
         print(selection_path())
         sys.exit(0)
+
+    if cmd == "runtime":
+        report = runtime_report(profiles_dir)
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        sys.exit(0 if report["runtime_root"]["exists"] else 2)
 
     if cmd == "list":
         if not profiles_dir:

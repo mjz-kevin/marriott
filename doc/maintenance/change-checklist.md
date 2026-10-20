@@ -76,6 +76,7 @@
 | node / python 版本 | ① `init/res/AI-SDLC-*.zip` 三个平台载荷；② `.cursor/profiles/setup.json`；③ `.cursor/mcp.example.macos.json` / `.windows.json`；④ `init/README.md` 版本表（`check.py` 校验 ②③④ 版本号一致） |
 | 离线 MCP 包（`init/res/mcp-offline/*.zip`） | 入口路径若变化 → `init/templates/install.sh` / `install.ps1` 中的 `*_ENTRY`；`init/README.md` 入口说明 |
 | 离线工具包（`init/res/tools/*.zip`） | 同类多版本时 `build.py` 取文件名排序最大者，旧版本 zip 及时删除；Chromium 文件名固定（见 `build.py` 的 `CHROMIUM_ZIPS`） |
+| 运行时根目录位置 / 目录布局（`node-*` / `python-*` / `mcp-offline/` / `tools/` 下的入口路径） | 运行时根目录与离线工具的解析逻辑有**三份独立副本**，须逐个改：① `confluence-publish/scripts/upload_confluence_v2.py`、② `md-to-pdf/scripts/export_pdf.py`（`_runtime_root` / `_offline_*`）、③ `profile-select/scripts/profile.py`（`runtime_report`）；另需同步 `setup.json` 的 `runtime_root` / `_layout`、`install*.sh` / `install*.ps1`、`profile-select` SKILL「Offline runtime & tools」布局表。改完用 `profile.py runtime` 确认 `missing` 为空 |
 
 CHANGELOG 需写明用户侧操作（升级方式取自 [`init/README.md`「升级与重装 → 运行时包」](../../init/README.md#运行时包)）。
 

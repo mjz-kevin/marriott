@@ -102,14 +102,14 @@ done
 
 echo "--> 安装 profiles"
 # profile 的 *.yaml 无条件覆盖（团队统一配置，无用户修改场景）；
-# setup.json 是用户本地运行时路径配置，已存在则保留，不覆盖。
+# setup.json 是用户本地运行时路径配置，已存在则先保留，后面「修正 setup.json」一步再合并新字段、修正失效路径。
 if [ -d "$PKG_DIR/profiles" ]; then
   mkdir -p "$CURSOR_HOME/profiles"
   ( cd "$PKG_DIR/profiles" && find . -mindepth 1 -maxdepth 1 -print0 ) | \
   while IFS= read -r -d '' item; do
     name="$(basename "$item")"
     if [ "$name" = "setup.json" ] && [ -f "$CURSOR_HOME/profiles/setup.json" ]; then
-      echo "    保留已有 setup.json（用户本地运行时配置，未覆盖）"
+      echo "    已有 setup.json，先保留，稍后与新版合并（保留有效自定义路径、补新字段、改写失效路径）"
       continue
     fi
     cp -R "$PKG_DIR/profiles/$name" "$CURSOR_HOME/profiles/"
@@ -222,6 +222,62 @@ elif PY="$(command -v python 2>/dev/null)"; then
   PY_SOURCE="path"
 fi
 [ -n "$PY" ] && echo "--> 自检 python：$PY [$PY_SOURCE]"
+
+# ---- 修正 ~/.cursor/profiles/setup.json：让 AI 能找到离线运行时 ----
+# 以本包 setup.json 为骨架（带最新说明与 runtime_root 等新字段），合并用户已有文件里仍然有效的自定义值；
+# 再把当前平台（macos）段里为空或已失效的路径改写为本机实测的运行时路径（按 CPU 架构）。
+SETUP_TARGET="$CURSOR_HOME/profiles/setup.json"
+SETUP_TEMPLATE="$PKG_DIR/profiles/setup.json"
+if [ -n "$PY" ] && [ -f "$SETUP_TEMPLATE" ]; then
+  RT_PY=""; RT_NODE=""; RT_NPM=""; RT_NPX=""; RT_ROOT=""
+  [ -d "$RUNTIME_ROOT" ] && RT_ROOT="$RUNTIME_ROOT"
+  RT_PY="$(resolve_python_bin python3 2>/dev/null || true)"
+  RT_NODE="$(resolve_node_bin node 2>/dev/null || true)"
+  RT_NPM="$(resolve_node_bin npm 2>/dev/null || true)"
+  RT_NPX="$(resolve_node_bin npx 2>/dev/null || true)"
+  "$PY" - "$SETUP_TEMPLATE" "$SETUP_TARGET" "$RT_ROOT" "$RT_PY" "$RT_NODE" "$RT_NPM" "$RT_NPX" <<'PYEOF'
+import json, os, sys
+tpl_path, target, rt_root, rt_py, rt_node, rt_npm, rt_npx = sys.argv[1:8]
+with open(tpl_path, encoding="utf-8") as f:
+    tpl = json.load(f)
+old = {}
+if os.path.isfile(target):
+    try:
+        with open(target, encoding="utf-8") as f:
+            old = json.load(f)
+    except Exception:
+        old = {}
+
+def valid(key, val):
+    if not isinstance(val, str) or not val.strip():
+        return False
+    p = os.path.expanduser(val.strip())
+    return os.path.isdir(p) if key == "runtime_root" else os.path.isfile(p)
+
+# 1) 合并用户已有的有效自定义值（非 _ 开头字段，路径存在才保留）
+for sec, seg in tpl.items():
+    if sec.startswith("_") or not isinstance(seg, dict):
+        continue
+    oseg = old.get(sec) if isinstance(old.get(sec), dict) else {}
+    for k in list(seg.keys()):
+        if not k.startswith("_") and valid(k, oseg.get(k)):
+            seg[k] = oseg[k]
+
+# 2) 当前平台段：空或失效的路径改写为本机实测运行时路径
+seg = tpl.setdefault("macos", {})
+fixed = []
+for k, v in (("runtime_root", rt_root), ("python", rt_py), ("node", rt_node), ("npm", rt_npm), ("npx", rt_npx)):
+    if v and not valid(k, seg.get(k)):
+        seg[k] = v
+        fixed.append(k)
+
+os.makedirs(os.path.dirname(target), exist_ok=True)
+with open(target, "w", encoding="utf-8") as f:
+    json.dump(tpl, f, ensure_ascii=False, indent=4)
+    f.write("\n")
+print("    setup.json 已更新" + (f"（按本机运行时改写：{', '.join(fixed)}）" if fixed else "（路径均有效，无需改写）"))
+PYEOF
+fi
 
 # ---- 生成 ~/.cursor/mcp.json（macos 模板：删 _comment、填 node 绝对路径 + 离线 MCP 入口、幂等保留已填凭证）----
 MCP_TEMPLATE="$CURSOR_HOME/mcp.example.macos.json"

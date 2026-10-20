@@ -76,7 +76,7 @@ Skill 按分组文件夹存放，Cursor 会递归识别 `SKILL.md`；安装包�
 
 ## 4. Profiles（`.cursor/profiles/`）
 
-- `<team>-<env>.yaml`（`app-test` / `app-prod` / `cms-test` / `cms-prod`）承载两队全部差异；另有运行时路径 `setup.json`。测试记忆存在 Confluence 页（profile 的 `mcp.confluence.test.memory_pages`，仅经用户确认后写入）。
+- `<team>-<env>.yaml`（`app-test` / `app-prod` / `cms-test` / `cms-prod`）承载两队全部差异；另有 `setup.json`：离线运行时根目录（`runtime_root`）与 python / node 路径，是 AI 找离线 python / node / mmdc / md-to-pdf / Chromium 的唯一出处（说明见 `profile-select` 的「Offline runtime & tools」，`profile.py runtime` 打印本机解析结果）。测试记忆存在 Confluence 页（profile 的 `mcp.confluence.test.memory_pages`，仅经用户确认后写入）。
 - 字段含义以 yaml 行内注释为准；当前选中哪个 profile 由 `profile-select` 记在本地（按仓库），不入库。结构规则与改动流程见 [`doc/maintenance/profiles.md`](doc/maintenance/profiles.md)。
 
 ## 5. 编写约定
