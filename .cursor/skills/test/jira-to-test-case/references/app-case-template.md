@@ -47,7 +47,7 @@ The case list table **fixedly contains the following columns**; fill in every co
 | Test title | One sentence summarizing the point under test |
 | Test-point type | Values: Data / Function / UI |
 | Priority | P0 (core main flow / blocking) / P1 (important) / P2 (minor / boundary) |
-| Domain | **AI judges and fills by default**: the business domain this case belongs to — one of **Commerce / Loyalty / Trips / Platform** (same enum as the Jira bug `Domain` / `business_domain`). Pick the single closest to the case's core value from the feature nature (not the title's literal words); when genuinely cross-domain, take the one matching the core value and note the reason in Notes. See §5 for the judgement rule |
+| Domain | **AI judges and fills by default**: the fine-grained business module this case belongs to — one leaf value from the **detailed Domain enum in §5** (mirrors the CN Bonvoy App Test Case Repository folder tree: `Commerce / Shop / Book / iOS-Local Payment / Android-Local Payment / Payment Console / PMS-MARSHA / Content / LaunchAds / Homepage / Discover / NCP / Loyalty / Compliance / Trips / Platform / Umeng / MK / Android-Saflok`). This is a **test-case-only** column — NOT the same enum as the 4-value Jira bug `Domain` field or the `business_domain` label (see §5). Pick the single leaf closest to the case's core value from the feature nature (not the title's literal words); when it cannot be pinned to a specific leaf, take the nearest and note the reason + its owning top-level group in Notes. See §5 for the enum and the judgement rule |
 | User type | Reference only user types registered in pytest.ini (GuestUser / MemberUser / PlatinumUser…) |
 | Preconditions | State/data/page that must hold before execution |
 | Test steps | **Numbered one by one, precise to user page actions**: which button to tap, what to type in which input, what to select in a dropdown/suggestion. Where it can be aligned to page-fact elements, write the concrete control; a vague "operate the page" is forbidden |
@@ -63,12 +63,12 @@ Column-writing example (not a fixed case, illustrative only; on-screen control t
 
 | Case ID | Test title | Test-point type | Priority | Domain | User type | Preconditions | Test steps (precise to actions) | Expected result | Test result | Pages involved | Data/Source | Regression | Automation | Notes |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| TC-001 | Search a destination and enter the hotel list | Function | P0 | Commerce | Guest | Already on the home page | 1. Tap the home "目的地" input; 2. Type "上海"; 3. Tap "上海, 中国" in the suggestion list; 4. Tap the "查找酒店" button | Navigates to the hotel list page; the title shows "上海" and the list is non-empty |  | home_page → property_list_page | AC1 | true | true |  |
-| TC-002 | Guest Info first-name required validation | Data | P1 | Commerce | Guest | Already on the Guest Info page | 1. Clear the "名字" input; 2. Tap the "继续" button | A required-field error appears under "名字" and no navigation occurs |  | guest_info_page | AC2 | true | true | Required rule pending dev confirmation |
-| TC-003 | Empty-state copy and icon display | UI | P2 | Commerce | Guest | Search a destination with no results | 1. Type a no-result keyword; 2. Tap "查找酒店" | The list area shows the empty-state illustration and "未找到酒店" copy |  | property_list_page | Figma | false | false | One-off UI check of this change's empty state, not a long-lived regression case |
-| TC-004 | Booking main-flow happy path | Function | P0 | Commerce | Member | Already logged in | 1. Search a destination on home…; 2. Pick a hotel…; 3. Pick a room…; 4. Fill Guest Info…; 5. Submit booking | Each page navigates normally; a booking review page is finally produced |  | home → … → review_booking_page | AC3 | true | false | Core flow worth regressing, but submitting a booking depends on third-party payment + async confirmation, so not automated |
+| TC-001 | Search a destination and enter the hotel list | Function | P0 | Shop | Guest | Already on the home page | 1. Tap the home "目的地" input; 2. Type "上海"; 3. Tap "上海, 中国" in the suggestion list; 4. Tap the "查找酒店" button | Navigates to the hotel list page; the title shows "上海" and the list is non-empty |  | home_page → property_list_page | AC1 | true | true | Domain=Shop (search→list, under Commerce) |
+| TC-002 | Guest Info first-name required validation | Data | P1 | Book | Guest | Already on the Guest Info page | 1. Clear the "名字" input; 2. Tap the "继续" button | A required-field error appears under "名字" and no navigation occurs |  | guest_info_page | AC2 | true | true | Required rule pending dev confirmation; Domain=Book (booking flow, under Commerce) |
+| TC-003 | Empty-state copy and icon display | UI | P2 | Shop | Guest | Search a destination with no results | 1. Type a no-result keyword; 2. Tap "查找酒店" | The list area shows the empty-state illustration and "未找到酒店" copy |  | property_list_page | Figma | false | false | One-off UI check of this change's empty state, not a long-lived regression case; Domain=Shop |
+| TC-004 | Booking main-flow happy path | Function | P0 | Book | Member | Already logged in | 1. Search a destination on home…; 2. Pick a hotel…; 3. Pick a room…; 4. Fill Guest Info…; 5. Submit booking | Each page navigates normally; a booking review page is finally produced |  | home → … → review_booking_page | AC3 | true | false | Core flow worth regressing, but submitting a booking depends on third-party payment + async confirmation, so not automated; Domain=Book |
 
-(Test-point type values: Data / Function / UI. Priority: P0 / P1 / P2. Domain: Commerce / Loyalty / Trips / Platform. Test result left blank until execution.)
+(Test-point type values: Data / Function / UI. Priority: P0 / P1 / P2. Domain: one leaf from the §5 detailed enum, e.g. Shop / Book / iOS-Local Payment / LaunchAds / Umeng / Trips …. Test result left blank until execution.)
 
 ## 3. Step-writing requirements (important)
 
@@ -124,10 +124,39 @@ Two of the case columns are **AI-made boolean judgements** — the AI must set e
 
 ## 5. `Domain` judgement rule (AI fills by default)
 
-The `Domain` column is an **AI-made single-choice judgement** — set it for **every** case to exactly one of **`Commerce` / `Loyalty` / `Trips` / `Platform`** (the same enum as the Jira bug `Domain` field and the profile `mcp.jira.labels.business_domain`). This lets each case trace to a business domain and aligns with how bugs are later filed.
+The `Domain` column is an **AI-made single-choice judgement** — set it for **every** case to exactly one **leaf value** from the detailed enum below. The enum mirrors the **CN Bonvoy App Test Case Repository** folder tree (two-level in Confluence, flattened to a single-level leaf list here), so each case traces to the concrete business module it exercises.
 
-- **Values (fixed enum, do not invent others)**: `Commerce` / `Loyalty` / `Trips` / `Platform` (Content has been merged into Loyalty).
-- **Judge by the feature nature, not the title's literal words.** Pick the single domain closest to the case's **core value** / the page & flow it exercises — e.g. search → list → detail → booking / rate / payment entry ⇒ `Commerce`; membership tier, points, benefits, member-only content ⇒ `Loyalty`; trips / reservations management, upcoming & past stays ⇒ `Trips`; account, login, settings, cross-cutting infrastructure / app shell ⇒ `Platform`.
-- **Prefer the requirement's own domain signal when present**: if the source Jira Epic / Story already carries a `business_domain` label, default to it; deviate only when a single case's functional nature clearly belongs elsewhere, and state the reason in **Notes**.
-- **Cross-domain cases**: when a case spans more than one domain, choose the one matching its **core value** (not the incidental steps), and note the cross-domain nature in **Notes**.
-- When the domain genuinely cannot be decided from the requirement + page facts, pick the closest and mark the uncertainty in **Notes** (do not leave it blank, and do not use a value outside the enum).
+- **Values (fixed enum — do not invent others; this list is the full set, taken verbatim from the repository folder tree)**:
+
+  | Leaf value | Owning top-level group | Note |
+  | --- | --- | --- |
+  | `Commerce` | Commerce | the group itself, use when a Commerce case does not fit a specific sub-module below |
+  | `Shop` | Commerce | search / hotel list / room / rate browsing |
+  | `Book` | Commerce | booking flow (guest info / review / confirm) |
+  | `iOS-Local Payment` | Commerce | iOS local payment |
+  | `Android-Local Payment` | Commerce | Android local payment |
+  | `Payment Console` | Payment Console | the group itself |
+  | `PMS-MARSHA` | Payment Console | PMS / MARSHA |
+  | `Content` | Content | the group itself |
+  | `LaunchAds` | Content | launch / splash ads |
+  | `Homepage` | Content | home page content |
+  | `Discover` | Content | Discover tab content |
+  | `NCP` | Content | NCP |
+  | `Loyalty` | Loyalty | the group itself (membership tier / points / benefits) |
+  | `Compliance` | Loyalty | compliance |
+  | `Trips` | Trips | the group itself (trips / reservations management) |
+  | `Platform` | Platform | the group itself (account / login / settings / app shell / cross-cutting) |
+  | `Umeng` | Platform | Umeng SDK / tracking |
+  | `MK` | MK | the group itself |
+  | `Android-Saflok` | MK | Android Saflok |
+
+- **Judge by the feature nature, not the title's literal words.** Pick the single **leaf** closest to the case's **core value** / the page & flow it exercises — e.g. search → list → detail → rate browsing ⇒ `Shop`; guest info / review / confirm a booking ⇒ `Book`; iOS payment screen ⇒ `iOS-Local Payment`; launch/splash ad ⇒ `LaunchAds`; home content ⇒ `Homepage`; account / login / settings / app shell ⇒ `Platform`; tracking/analytics via Umeng ⇒ `Umeng`.
+- **Fall back to the top-level group value when the leaf is unclear.** If the case clearly belongs to a group (e.g. Commerce) but cannot be pinned to a specific sub-module (Shop vs Book), use the **group value itself** (`Commerce`) and state the reason in **Notes**. Never leave it blank and never use a value outside this enum.
+- **Prefer the requirement's own domain signal when present**: if the source Jira Epic / Story already carries a `business_domain` label (one of the 4 top-level groups `Commerce / Loyalty / Trips / Platform`), use it to pick the **owning group**, then refine to the specific leaf by the case's feature nature; deviate only when a single case clearly belongs elsewhere, and note the reason in **Notes**.
+- **Cross-module cases**: when a case spans more than one leaf, choose the one matching its **core value** (not the incidental steps), and note the cross-module nature in **Notes**.
+
+> **Relationship with the Jira `business_domain` label and the bug `Domain` field (do not conflate — this case-table `Domain` is independent)**: this case-table `Domain` column uses the **detailed leaf enum above** and is **this (test-case) line's own field** — it is just Confluence table text, not bound by, and not the same source as, either Jira enum below:
+> - The PO-side Jira **`business_domain` label** (profile `mcp.jira.labels.business_domain.values`) is a filter hard-gate on CNAPP that only accepts the **4 top-level groups** `Commerce / Loyalty / Trips / Platform`.
+> - The Jira **bug `Domain` custom field** (profile `mcp.jira.bug.domain_values`) also uses the **4 top-level groups** `Commerce / Loyalty / Trips / Platform`.
+>
+> So the detailed leaf enum here is **test-case-only**; it is deliberately **not** propagated into the Jira label gate or the bug `Domain` field (those stay at the 4 groups). When a reader needs to relate a case's leaf to a bug/label, use the **owning top-level group** shown in the enum table (e.g. a `Shop` / `Book` case rolls up to `Commerce`).
