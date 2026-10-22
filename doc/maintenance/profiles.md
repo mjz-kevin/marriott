@@ -32,7 +32,7 @@ python .cursor/skills/common/profile-select/scripts/profile.py resolve   # 当�
 | `mcp.jira` | 项目 key、Issue 类型、工作流、标签 / Component / 标题前缀规则、链接集、Figma 内嵌 | `rg -l 'mcp\.jira' .cursor` |
 | `mcp.confluence` | 空间、根目录 / 父页 ID、文件夹层级、标题命名 | `rg -l 'mcp\.confluence' .cursor` |
 | `mcp.github` | GHES host / org、各交付仓库及其**基线分支** | `rg -l 'mcp\.github' .cursor` |
-| `mcp.harness` | org / project、可触发的流水线清单（单条可选 `artifact_stage`：判定「这次 build 已发布 / 可安装」的 stage，查最新 build 用）、**低环境白名单 `allowed_envs`**、禁止触发清单 `deny_list`（CMS）、轮询口径 | `rg -l 'mcp\.harness' .cursor` |
+| `mcp.harness` | org / project、可触发的流水线清单（单条可选 `artifact_stage`：判定「这次 build 已发布 / 可安装」的 stage，查最新 build 用）、**低环境白名单 `allowed_envs`**、可选 **`build_backend_exceptions`**（纯 CI 构建包连高环境后端的精确例外，当前仅 APP `Android_Adhoc_Build` · `flavor=Stg`）、禁止触发清单 `deny_list`（CMS）、轮询口径 | `rg -l 'mcp\.harness' .cursor` |
 | `code` | 语言栈、分支命名、构建命令语义、git hooks、commit 约定、AI 溯源标识、PR labels / reviewers 映射（`code.pr`，目前仅 APP iOS）、契约比对口径 | `rg -l 'code\.' .cursor` |
 | `review` | 编码规范来源、免审文件、合并门禁策略 | `rg -l 'review\.' .cursor` |
 | `test` | 单测命令语义、覆盖率门槛、测试范围（含部分「预留，暂无消费方」字段） | `rg -l 'test\.' .cursor` |
@@ -50,6 +50,7 @@ python .cursor/skills/common/profile-select/scripts/profile.py resolve   # 当�
 4. **白名单制下，「不该触发」靠不登记，不靠再加一个禁用键**：`pipelines` 是正向白名单（未登记即不可触发），所以只有当「不写」与「写了但标记禁止」**行为不同**时才值得加键。`deny_list` 两者行为相同，已从 4 份 profile 移除；`utility`（可 K8sDelete）、`HARNESS_STO_REMEDIATION_PLACEHOLDER`（动态执行壳）这类「名字看不出危险」的知识改写在 `pipelines` 上方注释里——注释在编辑清单时就能看见，比运行时报错拦得更早。
    - skill 与 `stage_run.py` 仍**保留 `deny_list` 的解析**：将来若有人重新填这个键，必须真的生效，否则一个专门用来禁止的字段被静默忽略，比不支持更危险。
 5. **CI/CD 只发布低环境**：`mcp.harness.allowed_envs` 当前为 `[dev, test]`，是 `harness-invoke` 与 `stage_run.py` 的硬约束（不在白名单即停止，无人工确认放行通道）。**往里加高环境（staging / stg / uat / prod）等于取消这条安全边界**，必须先有明确的团队决策，并同步 `cicd-agent` / `harness-invoke` / `AGENTS.md` §7 / 设计文档 §6.1 的说法。
+   - 例外机制 `build_backend_exceptions`：只覆盖「纯 CI（只构建 + 分发，不部署任何 Harness 环境）的已登记流水线 + 指定入参 + 指定取值」，让该取值不再把运行判为超范围；流水线 env 标签仍须在 `allowed_envs` 内，本次其它入参仍不得点名高环境。当前仅 APP 两份 profile 登记 `Android_Adhoc_Build` · `flavor=Stg`（QA / Dev / TL 日常 STG 测试包，团队决策 2026-10）。增改条目同样属于安全边界变更，规则同上；部署类流水线不得登记。
 6. **不放凭证与账号标识**：token、API Key、Harness `account_id` 都从 `~/.cursor/mcp.json` 读取。
 7. **注释即文档**：新增字段必须带行内注释，说明含义、取值、消费方；「预留」字段明确标注。注释用中文。
 8. **Jira / Confluence 的显示名要逐字对齐**（如工作流状态里的本地化名称「正在进行」「已完成」、标签大小写）。

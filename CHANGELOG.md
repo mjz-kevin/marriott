@@ -13,6 +13,11 @@
 ## [Unreleased]
 
 ### 变更
+- **CI/CD 允许 QA 日常打 Android STG 测试包（窄口径例外）**：此前 `Android_Adhoc_Build` 传 `flavor=Stg` 会因「入参取值点名高环境」被判超范围，测试只能去 Harness UI 手动打。按团队决策，新增 profile 字段 `mcp.harness.build_backend_exceptions`（`app-test` / `app-prod` 登记 `{ pipeline: Android_Adhoc_Build, input: flavor, values: [Stg], backend: stg }`；CMS 未加，缺省 = 无例外）。
+  - `harness-invoke` S2 新增「Build-backend exception」：须同时满足——精确命中登记的流水线 + 入参 + 取值；流水线 env 标签在 `allowed_envs` 内且为纯 CI（无 environmentRef / CD stage / 晋级链）；取值在 Harness 当前取值域内；本次其它入参（含默认值）不再点名高环境。命中后运行仍判 `in_scope`，S3 参数表与报告须写明「包连 STG 后端」。`Prod` / `Uat2` / `Perf`、iOS STG、其它流水线、任何部署类流水线照旧超范围；人工确认不能替代登记，AI 不得自行增改条目。
+  - `cicd-agent`：HARD SCOPE 段、C2、`scope_check` / param log 增加 `backend_exception`，§7 禁止项补充不得改 `build_backend_exceptions`。
+  - 文档：`AGENTS.md` §2 / §7、设计文档 §1 示意与 §6.1 脚注、`doc/maintenance/profiles.md`。`stage_run.py`（仅 CMS 晋级链用、按 `--env` 校验）与 `latest_build.py`（只读）不涉及入参取值判定，未改；`check.py` 无相关校验，未改。
+  - 升级方式：直接覆盖（需重装 TL / Dev / QA 角色包以更新 profile 与 skill）。
 - **`create-pr` 建 PR 时按 profile 自动带 Labels / Reviewers（目前仅 APP iOS），且须先确认再调用工具**：
   - 映射：新增 profile 字段 `code.pr.<repo>`，只在 `app-test` / `app-prod` 登记 `ios`。APP `android` 和 CMS 没有这个键，不推断 label / reviewer。
   - Label：按 diff 路径命中文件数选主模块，打 1 个模块 label；同时改到 Search 和 Booking 时用 `Commerce`。类型 label 按 Jira issue type 映射（`feat-ai/` 分支名看不出类型）。AI 溯源标签 `AIGenerated` 规则不变。

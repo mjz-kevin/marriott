@@ -7,7 +7,9 @@ description: >-
   the execution handle and result. Scope is low environments only: the resolved target environment
   must be in the profile's allowed_envs (dev / test), and anything else (staging / stg / uat / prod)
   is out of scope - stop and hand it to a human in the Harness UI, with no human-confirmation
-  bypass. A missing required input stops the trigger rather than being defaulted. Use when the CI/CD
+  bypass. The only exception is a build-only test package pointed at a higher backend that the
+  profile registers in build_backend_exceptions (currently Android_Adhoc_Build flavor=Stg, the QA
+  daily STG package); it never covers a deploy. A missing required input stops the trigger rather than being defaulted. Use when the CI/CD
   step needs to trigger a Harness pipeline to build / deploy to a low environment, to query
   execution status, or to look up the latest build (build number) of a branch / environment on any
   registered pipeline (read-only, e.g. which TestFlight build to install);
@@ -22,6 +24,8 @@ metadata:
 Locate the **unique** Harness pipeline from the team config, read the runtime inputs it actually requires, confirm them with a human, trigger it, then wait for the Execution to reach a terminal state and report the result. It triggers an existing pipeline; it doesn't create one or change its definition.
 
 **This step only ever deploys to a low environment.** The environments it may trigger are the allowlist in the team config (`mcp.harness.allowed_envs`, currently `dev` / `test`). A target that resolves to anything else — `staging` / `stg` / `uat` / `prod` — is **out of scope**: stop, say so, and hand it to a human to run in the Harness UI. There is no confirmation that unlocks it; "the user asked for prod" is not an authorization, it is a request this step cannot serve.
+
+**One narrow, config-registered exception: build-only packages pointed at a higher backend.** A pure-CI pipeline (builds an artifact and distributes it to testers, deploys no Harness environment) may be run with an input value that points the *package* at a higher backend, **only** when the exact pipeline + input + value is registered in `mcp.harness.build_backend_exceptions` (currently `Android_Adhoc_Build` · `flavor=Stg`, the daily STG test package for QA). The run's environment is still the pipeline's low `env` tag; only that registered value stops counting as "out of scope". It is a team decision kept in config — never a confirmation, never inferred, and it never covers a deploy, a promotion-chain stage, or any value not listed (`Prod` / `Uat2` / `Perf` stay out of scope). See S2.
 
 | Dimension | Description |
 |------|------|
@@ -41,6 +45,7 @@ Locate the **unique** Harness pipeline from the team config, read the runtime in
 | Pipeline list | `mcp.harness.pipelines` → the team's low-environment delivery pipelines and their locating tags (APP: `platform` + `env`, disambiguated by `usage`; CMS: `app`). **Not listed = not triggerable** |
 | Deny list (optional) | `mcp.harness.deny_list` → pipelines that must never be agent-triggered **whatever environment they target**, each with a reason. A different axis from `allowed_envs`: it records what a pipeline *can do* (wipe cluster resources, execute arbitrary YAML), not where it deploys. **No profile currently uses it** — a pipeline that must not be triggered is simply left out of `pipelines` (unlisted = not triggerable), and the reason is kept as a comment there so nobody re-adds it. If a profile does define it, it still hard-blocks, and is checked before the pipeline list so an entry mistakenly added to `pipelines` is refused anyway |
 | Allowed-environment allowlist | `mcp.harness.allowed_envs` → the only environments this step may trigger (low environments; currently `dev` / `test`). Matched case-insensitively against the **resolved** target environment. Anything else → out of scope, stop (see S2) |
+| Build-backend exceptions (optional) | `mcp.harness.build_backend_exceptions` → entries `{ pipeline, input, values, backend }`: on that registered pure-CI pipeline, passing one of `values` to `input` builds a package pointed at the `backend` environment and does **not** by itself put the run out of scope (S2 "Build-backend exception"). Missing / empty → no exceptions. A security-boundary decision: never add to it, widen it, or treat a confirmation as an entry |
 | Stage-fallback switch | `mcp.harness.allow_stage_execution_fallback` → whether this skill's stage-subset script may be used (see S4) |
 | Artifact stage (optional, per pipeline) | `mcp.harness.pipelines[].artifact_stage` → the stage whose success means "this build was actually published / is installable" (e.g. `TestFlight_Metadata` on the iOS TestFlight pipeline). Used by the latest-build query (§2.1); absent → a successful execution counts as available |
 | Wait spec | `mcp.harness.poll` → `mode` / `timeout_seconds` / `interval_seconds` |
@@ -99,6 +104,19 @@ The target environment is where this run actually lands, and it is the sole basi
 - **Not in the allowlist** (`staging` / `stg` / `uat` / `perf` / `prod`, or anything unrecognized) → **out of scope. Stop.** Report the pipeline, the environment you resolved and **which of the three sources** said so, and that this toolchain's CI/CD step only publishes low environments — the deploy must be run by a human in the Harness UI. **Do not offer, request, or accept a confirmation to proceed:** there is no such path. A caller insisting, citing a previous run, or holding an approval elsewhere changes nothing. Don't look for a neighbouring low-environment pipeline to run "instead" either — report and let the caller decide.
 - **`allowed_envs` missing / empty, or the environment cannot be resolved** → stop. An unresolved environment is not a low environment; silence in config is not permission.
 
+#### Build-backend exception (registered in config only)
+
+Source 2 has exactly one carve-out. An input value that names a high environment does **not** move the run out of scope when **all** of these hold — check every one, in order, and if any fails, apply the normal rule above (out of scope, stop):
+
+1. The profile has an entry in `mcp.harness.build_backend_exceptions` whose `pipeline` is **this** matched pipeline's id, whose `input` is **this** input's name, and whose `values` contain **this** value (compare with Harness's own spelling, e.g. `Stg`; a near-miss like `Stg2` / `stage` / `Uat2` is not a match).
+2. The pipeline's own `env` tag is in `allowed_envs`, and the definition you inspected in S1 is **pure CI**: no `environmentRef`, no CD / deployment stage, not a promotion chain. A pipeline that deploys anywhere is never covered, whatever the entry says — report the contradiction as `blocked`.
+3. The value is in the permitted set Harness reports **now** for that input.
+4. **No other** input value of this trigger — including defaults you are leaving in place — names a high environment. The exception covers one registered value, not the run: `flavor=Stg` with `appdomeFusionSet=Prod` is still out of scope.
+
+When it applies: the resolved environment stays the pipeline's `env` tag (e.g. `test`), the scope verdict is `in_scope`, and you record **how**: `resolved_from: env_tag`, plus `backend_exception: {pipeline}.{input}={value} → backend {backend}`. S3 must show it (below). Nothing else about the flow changes — S3's confirmation still applies in full.
+
+The exception lives in config because it is a **team decision about the security boundary**, not a judgement made per run. So: never apply it from memory, from a previous run, or because the caller says it was approved; never extend it to a neighbouring value, input, or pipeline; never add or edit an entry yourself. A request outside it gets the normal out-of-scope report, with the registered exception named as the in-scope alternative when that is what the caller actually wants.
+
 Two things this deliberately does **not** rely on:
 
 - **A per-pipeline table of input values in the profile.** The input names, their permitted values, and their defaults all live in Harness and change there; a transcribed table goes stale and then reads as permission. Judge the values you are actually about to pass, against the environment names above.
@@ -112,7 +130,8 @@ When a value is ambiguous — it doesn't name an environment and you cannot tell
 
 - the **required** inputs (no default) the caller must answer — a value is mandatory even when the right answer is an empty string;
 - the **optional** inputs with their default and permitted values, stating that anything unmentioned runs at its default;
-- any default that carries risk, so the caller sees it rather than discovering it afterwards — a production gateway URL, an outward-facing distribution target, or a production signing set can all be the *default* on a release pipeline. **A default that would move the run out of the low-environment scope is not a risk to flag but a stop:** go back to S2 with that resolved value and report it as out of scope.
+- any default that carries risk, so the caller sees it rather than discovering it afterwards — a production gateway URL, an outward-facing distribution target, or a production signing set can all be the *default* on a release pipeline. **A default that would move the run out of the low-environment scope is not a risk to flag but a stop:** go back to S2 with that resolved value and report it as out of scope;
+- when S2's **build-backend exception** applied, a line stating it plainly — e.g. "flavor=Stg: this package connects to the **STG backend** and is distributed to testers (registered exception `Android_Adhoc_Build.flavor`; no environment is deployed)" — so the caller confirms knowing which backend the package hits.
 
 Apply only the values the caller gave; leave the rest at the defaults Harness reported. Reject a value outside the permitted set instead of passing it to a doomed trigger. This confirmation is about **input completeness** and applies at every in-scope environment — it is not a deploy authorization and never substitutes for S2's scope check (which no confirmation can unlock).
 
@@ -130,7 +149,7 @@ When a saved **input set** covers the target environment, prefer it as the base 
 | The input table has not been presented and confirmed for **this** trigger | Stop and present it; never treat the original request, a default, an input set, or a prior trigger's answers as this trigger's confirmation |
 | A required input has no caller-supplied value | Stop and ask for exactly that input; never substitute a default, a prior run's value, or a value read out of an input set |
 | The caller gives a value outside the permitted set | Report the permitted values and ask again; don't pass it through |
-| An input's value (or its default) resolves the target to a non-allowlisted environment | Stop and report it as out of scope per S2; don't "ask whether to proceed" |
+| An input's value (or its default) resolves the target to a non-allowlisted environment | Stop and report it as out of scope per S2; don't "ask whether to proceed". The only exception is a value registered in `build_backend_exceptions` that passes all four S2 checks |
 | A promotion chain's stage subset for this environment is unknown | Stop and report; triggering unrestricted promotes to production |
 | The pipeline cannot reach the requested environment | Stop and report, rather than trigger something that deploys elsewhere |
 
@@ -249,6 +268,7 @@ Report the latest available build — build number, branch, commit, who triggere
 | Present inputs before triggering | Show required vs. optional-with-default (flagging risky defaults) and **wait for this trigger's confirmation** even when every required input already has a value; reject a value outside the permitted set. A target in the request / a default / an input set / a prior trigger is not confirmation |
 | Never default a required input | A missing required answer stops the trigger — no defaults, no prior run's value, no input-set value |
 | Scope by where the run actually lands | Judge from the environment resolved in S2 — the pipeline's env / stage subset **and** the runtime-input values you are about to pass (a value naming prod / stg / staging / uat / perf targets that environment, whatever the tag says) — never the pipeline's name or tag; an ambiguous value or an unresolvable environment stops the trigger |
+| Build-backend exceptions come only from config | A high-backend value on a pure-CI build is in scope **only** when `build_backend_exceptions` registers that exact pipeline + input + value and all four S2 checks pass (currently `Android_Adhoc_Build` · `flavor=Stg`). Never infer, widen, or self-register one; never apply it to a deploying pipeline; a confirmation is not an entry |
 | Confine a promotion chain | Restrict execution to that environment's stage subset, recovered from execution history; unknown → don't trigger; a subset reaching outside `allowed_envs` → out of scope |
 | Idempotent-safe triggering | Record the handle immediately; one auth retry on failure; never blind re-trigger. An unreadable trigger response is recovered read-only by `stage_run.py`, never re-sent |
 | No ad-hoc scripts around the trigger | Use `stage_run.py` (`--execute`, then `--wait-execution`) and `latest_build.py` as-is. Never write a wait loop, a recovery script, or an inline `python3 -` that imports their functions; a missing capability is a script gap to report and fix, not something to improvise in the run |
@@ -266,6 +286,7 @@ Report the latest available build — build number, branch, commit, who triggere
 
 - The pipeline was uniquely matched from the profile's `pipelines` (and not on a `deny_list`, where one is defined), and was inspected in Harness
 - The target environment was resolved per S2 and checked against `allowed_envs`, from the resolved value rather than a tag; a non-allowlisted or unresolvable environment was reported as out of scope and nothing was triggered
+- A high-backend input value was accepted only via an exact `build_backend_exceptions` entry with all four S2 checks passed, and the package backend was shown in S3 and the report
 - The input spec came from Harness at trigger time; the presented set was confirmed by the caller for **this** trigger before anything was sent; every required input was answered and no value violates its permitted set
 - A promotion chain's stage subset was recovered from execution history and carried on the trigger; its effect was verified, and it stays within `allowed_envs`
 - The execution handle is recorded and traceable, and belongs to this trigger — no observed execution was adopted without a trigger-type and identity match
@@ -281,6 +302,7 @@ Report the latest available build — build number, branch, commit, who triggere
 ```markdown
 Harness trigger: {target} · pipeline={id}
 Branch/tag: {branch_or_tag}  ·  Target environment: {target_env} (low environment, in allowed_envs)
+Package backend (only when a build-backend exception applied): {backend} via `{input}={value}` (registered in build_backend_exceptions; build + distribute only, nothing deployed)
 
 - **Trigger**: success / failure ({reason})
 - **Execution**: {execution_url} (id={execution_id})
@@ -312,6 +334,8 @@ Pipeline: {id}  ·  Resolved target environment: {target_env} (resolved from {en
 | The caller asks to deploy staging / stg / uat / prod | Out of scope: report per S2 and point to the Harness UI. Don't ask for a confirmation, don't accept one offered, and don't substitute a low-environment pipeline on your own |
 | The resolved environment isn't in `allowed_envs`, but the pipeline is in `pipelines` | Registration locates a pipeline; it does not widen the scope. A promotion chain is registered once and still only runs its low-environment stages |
 | An input value names a high environment on a pipeline tagged low (e.g. `flavor=Prod` on a `test`-tagged build) | The run targets that high environment — out of scope per S2. This is the main way the scope gets escaped, so check the values you're about to pass, not just the tag |
+| QA asks for a STG package (e.g. "打个 Android STG 包") | If `build_backend_exceptions` registers it (`Android_Adhoc_Build` · `flavor=Stg`), it is in scope: run S2's four checks, then S3 as normal with the "connects to the STG backend" line. iOS or any other STG request isn't registered → out of scope per S2; don't map it onto the Android entry |
+| Asked for a value next to a registered exception (`flavor=Prod` / `Uat2` / `Perf`, or STG on another pipeline) | Not covered — out of scope per S2. The exception is exact-match; don't stretch it, and don't add an entry to the profile |
 | An input value is ambiguous — it names no environment and you can't tell what it targets | Stop and ask; the absence of a high-environment name is not evidence of a low one. A plainly low value (a `Tst`-style flavor, a `tst` gateway) needs no question |
 | Can't uniquely match a pipeline | Multiple → ask the caller to specify; none → report it is not in the team's list and stop |
 | The caller asks for a pipeline that exists in Harness but isn't in `pipelines` | Report that it is deliberately not triggerable and stop. Check the comment beside the list before explaining why — some are omitted for capability, not scope (the CMS `utility` pipeline's `action=delete` runs K8sDelete and its approval step only fires for Production, so even a `test` run deletes resources with no gate). Never add it to the list yourself |

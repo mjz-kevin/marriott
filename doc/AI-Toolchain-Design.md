@@ -48,7 +48,7 @@ confluence:
   refs: { branching: "/pages/2038071297", e2e: "/pages/3799613820", regression: "/pages/4015751295" }
 code:   { languages: [swift, kotlin], build: [xcodebuild, gradlew], repos: [ios, android] }
 test:   { stack: [appium, pytest], regression_cases: 600 }
-cicd:   { pipelines: 4, selector: "platform x environment", allowed_envs: [dev, test] }
+cicd:   { pipelines: 4, selector: "platform x environment", allowed_envs: [dev, test], build_backend_exceptions: ["Android_Adhoc_Build flavor=Stg"] }
 
 # cms (excerpt)
 jira:
@@ -209,7 +209,7 @@ The following Skills are shipped to every role and do not change as Agents are a
 | Test Agent          | R+W  | R+W        | R      | —       | R     |
 
 > ¹ Writes are limited to status transitions and comments; no field restructuring or deletion.
-> ² Writes are limited to triggering pipeline execution **into a low environment listed in the profile's `mcp.harness.allowed_envs` (dev / test)**; a Staging / Prod deploy is out of the toolchain's scope and cannot be unlocked by human confirmation. No pipeline-definition changes or secret reads.
+> ² Writes are limited to triggering pipeline execution **into a low environment listed in the profile's `mcp.harness.allowed_envs` (dev / test)**; a Staging / Prod deploy is out of the toolchain's scope and cannot be unlocked by human confirmation. The only exception is a build-only test package pointed at a higher backend that the profile registers exactly in `mcp.harness.build_backend_exceptions` (currently APP `Android_Adhoc_Build` with `flavor=Stg`, the QA daily STG package); it deploys no environment, and a confirmation can never stand in for an entry. No pipeline-definition changes or secret reads.
 > ³ Writes are limited to submitting one PR review per head SHA (event `REQUEST_CHANGES` / `COMMENT`); no auto-approve, no merge unless the profile explicitly enables auto-merge and the user confirms; no direct push or branch-protection-rule changes.
 > ⁴ Writes are limited to the tech-solution **Web remote link** on the Spike ticket / Story (written by `tech-solution-publish` via the shared publish script); no ticket create / edit / transition / comment.
 >
