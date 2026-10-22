@@ -1,57 +1,86 @@
 # create-pr — reference
 
-Detailed template-selection rules and full template notes. The SKILL loads this file only when needed. The files under `template/PR/` are always the sole authoritative source — if this reference and the template files disagree, the files win.
+Loaded only when needed. The files under `template/<kit>/` are authoritative: `Mobile/` for team `app`, `CMS/` for team `cms`. If this reference disagrees with them, the files win.
 
 ## Template selection
 
-**Rule: select exactly one template; never merge templates.** Decide in this order:
+Apply the three rules in SKILL Step 2 against this table. Check the "In `Mobile/`" / "In `CMS/`" columns against the kit directory at runtime.
 
-1. The change characteristics clearly match one row in the table below -> use that scenario template.
-2. Mixed type / conflicting signals / no clear evidence -> let the user choose (`AskQuestion`: candidate scenario templates, most likely first, plus the general template as an option).
-3. Only when the user explicitly asked for silent / non-interactive execution **and** the scenario is undeterminable -> use the general template `pull_request_template.md` without asking.
+| Change characteristics | Template | In `Mobile/` | In `CMS/` |
+|------------------------|----------|:---:|:---:|
+| A new user-facing feature | `feature.md` | ✓ | ✓ |
+| Fixing a defect / handling a bug ticket | `bugfix.md` | ✓ | ✓ |
+| An urgent production fix (P0/P1), minimal scope | `hotfix.md` | — | ✓ |
+| A structural change that doesn't change behavior | `refactor.md` | ✓ | ✓ |
+| Docs / comments / README only | `docs.md` | — | ✓ |
+| A version release / merge into a release branch | `release.md` | ✓ | ✓ |
+| Mixed / undeterminable | Ask the user; in silent mode only, `pull_request_template.md` | ✓ | ✓ |
 
-| Change characteristics | Template |
-|----------|------|
-| A new user-facing feature | `PULL_REQUEST_TEMPLATE/feature.md` |
-| Fixing a defect / handling a bug ticket | `PULL_REQUEST_TEMPLATE/bugfix.md` |
-| An urgent production fix (P0/P1), minimal scope | `PULL_REQUEST_TEMPLATE/hotfix.md` |
-| A structural change that doesn't change behavior | `PULL_REQUEST_TEMPLATE/refactor.md` |
-| Docs / comments / README only | `PULL_REQUEST_TEMPLATE/docs.md` |
-| A version release / merge into a release branch | `PULL_REQUEST_TEMPLATE/release.md` |
-| Mixed / undeterminable | Let the user choose; in silent mode only, the general template `pull_request_template.md` |
+Signals:
 
-Hints for judging from the diff:
-- Only `*.md` / doc-path changes → `docs`.
-- The branch starts with `hotfix/` or the ticket is marked P0/P1 → `hotfix`.
-- A brand-new module/interface/page → `feature`.
-- Tests + a small-scope change for a specific bug ticket → `bugfix`.
-- Renames/moves with no test-assertion changes → `refactor`.
-- Version bump, CHANGELOG, tag → `release`.
+| Signal | Scenario |
+|--------|----------|
+| Only `*.md` / doc paths changed | `docs` |
+| Branch starts with `hotfix/`, or the ticket is P0/P1 | `hotfix` |
+| A new module / interface / page | `feature` |
+| Tests + a small change for a bug ticket | `bugfix` |
+| Renames / moves without test-assertion changes | `refactor` |
+| Version bump, CHANGELOG, tag | `release` |
 
-## Per-section fill-in guidance
+## Per-section fill guidance
 
-Apply only to the sections present in the selected template; don't add sections from other templates.
+Fill only the sections the selected template has.
 
-- **What & Why** — 2–4 sentences. State what changed and why. Cite the specific modules in the diff.
-- **Related** — fill the branch's Jira ticket into the Jira field; use `Closes #<n>` only when the issue number is known. Never fabricate.
-- **Type of change** — tick exactly the options the diff can substantiate.
-- **How / Implementation** — summarize the implementation approach and key trade-offs.
-- **How to Test** — specific, reproducible steps or commands. Prefer the build/test scripts already in the repo.
-- **Checklist** — tick only verifiable items. Leave the rest unticked, and list what still needs human verification in the summary to the user.
-- **Impact** — check the diff: migrations (schema/SQL files), config/env vars (`*.env`, config files, `libs.versions.toml`, `*.gradle`, `Info.plist`, etc.), and backward compatibility, and fill accordingly.
-- **Breaking Change & Rollback** — unless a public API/contract changes, fill `N/A`.
-- **Screenshots** — if there are no UI/asset-file changes, tick "no visual changes"; otherwise ask the author to attach before/after screenshots/recordings.
-- **AI Assistance** — tick "AI-assisted" when opened by `dev-agent`, the branch has the `code.branch.prefix` (e.g. `feat-ai/`), or the commits carry the `code.ai_provenance.commit_trailer`; then also apply `code.ai_provenance.pr_label` (only if the label exists in the repo). Otherwise leave both items for the author.
+- **What & Why** — 2–4 sentences on what changed and why, citing the changed modules.
+- **Related** — the Jira ticket from the branch / caller. Use `Closes #<n>` only when the issue number is known.
+- **Type of change** — tick exactly what the diff substantiates.
+- **How / Implementation** — the approach and key trade-offs.
+- **How to Test** — reproducible steps or commands. Prefer the repo's own build / test scripts.
+- **Checklist** — tick only verifiable items. Never auto-tick safety items ("tests passed", "no sensitive info") without evidence. Unticked items are deliberate; list them in the draft for the author.
+- **Impact** — base it on the diff:
+  - migrations: schema / SQL files;
+  - config / env: `*.env`, config files, `libs.versions.toml`, `*.gradle`, `Info.plist`;
+  - backward compatibility.
+- **Breaking Change & Rollback** — `N/A` unless a public API / contract changes.
+- **Screenshots** — tick "no visual changes" only when no UI / asset file changed; otherwise ask for before / after screenshots or a recording.
+- **AI Assistance** — per the "AI-assisted" input in SKILL.md. Otherwise leave both options for the author.
 
-## Draft display format
+## Labels & reviewers (`code.pr`)
 
-Put the filled-in body in a code block, followed by a short note listing:
-- Which single template was used and how it was chosen (determined from the diff + evidence / picked by the user / general template because silent mode and undeterminable);
-- Which checklist items are left unticked and need the author to handle.
+Field meanings are in the profile's yaml comments. Worked example:
 
-## gh CLI notes
+- The diff touches 7 files under `Module/ios-dragon-module-loyalty/` and 1 under `DragonApp/`.
+- The issue type is `Bug`.
+- The PR is opened by `dev-agent`.
 
-The `gh` CLI itself is cross-platform; the only difference is the shell syntax for "writing the body into a temp file." Pick one of the two:
+| Item | Result | Why |
+|------|--------|-----|
+| Module label | `Loyalty` | Loyalty 7 files > Platform 1 |
+| Type label | `bug` | `type_labels.Bug` |
+| Provenance label | `AIGenerated` | AI-assisted -> `code.ai_provenance.pr_label` |
+| Reviewers | `czhan767` | Loyalty `reviewers`, author removed, ≤ `max_reviewers` |
+
+Edge cases:
+
+| Case | Behavior |
+|------|----------|
+| No `code.pr.<repo key>` | No module / type label, no reviewers. Only the provenance label (if AI-assisted). Lines still shown; confirmation still required. |
+| No changed path matches a module | No module label, no reviewers. Say so in the draft. |
+| Tie on the primary module | List the tied modules and ask. |
+| Issue type not in `type_labels` | No type label. |
+| Label missing in the repo | Dropped before `gh pr create`, reported; never `gh label create` unasked. |
+| Reviewer can't be requested (no access / unknown / is the author) | PR is kept; failure reported. |
+
+Changing labels / reviewers on an existing PR follows the same gate: show the target lists, get confirmation, then run:
+
+```bash
+gh pr edit <n> --add-label <label> --add-reviewer <login>
+gh pr edit <n> --remove-label <label> --remove-reviewer <login>
+```
+
+## Writing the body file
+
+`gh` is cross-platform; only the temp-file syntax differs. Alternatively, write the body to a file inside the repo and pass it to `--body-file`; this is the simplest option.
 
 **POSIX (macOS / Linux / Git Bash / WSL):**
 
@@ -60,7 +89,7 @@ TMP=$(mktemp)
 cat > "$TMP" <<'EOF'
 <filled-in body>
 EOF
-gh pr create --base <base-branch> --title "<title>" --body-file "$TMP"
+gh pr create --base <base> --title "<title>" --body-file "$TMP" --label <l1>
 rm -f "$TMP"
 ```
 
@@ -71,10 +100,8 @@ $TMP = New-TemporaryFile
 @'
 <filled-in body>
 '@ | Set-Content -Path $TMP -Encoding utf8
-gh pr create --base <base-branch> --title "<title>" --body-file $TMP
+gh pr create --base <base> --title "<title>" --body-file $TMP --label <l1>
 Remove-Item $TMP
 ```
 
-- You can also skip the temp file and write the body to a file inside the repo, then point `--body-file` at it (the simplest, fully cross-platform).
-- `?template=<name>.md` is a GitHub **web** feature only and has no effect on `gh pr create`. This skill selects the template by reading the file directly.
-- Draft PR: add `--draft`. Specify reviewers with `--reviewer <user>` (CODEOWNERS auto-requests still layer on).
+Draft PR: add `--draft`.

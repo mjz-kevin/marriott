@@ -12,6 +12,20 @@
 
 ## [Unreleased]
 
+### 变更
+- **`create-pr` 建 PR 时按 profile 自动带 Labels / Reviewers（目前仅 APP iOS），且须先确认再调用工具**：
+  - 映射：新增 profile 字段 `code.pr.<repo>`，只在 `app-test` / `app-prod` 登记 `ios`。APP `android` 和 CMS 没有这个键，不推断 label / reviewer。
+  - Label：按 diff 路径命中文件数选主模块，打 1 个模块 label；同时改到 Search 和 Booking 时用 `Commerce`。类型 label 按 Jira issue type 映射（`feat-ai/` 分支名看不出类型）。AI 溯源标签 `AIGenerated` 规则不变。
+  - Reviewer：取主模块配置的同事，去掉作者本人，最多 3 个。CODEOWNERS 由 GitHub 自动请求，不重复配置。
+  - 确认门禁：草稿必须列出 Title / Body / Labels / Reviewers，为空也要写 `none`。用户明确确认后，才允许调用 `gh pr create`、`gh pr edit` 或 GitHub MCP 的 PR 写操作。未配置 `code.pr` 和静默模式都不能跳过确认。
+  - 执行：先校验 label 是否存在，不存在的不传、也不自建；PR 建好后再追加 reviewer，失败只提示、不回滚。
+  - `dev-agent`：D1 记录 `sources.story.type`；D7 拆成「出草稿 → `D7_pr_confirm` 等待确认 → 创建」两轮；恢复时针对当前 head 重新出草稿，不沿用旧草稿的确认；§7 增加对应禁止项。
+  - 文档：同步设计文档 §4.3、`doc/maintenance/profiles.md` §2。
+  - 升级方式：直接覆盖。
+
+### 修复
+- **`create-pr` 的模板路径与实际目录不一致**：文档写的是 `template/PR/...`，实际目录是 `template/Mobile/`（APP）和 `template/CMS/`（CMS），skill 也没说明该选哪个目录。现改为按 profile 的 `team` 选择目录。`Mobile/` 下没有 `hotfix` / `docs` 场景模板，命中这两类时改为让用户选择（静默模式下退回通用模板），不再选到不存在的文件。同步更新 `SKILL.md`、`reference.md`、`template/README.md`，以及两份通用模板里的注释。升级方式：直接覆盖。
+
 ---
 
 ## [0.4.0] - 2026-10-20

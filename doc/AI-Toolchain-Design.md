@@ -152,7 +152,7 @@ The following Skills are shipped to every role and do not change as Agents are a
 | `contract-diff`       | (2) Interface technical-solution check: field-by-field comparison of the implementation vs. the solution's interface definitions, flagging deviations | Dev          | APP — compares per the APP team's interface-contract criteria. CMS — per the CMS team.           |
 | `unit-test-runner`    | (3) Runs unit tests and aggregates pass rate and coverage                      | Dev          | APP — executes per the APP team's coding standards. CMS — per the CMS team's coding standards.   |
 | `acceptance-check`    | (4) Item-by-item acceptance against the acceptance criteria of each task in the technical solution, including the "contains no sensitive data" acceptance item | Dev          | None                                                                                             |
-| `create-pr`           | Generates the Pull Request description from the team's PR template, auto-filled from the real git diff (TL / Dev only, not a common Skill) | Dev          | PR template and AI-provenance label follow the profile (`code.ai_provenance`).                   |
+| `create-pr`           | Generates the Pull Request description from the team's PR template kit (`Mobile/` for APP, `CMS/` for CMS), auto-filled from the real git diff, and attaches module / type labels and reviewers mapped in the profile (confirmed by the DEV in the draft before creation) (TL / Dev only, not a common Skill) | Dev          | PR template kit follows the profile's `team`; AI-provenance label follows `code.ai_provenance`; label / reviewer mapping follows `code.pr.<repo>` (currently APP iOS only; absent = not applied). |
 
 ### 4.4 Code Review Skills
 

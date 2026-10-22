@@ -33,7 +33,7 @@ python .cursor/skills/common/profile-select/scripts/profile.py resolve   # 当�
 | `mcp.confluence` | 空间、根目录 / 父页 ID、文件夹层级、标题命名 | `rg -l 'mcp\.confluence' .cursor` |
 | `mcp.github` | GHES host / org、各交付仓库及其**基线分支** | `rg -l 'mcp\.github' .cursor` |
 | `mcp.harness` | org / project、可触发的流水线清单（单条可选 `artifact_stage`：判定「这次 build 已发布 / 可安装」的 stage，查最新 build 用）、**低环境白名单 `allowed_envs`**、禁止触发清单 `deny_list`（CMS）、轮询口径 | `rg -l 'mcp\.harness' .cursor` |
-| `code` | 语言栈、分支命名、构建命令语义、git hooks、commit 约定、AI 溯源标识、契约比对口径 | `rg -l 'code\.' .cursor` |
+| `code` | 语言栈、分支命名、构建命令语义、git hooks、commit 约定、AI 溯源标识、PR labels / reviewers 映射（`code.pr`，目前仅 APP iOS）、契约比对口径 | `rg -l 'code\.' .cursor` |
 | `review` | 编码规范来源、免审文件、合并门禁策略 | `rg -l 'review\.' .cursor` |
 | `test` | 单测命令语义、覆盖率门槛、测试范围（含部分「预留，暂无消费方」字段） | `rg -l 'test\.' .cursor` |
 | `doc` | 产物语言、PRD Scope 分块维度 | `rg -l 'doc\.' .cursor` |
