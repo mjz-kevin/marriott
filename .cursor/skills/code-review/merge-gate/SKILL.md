@@ -1,26 +1,39 @@
 ---
 name: merge-gate
 description: >-
-  Rule the PR merge gate from the code-review conclusion (a blocking-level issue means "merge not
-  recommended," otherwise "merge recommended"), and serve as the code-review chain's sole write point:
-  with the body produced by review-comment and the event matching the gate, submit a single unique PR
-  review in one shot via GitHub MCP; by default it doesn't auto-merge or auto-reject, leaving the call
-  to a human. Use when the review feedback is organized and a gate must be given and landed on the PR;
-  triggers: merge gate / merge decision / 合并门禁 / merge 门禁 / 合并判定 / 提交审核 review.
+  Rule the PR merge gate on the findings the reviewer confirmed (a confirmed 🔴 blocking finding means
+  "merge not recommended", otherwise "merge recommended"), shown as a traffic light, and serve as the
+  code-review chain's sole write point: only after the reviewer explicitly confirms which findings to
+  publish, submit one PR review in one shot — summary body + inline comments on the diff lines + the
+  event matching the gate — via the shared pr_review.py script (validate anchors, idempotent per head
+  SHA). Never approves, never merges; the merge is a human call. Use when the review draft is ready and
+  a gate must be given and landed on the PR;
+  triggers: merge gate / merge decision / publish review / 发布 review / 发到 PR / 合并门禁 / merge 门禁 / 合并判定 / 提交审核 review.
 metadata:
   agent: Code Review Agent
 ---
 
-# merge-gate — ruling the gate and submitting the review in one shot
+# merge-gate — confirm, rule the gate, publish one review with inline comments
 
-Give a "merge recommended / merge not recommended" gate conclusion based on code-review-rules' issue levels, and serve as the **sole PR write point** for the entire code-review chain: combine review-comment's body with the event matching the gate into one review and submit it in one shot via GitHub MCP. By default it **doesn't auto-merge or auto-reject** — the final merge is a human call.
+Give a 🔴 / 🟡 / 🟢 gate conclusion and serve as the **sole PR write point** of the code-review chain: once the reviewer has confirmed the draft, publish **one** review — summary body + inline comments on the changed lines + the event matching the gate — in a single submission. By default it **doesn't approve, auto-merge, or auto-close** — the merge is a human call.
+
+> Baseline: the iOS team's `review-pr-link` Phase 5 (post only on explicit instruction; summary + inline `comments[]` in one `POST …/pulls/{n}/reviews`; `commit_id` = head SHA; off-diff findings on the nearest changed line; 422 handling; return per-line links). The GitHub MCP's `create_pull_request_review` has no `comments` parameter, so the write goes through `scripts/pr_review.py` (stdlib, macOS + Windows; uses the local `gh` CLI when logged in, else the `mcp.json` token).
 
 | Dimension | Description |
 |------|------|
-| Purpose | Rule the merge gate and submit a single unique PR review with the correct event in one shot (no auto-merge) |
-| Input | code-review-rules' issue list (levels) + review-comment's redacted review body + the team merge policy |
-| Output | The submitted unique PR review (body + event) + the gate conclusion + a prompt for the human |
-| Scope | Rule the gate + submit the review event + prompt; by default doesn't execute the merge or auto-close the PR |
+| Purpose | Hard-gate on the reviewer's confirmation, rule the gate on what's published, submit one review with inline comments |
+| Input | review-comment's draft + payload, the reviewer's confirmation, the team merge policy |
+| Output | The submitted review (URL + per-line links) + the gate conclusion + a prompt for the human |
+| Scope | Confirm + rule + submit + prompt; doesn't merge, approve, close, or change code |
+
+## ⛔ HARD GATE — no PR write before confirmation
+
+Until the reviewer has **explicitly** confirmed the selection shown from the review draft (e.g. "publish all pre-selected", "publish F1,F2", "drop F2: <reason>", "summary only"), do **not** run `pr_review.py submit` or any GitHub MCP write (`create_pull_request_review`, `add_comment`, …).
+
+- Silence, "looks good", or a reply that names no selection isn't confirmation — ask again.
+- "Don't publish" is a valid answer: rule the gate locally, write nothing to the PR.
+- A confirmation is bound to the **head SHA** it was given for. If the head moved, the draft is stale: re-review; never reuse an old confirmation.
+- Read-only calls are allowed before confirmation (`pr_review.py existing` / `plan`, MCP reads).
 
 ## 0. Config values
 
@@ -28,10 +41,10 @@ Give a "merge recommended / merge not recommended" gate conclusion based on code
 
 | Purpose | Config key |
 |------|----|
-| GHES host | `profiles/{profile}.yaml` → `mcp.github.host` |
-| Repo owner/org | `profiles/{profile}.yaml` → `mcp.github.org` |
-| Target repo (`owner/name`) | `profiles/{profile}.yaml` → `mcp.github.repos.*.repo` |
-| Gate policy | `profiles/{profile}.yaml` → `review.merge_gate` (`on_block` / `auto_merge`; this cycle's convention is `auto_merge=false`, give only the conclusion and leave it to a human) |
+| GHES host | `profiles/{profile}.yaml` → `mcp.github.host` (passed as `--host`) |
+| Target repo (`owner/name`) | `profiles/{profile}.yaml` → `mcp.github.repos.*.repo` (passed as `--repo`) |
+| Gate policy | `profiles/{profile}.yaml` → `review.merge_gate` (`on_block` / `auto_merge`; this cycle `auto_merge=false`) |
+| Token | Transport `auto` (default): the user's own **`gh` CLI** when installed and logged in to the host (`gh auth status --hostname {host}`) — token in the OS credential store, TLS via the OS trust store, posts as that user. Otherwise **http**: `mcp.json` → `mcpServers.marriott-github.env.GITHUB_TOKEN`, read by the script itself. Never pass a token on the command line or print it |
 
 Required config keys missing (TBD) → stop and ask for them.
 
@@ -39,99 +52,135 @@ Required config keys missing (TBD) → stop and ask for them.
 
 | # | Condition |
 |---|------|
-| 1 | code-review-rules' issue list (with levels) and review-comment's redacted review body exist |
+| 1 | review-comment's redacted draft and payload exist for the current head SHA |
 | 2 | The target PR is known (owner/repo/pull_number) and is open |
-| 3 | GitHub MCP auth is available (if `mcp_auth` fails, stop) |
+| 3 | The reviewer's explicit selection for this head SHA is recorded |
 
 ## 2. Workflow
 
 ```
-- S1 Aggregate the review conclusion: whether a blocking-level issue exists
-- S2 Rule per the gate policy: merge recommended / merge not recommended
-- S3 Determine the review event by the ruling + policy
-- S4 Idempotency check: whether this agent has already submitted a review for the current head SHA
-- S5 Fallback-scan the review body (sensitive-data-guard), then submit the unique review with body + event in one shot via MCP
-- S6 Land the gate conclusion and prompt the human (merge requires human execution)
+- S1 Show the draft; get the reviewer's explicit selection (HARD GATE)
+- S2 Apply the selection: published / dropped (with reason) per finding
+- S3 Rule the gate on the published findings → light + event
+- S4 Filter the payload, fallback-scan it, run `plan` (anchor validation, read-only)
+- S5 `submit` one review (idempotent per head SHA)
+- S6 Report review URL + per-line links + the gate; prompt the human
 ```
 
-### S2 Gate ruling
+### S1 Confirmation
 
-| Review conclusion | Gate ruling |
-|------|------|
-| A blocking-level issue exists | Merge not recommended — the author must fix the blocking items, then re-review |
-| No blocking, has suggestions/hints | Mergeable (the author handles suggestions at discretion) — leave to a human to confirm |
-| No issues at all | Merge recommended — leave to a human to confirm |
+Show the draft's table (id / light / location / finding / pre-selection) inline or point to the draft file, and ask for the selection. Record the reviewer's reply **verbatim** with the head SHA (callers with state persist it to `sessions/`).
 
-### S3 Determine the review event (this cycle's policy)
+### S2 Apply the selection
 
-This cycle's convention is `review.merge_gate.auto_merge=false`: **no auto-merge, no auto-reject**, use only the review event to express the conclusion and leave the merge call to a human.
+Each finding ends up `publish: true` or `publish: false` with a reason (`dup`, `false positive: …`, `not worth a comment`, …).
 
-| Gate ruling | review event | Merge action |
+- **Dropping a 🔴 blocker requires a one-line reason** from the reviewer; it's recorded as `dismissed` (a human ruled it a false positive / not applicable). Without a reason, ask — never drop a blocker silently.
+- Adding a 🟢 nit, or changing the wording of a comment, is fine. **Changing a level** is the reviewer's explicit call only, and is recorded.
+
+### S3 Gate ruling (traffic light)
+
+The gate is ruled on the **published** findings — dismissed ones are excluded, and listed as such in the report.
+
+| Published findings | Light · ruling | review event |
 |------|------|------|
-| Merge not recommended | `REQUEST_CHANGES` (when `on_block=request_changes`) or `COMMENT` (when `on_block=comment`) | Don't merge; prompt the author to fix the blocking items |
-| Merge recommended | `COMMENT` (don't auto-`APPROVE` unless the policy explicitly enables it) | Don't auto-merge; prompt the human to confirm and then merge |
+| ≥ 1 🔴 | 🔴 Merge not recommended — author must fix, then re-review | `REQUEST_CHANGES` (`on_block=request_changes`) or `COMMENT` (`on_block=comment`) |
+| 🟡 only (± 🟢) | 🟡 Mergeable — author handles suggestions at discretion; human confirms | `COMMENT` |
+| none / 🟢 only | 🟢 Merge recommended — human confirms | `COMMENT` |
 
-### S4 Idempotency
+Never `APPROVE` (the script refuses it). Don't call `merge_pull_request` (only when `auto_merge=true` and confirmed twice — not enabled this cycle).
 
-Via `list_pull_request_reviews`, check whether this agent has already submitted a review for the current head SHA: if one exists, don't re-submit (unless the conclusion changed and needs updating), to avoid flooding. A head SHA change (the author pushed a new commit) counts as a new round, needing a fresh review and a fresh submission.
+### S4 Plan (read-only)
 
-### S5 Submit the unique review in one shot (GitHub MCP)
+1. From `tmp/review-payload_r{n}.json` keep only published comments; set `event` per S3; refresh the summary body's light, counts and table to match the published set; list dismissed blockers in one line ("🔴 dismissed by reviewer: F2 — reason") so the decision is transparent on the PR. Save as `tmp/review-confirmed_r{n}.json`.
+2. Fallback-scan it with `sensitive-data-guard` (even though review-comment scanned it); a hit blocks.
+3. Run:
 
-This is the code-review chain's **sole PR write point**. Before submitting, run one more `sensitive-data-guard` fallback scan over the review body (even if review-comment already scanned it); a hit blocks and reports only the location and type. Then via `create_pull_request_review` (`owner`, `repo`, `pull_number`, `body` = the redacted body produced by review-comment, `event` = the event determined in S3, optional `commit_id` = head SHA) **submit a single unique review in one shot** — body and event in the same submission, not split into two reviews.
+   ```bash
+   python <skills>/code-review/merge-gate/scripts/pr_review.py --host {mcp.github.host} \
+     plan --repo {owner/name} --pr {n} \
+     --payload .ai-sdlc/review/{id}/tmp/review-confirmed_r{n}.json \
+     --out .ai-sdlc/review/{id}/tmp/review-resolved_r{n}.json
+   ```
 
-> By default don't call `merge_pull_request`. Only when the team policy explicitly enables `auto_merge=true` and there are no blocking items may auto-merge be executed — not enabled this cycle, so encountering that config requires a second confirmation. If submission fails, run `mcp_auth` and retry once; if it still fails, report and stop.
+   It fetches the head SHA and every file patch, then resolves each comment's anchor: **inline** (line is in the diff), **nearby** (not in the diff → attached to the nearest changed line of the same file, body says "Actual location `path:L111` (outside this diff)"), or **summary** (file not in the diff / no patch / removed → folded into a "Findings outside this diff" section). It injects `commit_id` and the idempotency marker `ai-sdlc-review:{review_id}:r{n}:{head}`.
+   - Reviewer chose "summary only" → add `--summary-only` (every finding goes into the body, no inline comments).
+4. Show the anchor counts (inline / nearby / summary), the final event, **and the posting identity** (`connection.transport` + `connection.as_user` from the plan output) to the reviewer — this is part of what they confirmed; if `nearby` / `summary` counts are surprising, or the identity is not the reviewer, let them adjust before submitting.
+
+### S5 Submit (the only write)
+
+```bash
+python <skills>/code-review/merge-gate/scripts/pr_review.py --host {mcp.github.host} \
+  submit --repo {owner/name} --pr {n} \
+  --resolved .ai-sdlc/review/{id}/tmp/review-resolved_r{n}.json
+```
+
+| Exit | Meaning | Handling |
+|------|------|------|
+| 0 `submitted` | One review posted (body + event + inline comments) | Record `review_id`, `review_url`, `inline_links` immediately |
+| 0 `already_submitted` | A review with the same marker (same review_id + round + head) exists | Don't re-post; record the existing review |
+| 3 | Head moved since `plan` | Stale: new round — re-fetch, re-review, re-draft, re-confirm |
+| 5 | Posting identity is the PR author (four-eyes) | Stop; a different reviewer must publish. `--allow-self-review` only on a test repo and only when the user asks for it explicitly |
+| 4 + 422 | A line isn't part of the diff / commit stale | Re-run `plan` once; if it still fails, ask the reviewer: summary-only (`plan --summary-only`) or stop |
+| 4 other / 2 | Auth / network / config | Report and stop. Fallback when the script can't run at all: the MCP `create_pull_request_review` with the summary body only (findings located by `file:line` in the body), **after telling the reviewer inline comments are unavailable** |
+
+Transport: the script picks `gh` automatically when it's ready for the host, else `http`; `--transport gh|http` forces one (`gh` forced but not logged in → exit 2, no silent fallback). Use the **same transport for `plan` and `submit`** so the identity shown in S4 is the one that posts.
 
 ### S6 Human prompt
 
-Clearly tell the human: the current blocking-item count, whether the merge prerequisites are met, and that "the merge action requires human execution." Don't create the illusion that it's "already handled automatically."
+Report: the light and ruling, the review URL, per-line `#discussion_r…` links, which findings were inline / nearby / summary-only, dismissed blockers, and that **the merge requires human execution**. Don't create the illusion that it's "already handled automatically".
 
 ## 3. Mandatory rules
 
 | Rule | Description |
 |------|------|
-| Sole write point | The code-review chain submits a review only once in this step (body + event combined), producing no multiple reviews |
-| Fallback-scan before submitting | Before submitting, run the body through `sensitive-data-guard` once more; a hit blocks |
-| No auto-merge | This cycle `auto_merge=false`, by default don't execute the merge or auto-close the PR |
-| Block means stop | When a blocking-level issue exists, rule "merge not recommended", don't pass |
-| Rule by upstream levels | The gate ruling relies only on code-review-rules' levels, don't re-rule on your own |
-| Idempotent, no flooding | Don't re-submit a review for the same head SHA; update only when the conclusion changes |
-| Transparent conclusion | Clearly state that "merge requires human execution", don't create the illusion of an already-done auto-merge |
-| Auto only when policy explicit | Only when `auto_merge=true` and there's no blocking may it auto-merge, and a second confirmation is required |
+| Confirmation first | No PR write before the reviewer's explicit selection for the current head SHA (HARD GATE) |
+| Sole write point | The chain submits exactly one review per round, here (body + event + inline comments combined) |
+| Script for the write | Inline reviews go through `scripts/pr_review.py` (which itself uses `gh` or urllib); no ad-hoc `curl` / `gh api` / `gh pr review` / inline Python; MCP review only as the summary-only fallback |
+| Four-eyes | The script refuses to post as the PR author (exit 5) or when the identity can't be resolved |
+| Fallback-scan before submitting | The confirmed payload passes `sensitive-data-guard`; a hit blocks |
+| Gate on what's published | Dismissed blockers need a recorded reason and are shown on the PR; never drop one silently |
+| Never approve / merge | `APPROVE` is refused; `auto_merge=false` this cycle |
+| Idempotent, no flooding | The marker makes a re-run a no-op for the same review_id + round + head |
+| Transparent conclusion | State that the merge requires a human |
 
 ## 4. Quality gates
 
-- The gate conclusion is explicitly "merge recommended / merge not recommended", backed by the blocking-item count
-- Before submitting, the body passed the `sensitive-data-guard` fallback scan with no hits (or was redacted)
-- A single unique review (body + event combined) was submitted in one shot via MCP, with no multiple reviews produced
-- The review event is consistent with the policy (no auto-APPROVE/merge this cycle)
-- The idempotency check was done; no auto-merge was executed under `auto_merge=false`
-- A clear human prompt is given (merge requires human execution), and the conclusion is traceable to the issue levels
+- The reviewer's explicit selection is recorded for this head SHA before any write
+- The gate is ruled on the published findings and shown as a light; dismissed blockers have reasons
+- The confirmed payload passed the `sensitive-data-guard` fallback scan
+- `plan` ran; anchor counts were shown; one review was submitted (or `already_submitted`)
+- Review URL and per-line links are reported; no approve / merge happened
 
 ## 5. Output
 
 ```markdown
-Merge gate: {owner}/{repo} PR #{n} — {Merge recommended | Merge not recommended}
+Merge gate: {owner}/{repo} PR #{n} · r{round} — 🔴 Merge not recommended | 🟡 Mergeable | 🟢 Merge recommended
 
-- **Blocking items**: {b}{; must be fixed and re-reviewed / none}
-- **Suggestions/hints**: Suggestion {s} / Hint {i}
-- **Review submitted**: event={COMMENT / REQUEST_CHANGES} (a single one, body+event combined)
+- **Published**: 🔴 {b} · 🟡 {s} · 🟢 {i}  (dismissed 🔴: {F2 — reason} / none)
+- **Review**: {review_url} · event={COMMENT / REQUEST_CHANGES} · status={submitted / already_submitted / not published}
+- **Inline**: {x} on the diff line · {y} on the nearest changed line · {z} in the summary only
+- **Links**: F1 {path:line} {discussion url} …
 - **Sensitive-info fallback scan**: passed (no hits / redacted)
-- **Merge action**: not executed automatically, requires human confirmation before merging (this cycle auto_merge=false)
+- **Merge action**: not executed; a human confirms and merges (auto_merge=false)
 ```
 
 ## 6. Troubleshooting
 
 | Symptom | Handling |
 |------|------|
-| Config `auto_merge=true` | Auto-merge isn't enabled this cycle; when encountered, get a second confirmation from the user before deciding |
-| No code-review-rules conclusion or review body | Finish the standards review and feedback organization first; without input, don't guess the gate or submit |
-| Sensitive-info fallback scan hits | Block the submission, report only the location and type, redact and then submit |
-| A review for the same round already exists | Handle idempotently, don't re-submit; it's a new round only if the head SHA changed |
-| MCP auth/submission fails | Run `mcp_auth` and retry once; if it still fails, report |
-| Blocking items are fixed | The author must push a new commit (head SHA changes), then re-review and re-rule; don't pass on the old conclusion |
+| `mcp.json … GITHUB_TOKEN is empty` / not found | Only on the http transport. Either `gh auth login --hostname {host}` (preferred), or fill `~/.cursor/mcp.json` (marriott-github); or fall back to the summary-only MCP review after telling them |
+| `--transport gh unavailable: gh not logged in` | `gh auth login --hostname {host}`, or drop `--transport gh` to use http |
+| Exit 5 four-eyes | The logged-in user authored the PR; hand publishing to another reviewer |
+| 422 `line must be part of the diff` | Re-run `plan` (the head may have moved); persistent → summary-only or stop, the reviewer chooses |
+| Exit 3 head moved | The author pushed: new round, re-review; the old confirmation is void |
+| `already_submitted` | Idempotent no-op; report the existing review |
+| Config `auto_merge=true` | Not enabled this cycle; get a second confirmation before deciding |
+| Reviewer wants a blocker dropped without reason | Ask for the reason; without it, keep it published |
+| Network / SSL error to GHES | Check VPN / proxy (`HTTPS_PROXY`) first — if `curl https://{host}` also fails, it's the network. On the http transport the script adds OS trust-store CAs (macOS System / login keychain, Windows Root / CA) because the portable OpenSSL 3 doesn't see enterprise CAs; override with `SSL_CERT_FILE` / `REQUESTS_CA_BUNDLE`. A logged-in `gh` avoids CA handling entirely. Verification is never disabled |
 
 ## 7. Related
 
-- Upstream: code-review-rules (issue levels) + review-comment (provides the redacted review body)
-- Depends: sensitive-data-guard (fallback-scan the body before submitting; a hit blocks)
-- Downstream: merge after human confirmation → the CI/CD step (trigger the pipeline to build and deploy)
+- Upstream: review-comment (draft + payload), code-review-rules (levels)
+- Depends: sensitive-data-guard (fallback scan); `scripts/pr_review.py` (plan / submit; offline tests in `tests/run_tests.py`)
+- Downstream: merge after human confirmation → the CI/CD step

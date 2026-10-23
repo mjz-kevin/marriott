@@ -3,7 +3,7 @@ name: code-review-rules
 description: >-
   Review the PR review context item by item against the team's coding standards and security baseline
   (naming / layering / exception handling / logging / performance / security), tagging each issue with
-  a level (blocking / suggestion / hint), its file and line, the rule item it relies on, and a fix
+  a traffic-light level (🔴 blocking / 🟡 suggestion / 🟢 hint), its file and line, the rule item it relies on, and a fix
   suggestion; architecture and business-reasonableness are left to human judgment, no overreach. Use
   when the code-review step needs to review code item by item against the standards;
   triggers: code review rules / 代码规范审核 / 规范检查 / 安全基线审核 / 编码规范核验.
@@ -86,13 +86,21 @@ Tag each issue:
 
 | Field | Content |
 |------|------|
-| Level | Blocking (must fix, otherwise shouldn't be merged) / Suggestion (should fix) / Hint (optional improvement) |
-| Location | File path + line number (the new line number in the diff) |
+| Level | 🔴 Blocking / 🟡 Suggestion / 🟢 Hint — criteria in the level table below |
+| Location | File path + line number (the new line number in the diff); for a multi-line issue also the start line |
 | Matched rule | Which rule item it relies on (cite the rule item/number or standard name + section, from rules_source; when standards aren't configured, note "general dimension") |
 | Root cause | A one-line explanation of why it's violated |
 | Fix suggestion | An actionable suggestion for the author |
 
-Security issues default to "blocking" (unless the standards specify otherwise).
+**Level table (traffic lights; the single source for every downstream rendering).** The internal value stays `blocking` / `suggestion` / `hint`; the light and label are how it is shown everywhere (local draft, PR summary, inline comment prefix, status card):
+
+| Internal | Light · label | When (criteria from the iOS team's proven `review-pr-link` rubric, generalized) |
+|------|------|------|
+| `blocking` | 🔴 Blocker | Crash, data loss / corruption, security issue (hardcoded secret, injection, unvalidated input), wrong user-visible behavior, the merge would break the build, a clear deviation from the tech solution's interface contract |
+| `suggestion` | 🟡 Should fix | A likely-bug edge case, missing localization / error handling on a non-critical path, a weak test plan / missing tests on risky behavior, maintainability (wrong layer, reinvents an existing helper), performance smell |
+| `hint` | 🟢 Nit | Naming, style, an optional refactor, readability polish |
+
+Security issues default to 🔴 blocking (unless the standards specify otherwise). When in doubt between two levels, pick the lower one and say why in the root cause — the human reviewer can raise it in the confirmation step.
 
 ## 3. Mandatory rules
 
@@ -103,7 +111,8 @@ Security issues default to "blocking" (unless the standards specify otherwise).
 | Empty standards fall back | When `rules_source` is empty / unconfigured, fall back to general-dimension review and note it in the output, don't stop; the "security" dimension is always reviewed against the built-in general security baseline |
 | Review only this diff | Review only the changes this PR touches; don't wander into reviewing historical code |
 | Every entry traceable | Every issue cites the matched rule item (or notes "general dimension") and file:line, not subjective judgment |
-| Security defaults to blocking | Security issues such as hardcoded secrets/injection/unvalidated input default to "blocking" |
+| Security defaults to blocking | Security issues such as hardcoded secrets/injection/unvalidated input default to 🔴 blocking |
+| Levels from the level table | Every issue's level follows the S3 traffic-light table; downstream renders the light from the internal value, never re-rules it |
 | No overreach on architecture | Architecture and business-reasonableness are left to humans, not ruled here |
 | Rule only, don't change, don't comment | Only output the issue list; don't change code, don't write PR comments directly |
 
@@ -118,14 +127,14 @@ Security issues default to "blocking" (unless the standards specify otherwise).
 ## 5. Output
 
 ```markdown
-Standards review: {owner}/{repo} PR #{n} — {Blocking {b} / Suggestion {s} / Hint {i}}
+Standards review: {owner}/{repo} PR #{n} — 🔴 {b} / 🟡 {s} / 🟢 {i}
 
-| Level | File:line | Matched rule | Root cause | Fix suggestion |
-|------|------|------|------|------|
-| Blocking/Suggestion/Hint | {file:line} | {rule item} | {root cause} | {suggestion} |
+| ID | Level | File:line | Matched rule | Root cause | Fix suggestion |
+|----|------|------|------|------|------|
+| F1 | 🔴 Blocker / 🟡 Should fix / 🟢 Nit | {file:line} | {rule item} | {root cause} | {suggestion} |
 
 - **Security issues**: {count and summary / none}
-- **Next step**: hand to review-comment to land PR comments, and let merge-gate give the gate conclusion by level
+- **Next step**: hand to review-comment to build the local draft for the reviewer to confirm; merge-gate then rules the gate by level and publishes the confirmed findings
 ```
 
 ## 6. Troubleshooting
@@ -144,4 +153,4 @@ Standards review: {owner}/{repo} PR #{n} — {Blocking {b} / Suggestion {s} / Hi
 ## 7. Related
 
 - Upstream: diff-fetch (provides the per-file patch review context)
-- Downstream: review-comment (lands the issue list as PR comments) → merge-gate (gives the gate conclusion by level)
+- Downstream: review-comment (builds the local draft + inline payload from the issue list) → merge-gate (gives the gate conclusion by level and publishes after human confirmation)

@@ -25,6 +25,7 @@ python init/build.py --no-zip --yes     # 能否正常组装，汇总里「占�
 | --- | --- |
 | `sensitive-data-guard` | `python .cursor/skills/common/sensitive-data-guard/tests/run_tests.py`（用例说明见同目录 `TESTING.md`） |
 | `kb-query` | `python .cursor/skills/common/kb-query/tests/run_tests.py`（fixture 为虚构的 `tests/fixtures/sample-repo/.kb/`，入库；用 `KB_NOW` 固定时间、`KB_NO_GIT` 跳过 git 检查，结果可复现） |
+| `merge-gate`（`pr_review.py`） | `python .cursor/skills/code-review/merge-gate/tests/run_tests.py`（纯离线：patch 行号解析、锚点 inline / nearby / summary 判定、APPROVE 拒绝、head 变化、幂等标记、四眼原则（作者本人 / 身份未知拒绝）、transport 选择（gh 优先 / 回退 http / 强制 gh 未登录报错）、`gh api` 命令形态（body 走 stdin、`--hostname` 显式），用假客户端不联网）。联网冒烟：`pr_review.py --host <host> existing --repo <o/r> --pr <n>`，看输出里的 `connection.transport` / `as_user` |
 | 其他带 `scripts/` 的 Skill | 目前没有自动化测试。改动后至少用 `--help` / 只读子命令跑通一次，如 `python .cursor/skills/common/profile-select/scripts/profile.py list`、`python .cursor/skills/common/ai-sdlc-info/scripts/version.py --json` |
 | 离线运行时定位（`upload_confluence_v2.py` / `export_pdf.py` / `profile.py runtime`） | `python .cursor/skills/common/profile-select/scripts/profile.py runtime`（`missing` 应为空）+ `python .cursor/skills/common/md-to-pdf/scripts/export_pdf.py --check-env`（`offline_mmdc` / `offline_pdf` / `offline_chromium` 应为 `true`）；再用一份含 mermaid 的虚构 md 实际导出一次 PDF |
 | `confluence-publish` 上传脚本 | 只能发到 **test 空间**（`*-test.yaml` 的 `mcp.confluence`）验证，不要用 prod profile 试 |
