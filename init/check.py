@@ -24,6 +24,9 @@ AI SDLC 仓库一致性检查（维护用，不随包分发）。
   script-refs   SKILL.md 中引用的 scripts/*.py 能找到对应文件 → 否则 WARN。
   confluence    upload_confluence_v2.py 全仓库只有 confluence-publish 下一份 → 否则 ERROR。
   profiles      <team>-test.yaml 与 <team>-prod.yaml 的键结构一致 → 否则 ERROR。
+  backend-exc   mcp.harness.build_backend_exceptions（安全边界）：条目字段齐全、values 非空；引用的流水线已在
+                pipelines 登记且 env 在 allowed_envs 内；取值 / backend 不得点名生产；test / prod 两份一致
+                → 否则 ERROR。条目的流水线未在 harness-invoke / cicd-agent / AGENTS.md 中提及 → WARN。
   runtime       setup.json / mcp.example.*.json / init/README.md 中写死的 node、python 版本一致 → 否则 ERROR。
   templates     init/templates 下 .sh 与 .ps1 成对 → 否则 ERROR。
   version       pyproject.toml 的 version：HEAD 在 tag 上时必须等于该 tag（ERROR）；
@@ -405,6 +408,153 @@ def check_profiles(r: Report) -> None:
             r.error("profiles", f"{prod.name} 有而 {test.name} 没有的键：{k}")
 
 
+# ---------------------------------------------------------------- build_backend_exceptions
+# 生产后端的取值永远不得进例外（独立词 prod / production，或 URL 里的 prd 网关片段）。
+# 注意 prf = perf 网关，不在此拦截（perf 是否可登记由团队决定，当前未登记）。
+PROD_VALUE = re.compile(r"(?i)(?<![a-z])(prod|production)(?![a-z])|dsapprd|-prd\.|-prod\.")
+
+
+def _split_top(s: str, sep: str = ",") -> list[str]:
+    """按顶层分隔符切分（忽略引号与 [] {} 内部）。"""
+    out, buf, depth, quote = [], [], 0, ""
+    for ch in s:
+        if quote:
+            buf.append(ch)
+            if ch == quote:
+                quote = ""
+            continue
+        if ch in "\"'":
+            quote = ch
+        elif ch in "[{":
+            depth += 1
+        elif ch in "]}":
+            depth -= 1
+        elif ch == sep and depth == 0:
+            out.append("".join(buf))
+            buf = []
+            continue
+        buf.append(ch)
+    if "".join(buf).strip():
+        out.append("".join(buf))
+    return out
+
+
+def _scalar(v: str) -> str:
+    v = v.strip()
+    return v[1:-1] if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'" else v
+
+
+def _flow_value(v: str):
+    v = v.strip()
+    if v.startswith("[") and v.endswith("]"):
+        return [_scalar(x) for x in _split_top(v[1:-1]) if x.strip()]
+    return _scalar(v)
+
+
+def _flow_map(s: str) -> dict:
+    s = s.strip()
+    if not (s.startswith("{") and s.endswith("}")):
+        return {}
+    d = {}
+    for part in _split_top(s[1:-1]):
+        k, _, v = part.partition(":")
+        d[k.strip()] = _flow_value(v)
+    return d
+
+
+def _strip_comment(line: str) -> str:
+    """去掉行尾注释（引号内的 # 不算）。"""
+    quote = ""
+    for i, ch in enumerate(line):
+        if quote:
+            if ch == quote:
+                quote = ""
+        elif ch in "\"'":
+            quote = ch
+        elif ch == "#" and (i == 0 or line[i - 1] in " \t"):
+            return line[:i].rstrip()
+    return line.rstrip()
+
+
+def harness_section(path: Path) -> dict:
+    """抽取 mcp.harness 下的 pipelines / allowed_envs / build_backend_exceptions（只认单行流式写法）。"""
+    res: dict = {"pipelines": [], "allowed_envs": None, "exceptions": [], "has_exceptions": False}
+    lines = [_strip_comment(l) for l in read(path).split("\n")]
+    h_indent, cur = None, None
+    for line in lines:
+        if not line.strip():
+            continue
+        indent = len(line) - len(line.lstrip(" "))
+        body = line.strip()
+        if h_indent is None:
+            if body == "harness:":
+                h_indent = indent
+            continue
+        if indent <= h_indent:
+            break
+        m = KEY_LINE.match(line)
+        if m and len(m.group(1)) == h_indent + 2:
+            key, rest = m.group(2), line[m.end():].strip()
+            cur = key
+            if key == "allowed_envs":
+                res["allowed_envs"] = _flow_value(rest) if rest else []
+            elif key == "build_backend_exceptions":
+                res["has_exceptions"] = True
+            continue
+        if body.startswith("- "):
+            item = _flow_map(body[2:])
+            if cur == "pipelines" and item:
+                res["pipelines"].append(item)
+            elif cur == "build_backend_exceptions":
+                res["exceptions"].append(item or {"_raw": body})
+    return res
+
+
+def check_backend_exceptions(r: Report) -> None:
+    by_profile: dict[str, list] = {}
+    for p in sorted(PROFILES_DIR.glob("*.yaml")):
+        h = harness_section(p)
+        if not h["has_exceptions"]:
+            continue
+        name = p.name
+        pipes = {x.get("id"): x for x in h["pipelines"] if x.get("id")}
+        allowed = {str(e).lower() for e in (h["allowed_envs"] or [])}
+        norm = []
+        for i, e in enumerate(h["exceptions"]):
+            tag = f"{name} build_backend_exceptions[{i}]"
+            if "_raw" in e:
+                r.error("backend-exc", f"{tag} 不是单行流式映射，无法校验：{e['_raw']}")
+                continue
+            for f in ("pipeline", "input", "backend"):
+                if not isinstance(e.get(f), str) or not e.get(f):
+                    r.error("backend-exc", f"{tag} 缺少字段 {f}")
+            vals = e.get("values")
+            if not isinstance(vals, list) or not vals or not all(vals):
+                r.error("backend-exc", f"{tag} values 必须是非空列表")
+                vals = []
+            pid = e.get("pipeline")
+            if pid and pid not in pipes:
+                r.error("backend-exc", f"{tag} 引用的流水线 {pid} 未在 mcp.harness.pipelines 登记")
+            elif pid and str(pipes[pid].get("env", "")).lower() not in allowed:
+                r.error("backend-exc", f"{tag} 流水线 {pid} 的 env={pipes[pid].get('env')} 不在 allowed_envs {sorted(allowed)} 内")
+            for v in vals:
+                if PROD_VALUE.search(v):
+                    r.error("backend-exc", f"{tag} 取值点名生产，永远不得登记为例外：{v}")
+            if str(e.get("backend", "")).lower() in ("prod", "production"):
+                r.error("backend-exc", f"{tag} backend 为生产，永远不得登记为例外")
+            norm.append((pid, e.get("input"), tuple(vals), e.get("backend")))
+            if pid and not any(pid in read(f) for f in (
+                    SKILLS_DIR / "cicd" / "harness-invoke" / "SKILL.md",
+                    AGENTS_DIR / "cicd-agent.md", REPO_ROOT / "AGENTS.md")):
+                r.warn("backend-exc", f"{tag} 的流水线 {pid} 未在 harness-invoke / cicd-agent / AGENTS.md 中提及")
+        by_profile[name] = sorted(norm, key=str)
+    for test in sorted(PROFILES_DIR.glob("*-test.yaml")):
+        prod = test.name.replace("-test.yaml", "-prod.yaml")
+        a, b = by_profile.get(test.name), by_profile.get(prod)
+        if a != b:
+            r.error("backend-exc", f"{test.name} 与 {prod} 的 build_backend_exceptions 不一致")
+
+
 # ---------------------------------------------------------------- runtime versions
 def check_runtime_versions(r: Report) -> None:
     sources = [PROFILES_DIR / "setup.json", *sorted(CURSOR_DIR.glob("mcp.example.*.json")),
@@ -476,6 +626,7 @@ def main() -> int:
     check_script_refs(r)
     check_confluence_uploader(r)
     check_profiles(r)
+    check_backend_exceptions(r)
     check_runtime_versions(r)
     check_templates(r)
     check_version(r)

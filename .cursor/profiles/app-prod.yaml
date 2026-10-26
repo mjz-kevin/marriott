@@ -142,6 +142,10 @@ mcp:
                                        # ↑ artifact_stage：判定「这次 build 已可下载」的 stage（harness-invoke 查最新 build 用）。
                                        #   只有入参 uploadTo 含 TestFlight 才会上传；PR 自动触发的运行也会 Success 但跳过该 stage，
                                        #   TestFlight 上没有这个包。build 号 = Harness Build Id（runSequence = <+pipeline.sequenceId>）。
+                                       # ↑ 注意：该流水线的 API_BASE_URL 输入才决定包连哪套后端（Harness 下拉单选，默认 TST 网关
+                                       #   gatewaydsaptst1）；取 stg / perf / prf 网关会构建指向高环境后端的包并上传 TestFlight，
+                                       #   由 harness-invoke 统一拦截。唯一例外是下方 build_backend_exceptions 登记的
+                                       #   interceptor-stg（QA 日常 iOS STG 测试包）；gatewaydsapstg1 等其它 STG 网关仍拦截。
       - { id: Android_Adhoc_Build,            platform: android, env: test, usage: adhoc,      repo: android-dragon-app }
                                        # ↑ 注意：该流水线的 flavor 输入才决定包连哪套后端
                                        # （Harness 取值域 Tst/Tst2/Uat2/Stg/Perf/Prod，默认 Tst），
@@ -156,8 +160,10 @@ mcp:
                                        # 另外，若某个运行时入参的取值点名了高环境（如 flavor=Prod、网关 URL 指向 stg/prf），
                                        # harness-invoke 同样按超范围停止——判定依据始终是「这次实际打向哪里」，不是标签。
                                        # 不在白名单内 → skill 直接停止并提示去 Harness UI，没有人工确认放行通道。
-    build_backend_exceptions:          # 窄口径例外（QA日常需要打连 STG 后端的测试包）。
+    build_backend_exceptions:          # 窄口径例外（QA 日常需要打连 STG 后端的测试包）
+                                       # values 须与 Harness 取值逐字一致（URL 写完整串）；增改须团队决策，AI 不得自行增改。
       - { pipeline: Android_Adhoc_Build, input: flavor, values: [Stg], backend: stg }
+      - { pipeline: iOS_Dragon_App_Testflight_Dev, input: API_BASE_URL, values: ["https://interceptor-stg.csh.marriott.com.cn/v1/graph"], backend: stg }
     allow_stage_execution_fallback: false  # 本项目流水线均为单环境、无晋级链，不需要 stage 子集限定
     poll:                              # 触发后等待执行状态的口径
       mode: server_wait                # 优先用 MCP 的服务端阻塞等待（wait=true），而非 LLM 轮询循环

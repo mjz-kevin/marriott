@@ -52,6 +52,13 @@
 
 规则与流程只在 [profiles.md](profiles.md) 维护（4 份一起改、test / prod 同构、新增团队登记等）。
 
+改 `mcp.harness.build_backend_exceptions`（安全边界，须团队决策）时额外同步：
+
+- [ ] `test` / `prod` 两份条目完全一致；`values` 与 Harness 当前取值逐字一致（URL 写完整串，先用 `runtime_input_template` 只读核对）
+- [ ] `harness-invoke/SKILL.md`（description、开头说明、S2、S3 确认卡示例、规则表、场景表）与 `cicd-agent.md`（HARD SCOPE、C2）里的「currently …」清单
+- [ ] `AGENTS.md` §2 / §7、设计文档 §1 示意与 §6.1 脚注 ²、[profiles.md](profiles.md) §mcp.harness
+- [ ] 跑 `python init/check.py`：会校验流水线已登记、env 在 `allowed_envs` 内、字段非空、取值不点名生产、两份一致
+
 ## 6. 修改安装 / 卸载脚本（`init/templates/`）
 
 1. `.sh` 与 `.ps1` **成对修改**（`check.py` 校验文件成对，但不校验逻辑等价——需人工对照）。
