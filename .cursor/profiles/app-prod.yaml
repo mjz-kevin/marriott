@@ -147,6 +147,7 @@ mcp:
                                        # （Harness 取值域 Tst/Tst2/Uat2/Stg/Perf/Prod，默认 Tst），
                                        # 取 Uat2/Stg/Perf/Prod 会构建指向高环境后端的包并经 Appcircle 分发给测试者；
                                        # 这类「取值点名高环境」的入参由 harness-invoke 统一拦截，无需在此登记取值表。
+                                       # 唯一例外是下方 build_backend_exceptions 登记的 flavor=Stg（QA 日常 STG 测试包）。
       - { id: Android_Regression_Builds,      platform: android, env: test, usage: regression, repo: android-dragon-app }
       - { id: Mobile_s3_upload,               platform: both,    env: dev,  usage: config-upload, repo: mobile-config-upload-dev }
     allowed_envs: [dev, test]          # 允许触发的环境白名单（低环境）。本队流水线均为纯 CI（无 CD stage、无
@@ -155,6 +156,8 @@ mcp:
                                        # 另外，若某个运行时入参的取值点名了高环境（如 flavor=Prod、网关 URL 指向 stg/prf），
                                        # harness-invoke 同样按超范围停止——判定依据始终是「这次实际打向哪里」，不是标签。
                                        # 不在白名单内 → skill 直接停止并提示去 Harness UI，没有人工确认放行通道。
+    build_backend_exceptions:          # 窄口径例外（QA日常需要打连 STG 后端的测试包）。
+      - { pipeline: Android_Adhoc_Build, input: flavor, values: [Stg], backend: stg }
     allow_stage_execution_fallback: false  # 本项目流水线均为单环境、无晋级链，不需要 stage 子集限定
     poll:                              # 触发后等待执行状态的口径
       mode: server_wait                # 优先用 MCP 的服务端阻塞等待（wait=true），而非 LLM 轮询循环
@@ -205,6 +208,23 @@ code:
   ai_provenance:                      # AI 辅助代码溯源标识（dev-agent D6 / create-pr 用）：落在 commit 与 PR 上，合并后仍可追溯
     commit_trailer: "AI-Assisted: Cursor dev-agent"  # 追加在 commit message 末尾的 git trailer（与正文空一行，作最后一段）；android commit-msg 钩子只校验首行，不受影响
     pr_label: AIGenerated             # PR 上打的 GitHub label（与 Jira ai_provenance 同名）；仓库无此 label 时不自建，提示 DEV 处理
+  pr:                                 # create-pr 用：按 diff 推断 PR 的 labels / reviewers；键 = mcp.github.repos.<key>。无此键 = 不推断（Android 待补）。
+                                      # 推断结果须经 DEV 在草稿中确认后才调用工具；label 须仓库已存在（不自建）。
+                                      # owner 由仓库 CODEOWNERS 自动请求，此处只记 owner 之外的同事。
+    ios:
+      type_labels:                    # Jira issue type（dev-agent D1 读到的 Story 类型，显示名逐字对齐）→ 类型 label；未列出的类型不打类型 label
+        Story: story
+        Bug: bug
+      modules:                        # 模块 label：按 diff 改动路径（glob，相对仓库根）命中；命中文件数最多的为主模块，只打 1 个模块 label
+        - { label: Loyalty,  paths: ["Module/ios-dragon-module-loyalty/**"],  reviewers: [czhan767] }
+        - { label: Search,   paths: ["Module/ios-dragon-module-search/**"],   reviewers: [nliu531, bma845, ttang727] }
+        - { label: Booking,  paths: ["Module/ios-dragon-module-booking/**"],  reviewers: [nliu531, bma845, ttang727] }
+        - { label: Trips,    paths: ["Module/ios-dragon-module-trips/**"],    reviewers: [mhou516] }
+        - { label: Content,  paths: ["Module/ios-dragon-module-discover/**"], reviewers: [edu548] }
+        - { label: Platform, paths: ["Module/ios-dragon-library-common*/**", "Module/ios-dragon-library-uxl/**", "Module/ios-dragon-library-mboxes/**", "Module/ios-dragon-library-keys/**", "DragonApp/**"], reviewers: [lyang008, mai092, ttang727] }
+      combine:                        # 多模块合并规则：同时命中 when_all 中所有模块时，模块 label 改用 use（reviewers 取并集）
+        - { when_all: [Search, Booking], use: Commerce }
+      max_reviewers: 3                # 追加的 reviewer 上限（去掉 PR 作者本人后截断）
   contract:                           # contract-diff 口径：接口契约以技术方案 detail 的接口定义为基线
     source: tech_solution_detail       # 契约基线来源：Story 级明细方案的接口定义章节
     match: field_level                 # 比对粒度：逐字段（Swift 看 Codable/CodingKeys；Kotlin 看 data class/注解）

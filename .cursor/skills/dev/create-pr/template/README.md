@@ -4,18 +4,20 @@ This directory provides a set of best-practice GitHub Pull Request templates, in
 
 ## Directory Structure
 
+One kit per team; `create-pr` picks the kit by the current profile's `team` (`app` -> `Mobile/`, `cms` -> `CMS/`).
+
 ```
-template/PR/
-├── README.md                      # This document
-├── pull_request_template.md       # Default template (general-purpose, auto-loaded for all PRs)
-└── PULL_REQUEST_TEMPLATE/         # Multi-template directory (select by scenario)
-    ├── feature.md                 # New feature
-    ├── bugfix.md                  # Bug fix
-    ├── hotfix.md                  # Urgent production fix
-    ├── refactor.md                # Refactor
-    ├── docs.md                    # Documentation
-    └── release.md                 # Version release
+template/
+├── README.md                          # This document
+├── Mobile/                            # APP team (iOS / Android)
+│   ├── pull_request_template.md       # Default template (general-purpose)
+│   └── PULL_REQUEST_TEMPLATE/         # Scenario templates: feature, bugfix, refactor, release (no hotfix / docs)
+└── CMS/                               # CMS team
+    ├── pull_request_template.md       # Default template (general-purpose)
+    └── PULL_REQUEST_TEMPLATE/         # Scenario templates: feature, bugfix, hotfix, refactor, docs, release
 ```
+
+Below, `<kit>` means `Mobile` or `CMS`.
 
 ## How to Enable
 
@@ -31,7 +33,7 @@ Place the default template under `.github/`, and every new PR will automatically
 
 ```bash
 mkdir -p .github
-cp template/PR/pull_request_template.md .github/pull_request_template.md
+cp template/<kit>/pull_request_template.md .github/pull_request_template.md
 ```
 
 ### Option 2: Multi-Template Kit (recommended for mid-to-large or enterprise teams)
@@ -40,8 +42,8 @@ Place the multi-template directory under `.github/`:
 
 ```bash
 mkdir -p .github
-cp template/PR/pull_request_template.md .github/pull_request_template.md
-cp -R template/PR/PULL_REQUEST_TEMPLATE .github/PULL_REQUEST_TEMPLATE
+cp template/<kit>/pull_request_template.md .github/pull_request_template.md
+cp -R template/<kit>/PULL_REQUEST_TEMPLATE .github/PULL_REQUEST_TEMPLATE
 ```
 
 > Note: `.github/pull_request_template.md` (default) and `.github/PULL_REQUEST_TEMPLATE/` (multi-template) can coexist.

@@ -14,6 +14,41 @@
 
 ---
 
+## [0.4.1] - 2026-10-26
+
+### 变更
+- **Code Review 改造（以 iOS 同事 Ice 的 `review-pr-link` 为基准）：先本地确认再发布、行内评论、红黄绿灯**：
+  - **发布前本地确认**：新增节点「确认发布内容」（`R4_confirm_publish`，停止点）。`review-comment` 先写本地草稿 `docs/REVIEW-DRAFT_*`，每条发现带编号、灯色和可点击的 `file:line`，并与 PR 上已有评论去重。默认预选 🔴 / 🟡，🟢 和重复项默认不选。审核人回复「全部 / 只发 F1,F2 / 去掉 F2: 原因 / 仅总结 / 不发」后才能写 PR（`merge-gate` 硬门禁）。确认结果绑定 head SHA，head 变化后作废。去掉 🔴 必须填写原因，记为 `dismissed`；门禁只按实际发布的发现判定，被去掉的阻断项会在 PR 总结里列出。
+  - **行内评论**：GitHub MCP 的 `create_pull_request_review` 不支持 `comments` 参数，因此新增 `merge-gate/scripts/pr_review.py`（纯标准库、跨平台，token 读 `mcp.json` 里 `marriott-github` 的 `GITHUB_TOKEN`，host / repo 取 profile）。子命令：`existing`（只读，拉已有评论去重）、`plan`（只读，按 diff 校验每条锚点：在 diff 内则行内；不在 diff 内则挂到同文件最近的改动行，并注明真实行号；文件无 patch 的并入总结；同时注入 `commit_id` 和幂等标记）、`submit`（唯一写入点，一次提交「总结 + 行内评论 + event」）。脚本拒绝 `APPROVE`，`plan` 之后 head 变化会退出（exit 3），同一 review_id + 轮次 + head 不会重复提交；422 时可退回 `--summary-only`。脚本无法运行时，退回原来的 MCP 纯总结 review（需先告知审核人）。
+  - **红黄绿灯**：`code-review-rules` 的等级表按 Ice 标准细化判定口径（🔴 Blocker / 🟡 Should fix / 🟢 Nit），内部值仍是 `blocking / suggestion / hint`。草稿、PR 总结、行内评论前缀和状态卡统一用灯色；整体门禁分三档：🔴 不建议合并 / 🟡 可合并（有建议）/ 🟢 建议合并。
+  - `diff-fetch` 新增 S4b：拉取已有行内评论（`pr_review.py existing`，只读）和 CI 状态。
+  - `code-review-agent`：节点从 R0–R5 改为 R0–R6（新增「确认发布内容」）；`state.md` 新增 `draft`、`confirmation`、`findings[].publish / dup_of / anchor`、`gate.review_url / inline / dismissed`；同步更新 MCP 权限、状态卡和禁止项（确认前不得写 PR；只能经 `merge-gate` 发布，不得临时用 curl / gh api）。
+  - 新增离线单测 `merge-gate/tests/run_tests.py`（21 条）。`pr_review.py` 的连接方式（`--transport`，默认 `auto`）：**本机已安装 `gh` 且已登录该 host（`gh auth status --hostname`）时优先用 `gh api`**——token 存在系统凭证库，TLS 走系统信任库，以审核人本人身份发评论，不需要 `mcp.json` token，也不用处理证书；否则退回 urllib + `mcp.json` token，此时补加载系统信任库的企业 CA（macOS System / login 钥匙串、Windows Root / CA；离线包的 OpenSSL 3 看不到企业 CA，不补会 `CERTIFICATE_VERIFY_FAILED`），可用 `SSL_CERT_FILE` 覆盖，任何情况下都不关闭校验。脚本不写死任何公司或 CA 名称。每条命令都会输出 `connection{transport, as_user}`；请求体经 stdin 传给 `gh`，不出现在命令行。`submit` 新增四眼原则：发评论的身份就是 PR 作者，或身份无法确认时拒绝提交（exit 5 / 4），测试仓库可加 `--allow-self-review`。文档同步：设计文档 §2 / §3 / §4.4 / §6.1 脚注 ³、`AGENTS.md` §2 / §6、`doc/maintenance/testing.md`。profile 未改（复用 `mcp.github.*`、`review.merge_gate`）。
+  - 升级方式：直接覆盖（需重装 TL / Dev 角色包）。仅新增脚本，未删除文件。建议审核人执行 `gh auth login --hostname <GHES host>`；没装 `gh` 的，首次实测前请在测试 PR 上确认 `mcp.json` 里的 PAT 有写 review 的权限。
+- **CI/CD 允许 QA 日常打 Android STG 测试包（窄口径例外）**：此前 `Android_Adhoc_Build` 传 `flavor=Stg` 会因「入参取值点名高环境」被判超范围，测试只能去 Harness UI 手动打。按团队决策，新增 profile 字段 `mcp.harness.build_backend_exceptions`（`app-test` / `app-prod` 登记 `{ pipeline: Android_Adhoc_Build, input: flavor, values: [Stg], backend: stg }`；CMS 未加，缺省 = 无例外）。
+  - `harness-invoke` S2 新增「Build-backend exception」：须同时满足——精确命中登记的流水线 + 入参 + 取值；流水线 env 标签在 `allowed_envs` 内且为纯 CI（无 environmentRef / CD stage / 晋级链）；取值在 Harness 当前取值域内；本次其它入参（含默认值）不再点名高环境。命中后运行仍判 `in_scope`，S3 参数表与报告须写明「包连 STG 后端」。`Prod` / `Uat2` / `Perf`、iOS STG、其它流水线、任何部署类流水线照旧超范围；人工确认不能替代登记，AI 不得自行增改条目。
+  - `cicd-agent`：HARD SCOPE 段、C2、`scope_check` / param log 增加 `backend_exception`，§7 禁止项补充不得改 `build_backend_exceptions`。
+  - 文档：`AGENTS.md` §2 / §7、设计文档 §1 示意与 §6.1 脚注、`doc/maintenance/profiles.md`。`stage_run.py`（仅 CMS 晋级链用、按 `--env` 校验）与 `latest_build.py`（只读）不涉及入参取值判定，未改；`check.py` 无相关校验，未改。
+  - 升级方式：直接覆盖（需重装 TL / Dev / QA 角色包以更新 profile 与 skill）。
+- **`create-pr` 建 PR 时按 profile 自动带 Labels / Reviewers（目前仅 APP iOS），且须先确认再调用工具**：
+  - 映射：新增 profile 字段 `code.pr.<repo>`，只在 `app-test` / `app-prod` 登记 `ios`。APP `android` 和 CMS 没有这个键，不推断 label / reviewer。
+  - Label：按 diff 路径命中文件数选主模块，打 1 个模块 label；同时改到 Search 和 Booking 时用 `Commerce`。类型 label 按 Jira issue type 映射（`feat-ai/` 分支名看不出类型）。AI 溯源标签 `AIGenerated` 规则不变。
+  - Reviewer：取主模块配置的同事，去掉作者本人，最多 3 个。CODEOWNERS 由 GitHub 自动请求，不重复配置。
+  - 确认门禁：草稿必须列出 Title / Body / Labels / Reviewers，为空也要写 `none`。用户明确确认后，才允许调用 `gh pr create`、`gh pr edit` 或 GitHub MCP 的 PR 写操作。未配置 `code.pr` 和静默模式都不能跳过确认。
+  - 执行：先校验 label 是否存在，不存在的不传、也不自建；PR 建好后再追加 reviewer，失败只提示、不回滚。
+  - `dev-agent`：D1 记录 `sources.story.type`；D7 拆成「出草稿 → `D7_pr_confirm` 等待确认 → 创建」两轮；恢复时针对当前 head 重新出草稿，不沿用旧草稿的确认；§7 增加对应禁止项。
+  - 文档：同步设计文档 §4.3、`doc/maintenance/profiles.md` §2。
+  - 升级方式：直接覆盖。
+
+### 修复
+- **`create-pr` 的模板路径与实际目录不一致**：文档写的是 `template/PR/...`，实际目录是 `template/Mobile/`（APP）和 `template/CMS/`（CMS），skill 也没说明该选哪个目录。现改为按 profile 的 `team` 选择目录。`Mobile/` 下没有 `hotfix` / `docs` 场景模板，命中这两类时改为让用户选择（静默模式下退回通用模板），不再选到不存在的文件。同步更新 `SKILL.md`、`reference.md`、`template/README.md`，以及两份通用模板里的注释。升级方式：直接覆盖。
+
+### 升级方式
+- **直接覆盖**：本版只新增脚本 / 测试与 profile 字段（`mcp.harness.build_backend_exceptions`、`code.pr.<repo>`），无资产删除或改名，安装行为不变。需重装 TL / Dev / QA 角色包以更新 skill 与 profile；运行时未变，无需重装运行时。
+- Code Review 行内评论：建议审核人执行 `gh auth login --hostname <GHES host>`；没装 `gh` 的，首次使用前请在测试 PR 上确认 `mcp.json` 里的 PAT 有写 review 的权限。
+
+---
+
 ## [0.4.0] - 2026-10-20
 
 ### 新增

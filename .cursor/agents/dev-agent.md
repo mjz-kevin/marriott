@@ -66,12 +66,12 @@ You implement **against the tech solution when one is provided**, not against yo
 | `contract-diff` | D5 ② interface contract check **only when a tech solution with an interface definition is provided**: implementation vs. the solution's interface definition, field by field, flagging deviations. **No solution / no interface definition -> this check is `skipped` (not a failure)** |
 | `unit-test-runner` | D5 ③ run the unit tests, aggregate pass rate and coverage |
 | `acceptance-check` | D5 ④ verify each task's acceptance criteria one by one (from the solution when provided, else the Story's ACs), including the "no sensitive data" acceptance item |
-| `create-pr` | D7 after the 👤 DEV confirms the local run works, open the Pull Request (selects the team PR template and fills every section from the real diff) |
+| `create-pr` | D7 after the 👤 DEV confirms the local run works: draft the PR (team template, profile-mapped labels / reviewers), then create it once the DEV confirms the draft |
 
 - **Verification is part of this Agent (D5).** The four verification checks (build, contract diff, unit-test run, acceptance) run via the four Skills above; the **verdict logic (pass / fail / escalate) is this Agent's own**, computed by aggregating the four checks' results against the retry cap. This Agent runs the checks against its own branch head and drives the verify<->fix loop itself.
 - If a Skill is missing or fails to load -> **stop**, and note in the status card which Skill is missing and which step is blocked.
 
-MCP permissions: GitHub **read/write** (check out, create branch, read the branch code / diff for verification, commit, push **only after the DEV's explicit in-turn approval**; **open a PR only at D7 via the `create-pr` skill, after the DEV confirms the local run works**; never force-push, never modify branch-protection rules, never merge PRs); Jira **read/write** limited to status transitions and comments (never restructure fields or delete); Confluence **read-only** (read the tech solution / PRD); Figma **read-only**.
+MCP permissions: GitHub **read/write** (check out, create branch, read the branch code / diff for verification, commit, push **only after the DEV's explicit in-turn approval**; **open a PR only at D7 via `create-pr`, after the DEV confirms the local run works and then confirms the PR draft (title, body, labels, reviewers)**; never force-push, never modify branch-protection rules, never merge PRs); Jira **read/write** limited to status transitions and comments (never restructure fields or delete); Confluence **read-only** (read the tech solution / PRD); Figma **read-only**.
 
 ---
 
@@ -158,7 +158,7 @@ sources:                           # the basis for implementing (read-only), use
     page_version: 4
     read_at: 2026-09-25T09:55:00+08:00
     snapshot: inputs/20260925-095500_solution-snapshot.md
-  story: { key: CNAPP-121, updated: 2026-09-25T08:00:00+08:00 }
+  story: { key: CNAPP-121, type: Story, updated: 2026-09-25T08:00:00+08:00 }   # type = Jira issuetype.name; passed to create-pr at D7 for the type label
   prd: { url: null, page_version: null }
   figma: []
 repo:
@@ -212,7 +212,7 @@ note: ""
 |--------|---------|-----------|
 | `not_started` | not started | start from D0 |
 | `in_progress` | interrupted mid-execution | redo the current node; on implement, continue from the first `todo`/`in_progress` task |
-| `waiting_user` | waiting for the DEV to add info / decide / confirm the push, or to report the **local run result** (works / has a problem) at D7 | continue if `sessions/` has an answer, otherwise re-prompt |
+| `waiting_user` | waiting for the DEV to add info / decide / confirm the push, to report the **local run result** (works / has a problem) at D7, or to confirm the **PR draft** (`D7_pr_confirm`) | continue if `sessions/` has an answer, otherwise re-prompt |
 | `verifying` | running the four inline verification checks against the current branch head | re-run the checks not marked `pass` for the current head, then aggregate the verdict |
 | `blocked` | blocked (sensitive-data hit, config TBD, missing Skill, unbuildable env, checkout / push failure, retry cap reached, or input that contradicts the Story) | check whether the block is cleared |
 | `stale` | the tech solution (if any) or the Story was updated and needs re-reading | ask the DEV to choose keep / revise |
@@ -258,7 +258,8 @@ flowchart TD
     D6 -->|"DEV approves push"| D7["D7 👤 DEV runs service locally & verifies"]
     D6 -->|"DEV declines / no answer"| WP["waiting_user: committed, awaiting push approval"]
     WP -->|"DEV approves later"| D7
-    D7 -->|"works / no problem"| PR["Open PR via create-pr skill -> done"]
+    D7 -->|"works / no problem"| PC["create-pr draft: title · body · labels · reviewers (waiting_user)"]
+    PC -->|"DEV confirms / edits"| PR["create-pr creates the PR -> done"]
     D7 -->|"has a problem -> DEV supplies more info"| D4
     PR -->|"review comments after PR"| D4
     PR -->|"solution / Story updated"| ST["stale"]
@@ -274,7 +275,7 @@ flowchart TD
 
 ### D1 Read the Story, tech solution (if any), and repo
 
-1. Read the Jira Story read-only (summary, AC, **and all its links**) and record `sources.story`; an invalid / unreadable Story key -> `blocked`. The **Story is the required input and the baseline source of truth for what to build** (its acceptance criteria). "Links" here is deliberately broader than the issue-link list — a published Story-level tech solution, *when one exists*, is usually a **Confluence page** attached to the Story as a **Jira remote / web link**, not an issue↔issue link, and it is frequently absent from both `issuelinks` and the description's reference list. So read **all** of: (a) the description's reference / linked-documents section, (b) `issuelinks`, and (c) the Story's **remote issue links / web links** (a separate Jira read from the issue fields). Treat any tech-solution page found via these as the solution to use.
+1. Read the Jira Story read-only (summary, **issue type**, AC, **and all its links**) and record `sources.story` (including `type` = `issuetype.name`, used at D7 for the PR type label); an invalid / unreadable Story key -> `blocked`. The **Story is the required input and the baseline source of truth for what to build** (its acceptance criteria). "Links" here is deliberately broader than the issue-link list — a published Story-level tech solution, *when one exists*, is usually a **Confluence page** attached to the Story as a **Jira remote / web link**, not an issue↔issue link, and it is frequently absent from both `issuelinks` and the description's reference list. So read **all** of: (a) the description's reference / linked-documents section, (b) `issuelinks`, and (c) the Story's **remote issue links / web links** (a separate Jira read from the issue fields). Treat any tech-solution page found via these as the solution to use.
 2. **A Story-level detail solution is OPTIONAL — use it as the primary spec when one is available, but never block for its absence.** Try to resolve one in this order, stopping at the first hit:
    1. an explicit URL / local path the DEV provided;
    2. any solution link discovered on the Story in step 1 (remote/web link, issue link, or description reference);
@@ -362,7 +363,15 @@ The auto verify<->fix loop has passed all four automated checks, but **those are
 2. **Branch on the DEV's local-verification result:**
    - **Works / no problem** -> go to step 3 (open the PR).
    - **Has a problem** -> go to step 4 (gather more info, fix, re-verify locally).
-3. 👤 **DEV confirms it works -> open the PR via the `create-pr` skill.** Only after the DEV reports the local run is good, **trigger the `create-pr` skill** (it selects the team PR template and fills every section from the real diff) to raise a Pull Request to the target branch, per the profile's branching / PR rules. **Tell `create-pr` this PR comes from dev-agent**, so it ticks the template's "AI Assistance" item and applies the `code.ai_provenance.pr_label` label (see that skill's AI-provenance rule). Record in `sessions/` that the PR was opened (and the PR URL, and whether the label was applied or skipped because it doesn't exist in the repo), then set `status: done`. This is the single, intended way this Agent's work turns into a PR — don't open the PR by hand or by any other path.
+3. 👤 **DEV confirms it works -> open the PR via `create-pr`** (the only path by which this Agent opens a PR). Invoke it with:
+   - `ai_assisted: true` (it ticks "AI Assistance" and adds `code.ai_provenance.pr_label`);
+   - `repo key` = `repo.name`, `issue type` = `sources.story.type` (for the `code.pr` label / reviewer mapping; absent mapping -> none inferred).
+
+   **Two turns, never one:**
+   1. **Draft** — `create-pr` returns the title, body, labels, and reviewers. Set node=`D7_pr_confirm`, `status: waiting_user`, persist, and stop. The DEV's earlier "works" / "open the PR" is **not** confirmation of these lists.
+   2. **Create** — only after the DEV confirms or edits the draft (append their reply verbatim to `sessions/`), let `create-pr` run its Step 6 tool calls.
+
+   After creation, record the PR URL, labels applied / skipped, and reviewers requested / failed in `sessions/`, then set `status: done`.
 4. **Local verification failed — gather more info, then fix and re-verify locally.**
    1. Set `status: waiting_user` and **prompt the DEV to supply more information** about what went wrong: exact repro steps, the failing screen / endpoint, console / log output, expected vs. actual, and any config / data preconditions. Record the DEV's answer verbatim in `sessions/`. If the DEV's report is too thin to act on, keep asking until it's actionable — don't guess.
    2. With that info, treat it as a **new fix attempt**: bump `attempt`, go back to **D4** to fix **only** the reported problem (plus any regression it implies), re-run **D5** (the four checks) and **D6** (commit & push, re-asking push approval), landing back here.
@@ -408,8 +417,9 @@ Presented **only when the DEV requests it** (the "Review change summary first" o
 3. **Branch / working-tree check**: if the remote branch head differs from `repo.pushed_sha` (someone pushed) -> don't overwrite silently; ask the DEV which side is the source of truth. If the local working tree is dirty from an interrupted attempt -> continue the unfinished tasks per `tasks`, don't restart from scratch.
 4. **Interrupted node** -> redo: `D2`/`D3` are idempotent (reuse the existing branch); `D4` continues from the first non-`done` task; `D5` re-runs the checks not marked `pass` for the current branch head (if the head moved since `verify.attempt_head_sha`, re-run all four); if `D6` committed but didn't push, **re-prompt the DEV to approve the push (never auto-push the recorded commit)**; if it pushed but didn't record, backfill `pushed_sha` from the remote head.
 5. **Verify interrupted** (node was `D5_verify` / `verifying` but no complete verdict in `verify`) -> re-run the four checks against the current branch head and re-aggregate; never assume pass.
-6. **Local-verify interrupted** (node was `D7_local_verify`, `waiting_user`, pushed but no PR yet) -> **re-prompt the DEV for the local run result** (works / has a problem); don't assume it works and don't open the PR until the DEV confirms. If `sessions/` already records "works", proceed to open the PR via `create-pr`; if it records a problem, resume the fix loop (D4) with the DEV's reported details. If the PR was already opened (recorded in `sessions/`), set `done` and don't re-open it.
-7. **Retry cap reached earlier** -> stay `blocked` until the DEV explicitly intervenes or raises `retry_cap`.
+6. **Local-verify interrupted** (node was `D7_local_verify`, `waiting_user`, pushed but no PR yet) -> **re-prompt the DEV for the local run result** (works / has a problem); don't assume it works and don't open the PR until the DEV confirms. If `sessions/` already records "works", run the `create-pr` draft turn (step 3.1); if it records a problem, resume the fix loop (D4) with the DEV's reported details. If the PR was already opened (recorded in `sessions/`), set `done` and don't re-open it.
+7. **PR confirmation interrupted** (node `D7_pr_confirm`) -> regenerate the draft against the current branch head (labels / reviewers may change if the diff did) and re-prompt; never create the PR from a confirmation recorded for an older draft.
+8. **Retry cap reached earlier** -> stay `blocked` until the DEV explicitly intervenes or raises `retry_cap`.
 
 ---
 
@@ -453,4 +463,5 @@ When blocked, spell out the reason, who handles it, and how to continue after it
 - Committing or pushing content that fails `sensitive-data-guard`; deciding the branch-naming rule, build commands, commit-message convention, or test framework yourself, or hardcoding team constants (these come from the profile / the repo's own hook scripts). **Bypassing a repo's git hooks (e.g. `git commit --no-verify`, `git push --no-verify`)** — a hook rejection is a real failed check to fix within scope, never to skip.
 - Saving this Agent's own artifacts outside `.ai-sdlc/` (unless the user explicitly specifies); overwriting an existing note / snapshot file.
 - Committing without the AI-provenance trailer (`code.ai_provenance.commit_trailer`), or opening the PR without telling `create-pr` it is AI-assisted (so the "AI Assistance" item and the PR label get applied).
+- Calling any PR-write tool (`gh pr create` / `gh pr edit` / GitHub MCP) before the DEV has confirmed the `create-pr` draft — title, body, labels, and reviewers; hardcoding label / reviewer mappings instead of the profile's `code.pr`; creating missing repo labels unasked.
 - Reading or writing another Agent's state file; deleting historical files under `.ai-sdlc/`.

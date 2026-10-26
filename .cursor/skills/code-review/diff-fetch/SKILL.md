@@ -50,6 +50,7 @@ Required config keys missing (TBD) → stop and ask for them; don't guess the re
 - S2 Read the PR metadata via GitHub MCP (get_pull_request)
 - S3 Read the changed-file list and per-file patch via MCP (list_pull_request_files, paging through all)
 - S4 Read the commit list via MCP (list_pull_request_commits)
+- S4b Read existing review comments (for dedupe) and the CI status of the head SHA
 - S5 Filter review-exempt files, classify by file, build the structured review context
 - S6 Report the context (handed to the code-review-rules step)
 ```
@@ -68,6 +69,17 @@ Read via `list_pull_request_files` (`owner`, `repo`, `pull_number`) for each cha
 
 Read the commit sequence via `list_pull_request_commits`, to understand how the changes evolved, distinguish "newly added this time" from "historical leftover," and aid the rules review's context judgment.
 
+### S4b Existing comments and CI status (read-only)
+
+- **Existing inline review comments** — the GitHub MCP has no tool for PR review (line) comments, so read them with the shared script (read-only subcommand):
+
+  ```bash
+  python <skills>/code-review/merge-gate/scripts/pr_review.py --host {mcp.github.host} existing --repo {owner/name} --pr {n}
+  ```
+
+  It returns the head SHA, every existing inline comment (`path` / `line` / author / first line / outdated) and the reviews, including earlier AI SDLC reviews (`ai_sdlc_marker`). Save it to `inputs/`. Downstream uses it so the draft **doesn't duplicate** a point a human or bot already raised on the same line. If the script fails (no token / network), note "existing comments not checked" and continue — don't block the review.
+- **CI status** — optional: `list_check_runs_for_ref` on the head SHA; summarize pass / fail / pending with the failing check names, for the review header. Unavailable → note "CI status unknown".
+
 ### S5 Filter and classify
 
 - Filter files matched by `review.ignore_globs` (e.g. `*.lock`, `dist/**`, `*.generated.*`, `pnpm-lock.yaml`, `Package.resolved`); when the config is absent, use the built-in fallback list and note it.
@@ -78,7 +90,7 @@ Read the commit sequence via `list_pull_request_commits`, to understand how the 
 
 | Rule | Description |
 |------|------|
-| Read via MCP | PR info, files, and commits are all read via GitHub MCP; don't guess the diff content |
+| Read via MCP | PR info, files, and commits are all read via GitHub MCP; don't guess the diff content. Only the existing inline review comments go through the read-only `pr_review.py existing` (the MCP has no tool for them) |
 | Page through all | `list_pull_request_files` must traverse all pages; a missed page misses files to review |
 | Fetch only, don't rule | This step only fetches and organizes; it doesn't rule issues or write comments |
 | Exempt files traceable | Filtered files must be listable (which were filtered, by which rule), not silently hidden |
@@ -100,6 +112,8 @@ Review context ready: {owner}/{repo} PR #{n} — {title}
 
 - **Branch**: {head} → {base} (head SHA {head_sha})
 - **Size**: {files} files, +{add} / -{del} lines, {commits} commits
+- **CI**: {pass / fail: {checks} / pending / unknown}
+- **Existing review comments**: {n} inline ({m} outdated) / not checked
 - **Files under review**: {review count} (filtered {ignored} exempt)
 
 | File | Status | +/- | Note |

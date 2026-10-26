@@ -1,6 +1,6 @@
 <!--
 Default Pull Request Template (general-purpose)
-To use a dedicated template for a specific scenario, see the template/PR/PULL_REQUEST_TEMPLATE/ directory,
+To use a dedicated template for a specific scenario, see the PULL_REQUEST_TEMPLATE/ directory next to this file,
 or append a parameter such as ?template=feature.md to the PR creation URL to select one.
 
 Branch naming convention: [Jira ticket number]-[description]
