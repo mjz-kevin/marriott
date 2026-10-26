@@ -14,6 +14,20 @@
 
 ---
 
+## [0.4.2] - 2026-10-26
+
+### 变更
+- **CI/CD 允许打 iOS STG 测试包（`interceptor-stg`，窄口径例外）**：此前 `iOS_Dragon_App_Testflight_Dev` 传 `API_BASE_URL=https://interceptor-stg.csh.marriott.com.cn/v1/graph` 会因「入参取值点名高环境」被判超范围，只能去 Harness UI 手动打。按团队决策（2026-10），`app-test` / `app-prod` 的 `build_backend_exceptions` 新增 `{ pipeline: iOS_Dragon_App_Testflight_Dev, input: API_BASE_URL, values: ["https://interceptor-stg.csh.marriott.com.cn/v1/graph"], backend: stg }`。只登记这一个 URL：`gatewaydsapstg1`（.com / .com.cn）、perf / prf 网关仍超范围。判定逻辑没变，沿用 S2 的四项检查。
+  - `harness-invoke`：description、开头说明、S2 匹配说明（URL 须整串一致）、S3 确认卡补 iOS 示例、规则表和场景表都去掉了「iOS STG 超范围」的说法，改成「各平台只匹配自己的条目，不得把 iOS 请求套到 Android `flavor` 条目上」。`cicd-agent`：HARD SCOPE 段和 C2 同步。
+  - `init/check.py` 新增 `backend-exc` 检查：条目字段齐全、values 非空；引用的流水线已在 `pipelines` 登记且 env 在 `allowed_envs` 内；取值 / backend 不得点名生产；test / prod 两份一致（ERROR）。条目的流水线未在 Skill / Agent / `AGENTS.md` 提及时只报 WARN。
+  - 文档：`AGENTS.md` §2 / §7、设计文档 §1 示意与 §6.1 脚注 ²、`doc/maintenance/profiles.md`、`doc/maintenance/change-checklist.md` §5（新增「改例外条目」清单）。`stage_run.py` / `latest_build.py` 不涉及取值判定，未改。
+  - 升级方式：直接覆盖（需重装 TL / Dev / QA 角色包，以更新 profile 和 skill）。
+
+### 升级方式
+- **直接覆盖**：仅修改 skill / agent / profile 内容与 `init/check.py`，无资产新增、删除或改名，安装行为不变。需重装 TL / Dev / QA 角色包以更新 `harness-invoke`、`cicd-agent` 与 profile；运行时未变，无需重装运行时。
+
+---
+
 ## [0.4.1] - 2026-10-26
 
 ### 变更
