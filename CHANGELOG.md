@@ -12,6 +12,10 @@
 
 ## [Unreleased]
 
+---
+
+## [0.4.1] - 2026-10-26
+
 ### 变更
 - **Code Review 改造（以 iOS 同事 Ice 的 `review-pr-link` 为基准）：先本地确认再发布、行内评论、红黄绿灯**：
   - **发布前本地确认**：新增节点「确认发布内容」（`R4_confirm_publish`，停止点）。`review-comment` 先写本地草稿 `docs/REVIEW-DRAFT_*`，每条发现带编号、灯色和可点击的 `file:line`，并与 PR 上已有评论去重。默认预选 🔴 / 🟡，🟢 和重复项默认不选。审核人回复「全部 / 只发 F1,F2 / 去掉 F2: 原因 / 仅总结 / 不发」后才能写 PR（`merge-gate` 硬门禁）。确认结果绑定 head SHA，head 变化后作废。去掉 🔴 必须填写原因，记为 `dismissed`；门禁只按实际发布的发现判定，被去掉的阻断项会在 PR 总结里列出。
@@ -38,6 +42,10 @@
 
 ### 修复
 - **`create-pr` 的模板路径与实际目录不一致**：文档写的是 `template/PR/...`，实际目录是 `template/Mobile/`（APP）和 `template/CMS/`（CMS），skill 也没说明该选哪个目录。现改为按 profile 的 `team` 选择目录。`Mobile/` 下没有 `hotfix` / `docs` 场景模板，命中这两类时改为让用户选择（静默模式下退回通用模板），不再选到不存在的文件。同步更新 `SKILL.md`、`reference.md`、`template/README.md`，以及两份通用模板里的注释。升级方式：直接覆盖。
+
+### 升级方式
+- **直接覆盖**：本版只新增脚本 / 测试与 profile 字段（`mcp.harness.build_backend_exceptions`、`code.pr.<repo>`），无资产删除或改名，安装行为不变。需重装 TL / Dev / QA 角色包以更新 skill 与 profile；运行时未变，无需重装运行时。
+- Code Review 行内评论：建议审核人执行 `gh auth login --hostname <GHES host>`；没装 `gh` 的，首次使用前请在测试 PR 上确认 `mcp.json` 里的 PAT 有写 review 的权限。
 
 ---
 
