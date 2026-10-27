@@ -12,6 +12,9 @@
 
 ## [Unreleased]
 
+### 变更
+- **`test-run-report-bug`：Jira Bug 写入格式硬约束**：补齐与 `user-story-publish` 一致的 MCP 提交规则——`createJiraIssue` / `editJiraIssue` / `addCommentToJiraIssue` 必须带 `contentFormat: "markdown"`，Description 与 Replication Steps 仅用 Markdown，禁止把 Confluence storage HTML / 原始 HTML / Wiki 标记写入字段，避免工单正文出现可见的 HTML 标签或未渲染的 `**`；`references/app-bug-template.md` 增加 §5 对照表。
+
 ---
 
 ## [0.4.2] - 2026-10-26
