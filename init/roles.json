@@ -70,6 +70,7 @@
         "review-comment",
         "merge-gate",
         "create-pr",
+        "review-feedback",
         "harness-invoke"
       ]
     },
@@ -100,6 +101,7 @@
         "review-comment",
         "merge-gate",
         "create-pr",
+        "review-feedback",
         "harness-invoke"
       ]
     },

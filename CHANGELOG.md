@@ -12,6 +12,21 @@
 
 ## [Unreleased]
 
+### 变更
+- **行内 review 评论不再挂在语句上一行注释上**：`pr_review.py plan` 若请求行是 `//` / KDoc / 空行，且下一句语句在 diff 里，则锚到那句（`nudged_from` 记下原稿行号）；正文反引号只引用了注释本身则不挪，避免误伤「这条注释写错了」。`code-review-rules` / `review-comment` / `code-review-agent` 写明 `line` 必须是被讨论的语句。离线单测 36 → 42。已发到 PR 的旧评论不会改位置。
+
+### 新增
+- **Code Review 意见闭环：开发能读到全部评论（含代码行内评论），逐条决定「改」还是「解释不改」，确认后回复；审核人可人工复审，也可用 agent 复审**：
+  - **问题**：GitHub MCP 没有读取 / 回复代码行内评论的工具；`pr_review.py existing` 只返回每条评论第一行的前 200 字符（原本只用于去重），开发在新对话里贴 PR 链接时读不全意见。dev-agent 也没有「处理 review 意见」的流程，读到意见后容易直接改代码。
+  - **脚本 `merge-gate/scripts/pr_review.py`**（审核侧与开发侧共用一份）：`existing` 去掉截断，补 `id` / `in_reply_to_id` / 完整正文（旧字段保留）。新增 `feedback`（只读）：行内评论按 thread 分组（根评论 + 回复）、review 总结（含「diff 外的发现」）、PR 对话区评论，全部全文；resolved 状态走 GraphQL，不可用时为 `null` 并给出警告，不中断；标出 `awaiting`（等作者 / 等审核人）。新增 `reply`（写）：回复挂到 thread 根评论下，或在对话区发一条引用原文的评论；每条带隐藏标记 `ai-sdlc-reply:…`，重跑不重复发；支持 `--dry-run`；部分失败逐条报告（exit 4）。新增 `resolve`（写，仅审核侧）：GraphQL `resolveReviewThread`，发评论身份是 PR 作者时拒绝（exit 5）。离线单测从 21 条增至 36 条。
+  - **新 Skill `dev/review-feedback`**（随 TL / Dev 分发）：读取全部评论 → AI 逐条预判写本地分诊单 `REVIEW-TRIAGE_*`（改 / 解释不改 / 反问 / 忽略，附理由和回复草稿）→ **开发逐条拍板前不允许改代码** → 「改」的条目走 dev-agent 的修复循环（验证、提交，推送前确认）→ 推送成功后生成「已在 `sha` 修复」回复 → **开发确认回复原文后才发** → 可选：重新请求 review（开发选择后调用 MCP `request_reviewers`）。🔴 选「解释不改」允许，但明确提示审核人认可前门禁仍是 🔴。开发侧不 resolve、不 dismiss、不 approve。
+  - **`dev-agent`**：新增节点 D8「处理 review 意见」（`D8_read` / `D8_triage` / `D8_reply_confirm`）、state 字段 `pr` / `review_feedback`；支持用 PR 链接定位（§5.1，找不到 state 时按 PR 分支建最小 state）；D6 推送后若属于 review 修复，回到 D8 发回复，不再走 D7 建 PR；同步 MCP 权限、状态卡、恢复规则、禁止项。
+  - **审核侧**：`diff-fetch` 改用 `feedback` 读全量评论；`review-comment` 去重新增「已讨论」类，并在草稿里新增「作者回复」表（AI 建议接受 / 坚持 + 回复草稿，`review-answers_r{n}.json`）；`merge-gate` 新增 S7：审核人逐条确认后回复，接受的 thread 由 agent resolve，坚持的保持 open，接受的 🔴 不再阻断；`code-review-agent` 支持「回复轮」（head 未变、只有作者回复时不重新审代码、不发新 review）。审核人也可以直接在 GitHub 上看回复、自己 resolve，下次运行会读到。
+  - 文档：`AGENTS.md` §2 / §3、设计文档 §2.2 / §4 / §5 / §6.1（新增脚注 ⁵）、`init/README.md`、`doc/maintenance/testing.md`。profile 未改（复用 `mcp.github.*`）。
+
+### 升级方式
+- **直接覆盖**：只新增 skill（`review-feedback`）与脚本子命令，没有删除或改名，安装行为不变。需重装 TL / Dev 角色包。resolve 需要发评论账号对该仓库有写权限（`gh` 登录账号或 `mcp.json` 的 PAT）。
+
 ---
 
 ## [0.4.2] - 2026-10-26

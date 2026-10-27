@@ -11,11 +11,37 @@ Subcommands (all print one JSON object on stdout):
 
   existing  --repo owner/name --pr N
             Read-only. Head SHA + existing inline review comments + reviews (for dedupe).
+            Every comment carries its full body (never truncated) plus id / in_reply_to_id.
+
+  feedback  --repo owner/name --pr N [--out feedback.json]
+            Read-only. All review feedback on the PR, full text, never truncated:
+              threads       inline review comments grouped into threads (root + replies),
+                            with path / line / diff_hunk / outdated / resolved / who spoke last
+              reviews       review summaries (state + body), incl. AI SDLC markers
+              conversation  PR conversation (issue) comments
+            `resolved` comes from GraphQL (reviewThreads.isResolved), best effort: null plus
+            a warning when GraphQL is unavailable. With --out the full result goes to the
+            file and stdout gets counts only. Used by review-feedback (author side) and
+            diff-fetch (reviewer side, to see the author's replies).
+
+  reply     --repo owner/name --pr N --payload replies.json [--dry-run]
+            Write. Posts confirmed replies: kind=thread -> under an inline review thread
+            (POST .../pulls/{n}/comments/{root}/replies); kind=conversation -> one PR
+            conversation comment (for review-summary / off-diff findings, which have no
+            thread). Idempotent per marker ai-sdlc-reply:{feedback_id}:r{round}:{item_id}.
+            Never resolves, approves, or dismisses. --dry-run validates and posts nothing.
+
+  resolve   --repo owner/name --pr N --payload resolve.json [--dry-run]
+            Write, reviewer side only. Resolves the listed review threads (GraphQL
+            resolveReviewThread) after the reviewer accepted the author's reply. Refuses
+            when the posting identity is the PR author (the author never closes a
+            reviewer's point) unless --allow-self-review (test repos only).
 
   plan      --repo owner/name --pr N --payload draft.json --out resolved.json [--summary-only]
             Read-only. Fetch the PR head + per-file patches, validate every inline comment
             against the diff (RIGHT side), and resolve its anchor:
-              inline  - the requested line is in the diff
+              inline  - the requested line is in the diff (a comment/blank snaps onto the
+                        next statement unless the body quotes only the comment)
               nearby  - not in the diff; attached to the nearest changed line of the same
                         file, body references the real line ("~L111, outside this diff")
               summary - file not in the diff / no patch / removed; moved into the review body
@@ -51,7 +77,8 @@ submit refuses when the posting identity is the PR author (four-eyes) unless
 --allow-self-review (test repos only).
 
 Exit codes: 0 ok / already submitted; 2 usage or config error; 3 stale head (re-run plan);
-4 GitHub API error (message in JSON); 5 self-review refused.
+4 GitHub API error (message in JSON; for reply / resolve: at least one item failed, the
+others are still reported); 5 self-review / author-resolve refused.
 """
 from __future__ import annotations
 
@@ -70,6 +97,8 @@ import urllib.request
 
 MCP_SERVER_KEY = "marriott-github"
 MARKER_PREFIX = "ai-sdlc-review"
+REPLY_MARKER_PREFIX = "ai-sdlc-reply"
+REPLY_KINDS = ("thread", "conversation")
 ALLOWED_EVENTS = ("COMMENT", "REQUEST_CHANGES")
 COMMENT_FIELDS = ("path", "line", "side", "start_line", "start_side", "body")
 HUNK_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@")
@@ -137,6 +166,13 @@ def api_base(host):
     if h == "github.com":
         return "https://api.github.com"
     return "https://%s/api/v3" % h
+
+
+def graphql_url(host):
+    h = normalize_host(host)
+    if h == "github.com":
+        return "https://api.github.com/graphql"
+    return "https://%s/api/graphql" % h
 
 
 # ------------------------------------------------------------------ http
@@ -246,10 +282,16 @@ class HttpClient(_Paging):
     """REST over urllib with the mcp.json token (fallback when gh is unavailable)."""
     transport = "http"
 
-    def __init__(self, base, token):
+    def __init__(self, base, token, graphql_endpoint=None):
         self.base = base
         self.token = token
+        self.graphql_endpoint = graphql_endpoint
         self.ctx = ssl_context()
+
+    def graphql(self, query, variables):
+        if not self.graphql_endpoint:
+            raise ApiError(0, "GraphQL endpoint unknown")
+        return self.request("POST", self.graphql_endpoint, {"query": query, "variables": variables})
 
     def request(self, method, path, body=None):
         url = path if path.startswith("http") else self.base + path
@@ -342,6 +384,10 @@ class GhClient(_Paging):
             raise ApiError(status, msg)
         return json.loads(out_s) if out_s.strip() else None
 
+    def graphql(self, query, variables):
+        # `gh api graphql` resolves the host's GraphQL endpoint (GHES: /api/graphql) itself.
+        return self.request("POST", "graphql", {"query": query, "variables": variables})
+
 
 def gh_status(host):
     """(exe, ready, reason) for `gh` against `host`. Never prompts."""
@@ -371,17 +417,24 @@ def make_client(transport, host, mcp_path):
         fallback_reason = reason
     else:
         fallback_reason = "--transport http"
-    return HttpClient(api_base(host), load_github_token(mcp_path)), fallback_reason
+    return HttpClient(api_base(host), load_github_token(mcp_path), graphql_url(host)), fallback_reason
 
 
 # ------------------------------------------------------------------ diff logic (pure, unit-tested)
+# Agents often pin a finding on the // / KDoc / blank above the statement they
+# quote. Snap forward so the GitHub comment sits on the statement (PR 1450:154→155).
+NUDGE_WINDOW = 8
+_QUOTE_RE = re.compile(r"`([^`]+)`")
+
+
 def parse_patch(patch):
-    """Return (commentable, added): new-file (RIGHT side) line numbers present in the diff.
+    """Return (commentable, added, texts): new-file (RIGHT side) lines in the diff.
 
     commentable = context + added lines (GitHub accepts RIGHT-side comments on both);
-    added = only '+' lines (preferred anchors when relocating an off-diff finding).
+    added = only '+' lines (preferred anchors when relocating an off-diff finding);
+    texts = {line: source without the leading diff marker} for every commentable line.
     """
-    commentable, added = set(), set()
+    commentable, added, texts = set(), set(), {}
     new_line = None
     for raw in (patch or "").splitlines():
         m = HUNK_RE.match(raw)
@@ -393,13 +446,64 @@ def parse_patch(patch):
         if raw.startswith("+"):
             commentable.add(new_line)
             added.add(new_line)
+            texts[new_line] = raw[1:]
             new_line += 1
         elif raw.startswith("-"):
             continue
         else:
             commentable.add(new_line)
+            texts[new_line] = raw[1:] if raw.startswith(" ") else raw
             new_line += 1
-    return commentable, added
+    return commentable, added, texts
+
+
+def is_non_statement(text):
+    """True for a blank or comment/KDoc line (C-like, #, --, HTML, Python docstring)."""
+    s = (text or "").strip()
+    if not s:
+        return True
+    if s.startswith("//") or s.startswith("#") or s.startswith("--"):
+        return True
+    if s.startswith("/*") or s.startswith("*/") or s.startswith("*"):
+        return True
+    if s.startswith("<!--") or s.startswith('"""') or s.startswith("'''"):
+        return True
+    return False
+
+
+def _quoted_on(body, text):
+    """Backtick snippets (len >= 4) that appear in text."""
+    src = text or ""
+    out = []
+    for s in _QUOTE_RE.findall(body or ""):
+        s = s.strip()
+        if len(s) >= 4 and s in src:
+            out.append(s)
+    return out
+
+
+def next_statement_line(start, commentable, texts, window=NUDGE_WINDOW):
+    """First commentable statement after start, within window new-file lines."""
+    for n in range(start + 1, start + 1 + window):
+        if n in commentable and not is_non_statement(texts.get(n, "")):
+            return n
+    return None
+
+
+def nudge_off_comment(line, commentable, texts, body):
+    """If line is a comment/blank, snap to the next statement unless the body quotes only the comment.
+
+    Returns (target_line, nudged_from_or_None).
+    """
+    if not is_non_statement(texts.get(line, "")):
+        return line, None
+    nxt = next_statement_line(line, commentable, texts)
+    if nxt is None:
+        return line, None
+    here, there = texts.get(line, ""), texts.get(nxt, "")
+    if _quoted_on(body, here) and not _quoted_on(body, there):
+        return line, None
+    return nxt, line
 
 
 def nearest(target, candidates):
@@ -442,19 +546,22 @@ def resolve_comments(comments, files):
             anchors.append(rec)
             continue
 
-        commentable, added = parsed[path]
+        commentable, added, texts = parsed[path]
         if line in commentable:
-            item = {"path": path, "line": line, "side": "RIGHT", "body": body}
+            target, nudged_from = nudge_off_comment(line, commentable, texts, body)
+            item = {"path": path, "line": target, "side": "RIGHT", "body": body}
             start = c.get("start_line")
             try:
                 start = int(start) if start is not None else None
             except (TypeError, ValueError):
                 start = None
-            if start is not None and start < line and all(
-                    n in commentable for n in range(start, line + 1)):
+            if start is not None and start < target and all(
+                    n in commentable for n in range(start, target + 1)):
                 item["start_line"] = start
                 item["start_side"] = "RIGHT"
-            rec.update(anchor="inline", line=line)
+            rec.update(anchor="inline", line=target)
+            if nudged_from is not None:
+                rec["nudged_from"] = nudged_from
             inline.append(item)
         else:
             near = nearest(line, added) or nearest(line, commentable)
@@ -526,9 +633,11 @@ def cmd_existing(cli, args):
         "author": info["author"], "connection": conn,
         "self_review": bool(conn["as_user"]) and conn["as_user"] == info["author"],
         "inline_comments": [{
+            "id": c.get("id"), "in_reply_to_id": c.get("in_reply_to_id"),
             "path": c.get("path"), "line": c.get("line") or c.get("original_line"),
             "user": (c.get("user") or {}).get("login"),
-            "first_line": (c.get("body") or "").split("\n", 1)[0][:200],
+            "first_line": (c.get("body") or "").split("\n", 1)[0],
+            "body": c.get("body") or "",
             "outdated": c.get("line") is None, "url": c.get("html_url"),
         } for c in comments],
         "reviews": [{
@@ -537,6 +646,310 @@ def cmd_existing(cli, args):
             "ai_sdlc_marker": find_marker(r.get("body")),
         } for r in reviews],
     })
+
+
+# ------------------------------------------------------------------ feedback / reply / resolve
+THREADS_QUERY = """
+query($owner: String!, $name: String!, $number: Int!, $cursor: String) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+      reviewThreads(first: 100, after: $cursor) {
+        pageInfo { hasNextPage endCursor }
+        nodes { id isResolved comments(first: 1) { nodes { databaseId } } }
+      }
+    }
+  }
+}"""
+
+RESOLVE_MUTATION = """
+mutation($id: ID!) {
+  resolveReviewThread(input: {threadId: $id}) { thread { id isResolved } }
+}"""
+
+
+def gql(cli, query, variables):
+    res = cli.graphql(query, variables) or {}
+    if res.get("errors"):
+        raise ApiError(200, "GraphQL: " + json.dumps(res["errors"], ensure_ascii=False)[:2000])
+    return res.get("data") or {}
+
+
+def thread_states(cli, owner, name, pr, max_pages=30):
+    """{root comment databaseId: {"node_id", "resolved"}} via GraphQL reviewThreads."""
+    states, cursor = {}, None
+    for _ in range(max_pages):
+        data = gql(cli, THREADS_QUERY, {"owner": owner, "name": name, "number": pr, "cursor": cursor})
+        rt = (((data.get("repository") or {}).get("pullRequest") or {}).get("reviewThreads") or {})
+        for n in rt.get("nodes") or []:
+            first = ((n.get("comments") or {}).get("nodes") or [{}])[0] or {}
+            if first.get("databaseId") is not None:
+                states[int(first["databaseId"])] = {"node_id": n.get("id"),
+                                                    "resolved": bool(n.get("isResolved"))}
+        page = rt.get("pageInfo") or {}
+        if not page.get("hasNextPage"):
+            break
+        cursor = page.get("endCursor")
+    return states
+
+
+def find_reply_marker(body):
+    m = re.search(REPLY_MARKER_PREFIX + r":[^\s>]+", body or "")
+    return m.group(0) if m else None
+
+
+def reply_marker(feedback_id, rnd, item_id):
+    return "%s:%s:r%s:%s" % (REPLY_MARKER_PREFIX, feedback_id, rnd, item_id)
+
+
+def _login(obj):
+    return (obj.get("user") or {}).get("login")
+
+
+def thread_root(cid, by_id):
+    """Follow in_reply_to_id up to the thread's root comment id (GitHub replies attach to the root)."""
+    seen = set()
+    while cid in by_id and by_id[cid].get("in_reply_to_id") and cid not in seen:
+        seen.add(cid)
+        cid = by_id[cid]["in_reply_to_id"]
+    return cid
+
+
+def build_threads(comments, author, states=None):
+    """Group REST review comments into threads. Pure (unit-tested).
+
+    states: thread_states() result or None when GraphQL was unavailable (resolved -> None).
+    awaiting: None when resolved; "reviewer" when the PR author spoke last; else "author".
+    """
+    by_id = {c.get("id"): c for c in comments if c.get("id") is not None}
+    groups = {}
+    for c in sorted(comments, key=lambda x: (x.get("created_at") or "", x.get("id") or 0)):
+        groups.setdefault(thread_root(c.get("id"), by_id), []).append(c)
+    threads = []
+    for root_id, items in groups.items():
+        root = by_id.get(root_id) or items[0]
+        st = (states or {}).get(root_id) if states is not None else None
+        resolved = None if states is None else bool(st and st.get("resolved"))
+        last_by = _login(items[-1])
+        by_author = bool(author) and last_by == author
+        threads.append({
+            "thread_id": root_id,
+            "node_id": (st or {}).get("node_id"),
+            "path": root.get("path"),
+            "line": root.get("line"),
+            "start_line": root.get("start_line"),
+            "original_line": root.get("original_line"),
+            "outdated": root.get("line") is None,
+            "resolved": resolved,
+            "review_id": root.get("pull_request_review_id"),
+            "url": root.get("html_url"),
+            "diff_hunk": root.get("diff_hunk"),
+            "opened_by": _login(root),
+            "last_by": last_by,
+            "last_by_author": by_author,
+            "awaiting": None if resolved else ("reviewer" if by_author else "author"),
+            "comments": [{
+                "id": c.get("id"), "user": _login(c), "created_at": c.get("created_at"),
+                "is_author": bool(author) and _login(c) == author,
+                "body": c.get("body") or "",
+                "ai_sdlc_review_marker": find_marker(c.get("body")),
+                "ai_sdlc_reply_marker": find_reply_marker(c.get("body")),
+                "url": c.get("html_url"),
+            } for c in items],
+        })
+    return threads
+
+
+def cmd_feedback(cli, args):
+    owner, name = split_repo(args.repo)
+    info = pr_info(cli, owner, name, args.pr)
+    comments = cli.paged("/repos/%s/%s/pulls/%d/comments" % (owner, name, args.pr))
+    reviews = cli.paged("/repos/%s/%s/pulls/%d/reviews" % (owner, name, args.pr))
+    issue_comments = cli.paged("/repos/%s/%s/issues/%d/comments" % (owner, name, args.pr))
+    warnings, states = [], None
+    try:
+        states = thread_states(cli, owner, name, args.pr)
+    except (ApiError, AttributeError, KeyError, TypeError, ValueError) as e:
+        warnings.append("thread resolved status unavailable (GraphQL): %s" % (
+            getattr(e, "message", None) or e))
+    author = info["author"]
+    threads = build_threads(comments, author, states)
+    result = {
+        "ok": True, "pr_url": info["url"], "state": info["state"], "head_sha": info["sha"],
+        "author": author, "connection": conn_info(cli), "warnings": warnings,
+        "threads": threads,
+        "reviews": [{
+            "id": r.get("id"), "user": _login(r), "state": r.get("state"),
+            "submitted_at": r.get("submitted_at"), "commit_id": r.get("commit_id"),
+            "body": r.get("body") or "", "ai_sdlc_marker": find_marker(r.get("body")),
+            "url": r.get("html_url"),
+        } for r in reviews],
+        "conversation": [{
+            "id": c.get("id"), "user": _login(c), "created_at": c.get("created_at"),
+            "is_author": bool(author) and _login(c) == author,
+            "body": c.get("body") or "", "ai_sdlc_reply_marker": find_reply_marker(c.get("body")),
+            "url": c.get("html_url"),
+        } for c in issue_comments],
+    }
+    result["counts"] = {
+        "threads": len(threads),
+        "unresolved": sum(1 for t in threads if t["resolved"] is False),
+        "awaiting_author": sum(1 for t in threads if t["awaiting"] == "author"),
+        "awaiting_reviewer": sum(1 for t in threads if t["awaiting"] == "reviewer"),
+        "reviews_with_body": sum(1 for r in result["reviews"] if r["body"].strip()),
+        "conversation": len(result["conversation"]),
+    }
+    if args.out:
+        os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
+        with open(args.out, "w", encoding="utf-8") as f:
+            json.dump(result, f, ensure_ascii=False, indent=2)
+        summary = {k: result[k] for k in ("ok", "pr_url", "state", "head_sha", "author",
+                                          "connection", "warnings", "counts")}
+        summary["out"] = os.path.abspath(args.out)
+        out(summary)
+    out(result)
+
+
+def require_identity(cli):
+    conn = conn_info(cli)
+    if not conn["as_user"]:
+        fail("cannot resolve the posting identity (GET /user failed): refusing to write", code=4)
+    return conn
+
+
+def validate_replies(payload):
+    for k in ("feedback_id", "round"):
+        if payload.get(k) in (None, ""):
+            fail("reply payload missing '%s'" % k)
+    replies = payload.get("replies") or []
+    if not replies:
+        fail("reply payload has no replies")
+    seen = set()
+    for r in replies:
+        iid = r.get("item_id")
+        if not iid or iid in seen:
+            fail("every reply needs a unique item_id (got %r)" % iid)
+        seen.add(iid)
+        if r.get("kind") not in REPLY_KINDS:
+            fail("reply %s: kind must be one of %s" % (iid, REPLY_KINDS))
+        if not (r.get("body") or "").strip():
+            fail("reply %s: empty body" % iid)
+        if r["kind"] == "thread":
+            try:
+                int(r.get("thread_id"))
+            except (TypeError, ValueError):
+                fail("reply %s: kind=thread needs a numeric thread_id (a review comment id)" % iid)
+    return replies
+
+
+def cmd_reply(cli, args):
+    owner, name = split_repo(args.repo)
+    payload = load_json(args.payload)
+    replies = validate_replies(payload)
+    info = pr_info(cli, owner, name, args.pr)
+    if info["state"] != "open":
+        fail("PR is %s, not open" % info["state"])
+    conn = require_identity(cli)
+    comments = cli.paged("/repos/%s/%s/pulls/%d/comments" % (owner, name, args.pr))
+    issue_comments = cli.paged("/repos/%s/%s/issues/%d/comments" % (owner, name, args.pr))
+    by_id = {c.get("id"): c for c in comments}
+    posted_markers = {}
+    for c in comments + issue_comments:
+        m = find_reply_marker(c.get("body"))
+        if m:
+            posted_markers[m] = c.get("html_url")
+
+    results, failed = [], 0
+    for r in replies:
+        mark = reply_marker(payload["feedback_id"], payload["round"], r["item_id"])
+        rec = {"item_id": r["item_id"], "kind": r["kind"], "marker": mark}
+        if r["kind"] == "thread":
+            tid = int(r["thread_id"])
+            if tid not in by_id:
+                rec.update(status="failed", error="review comment %d not found on this PR" % tid)
+                failed += 1
+                results.append(rec)
+                continue
+            rec["thread_id"] = thread_root(tid, by_id)
+        if mark in posted_markers:
+            rec.update(status="already_posted", url=posted_markers[mark])
+            results.append(rec)
+            continue
+        if args.dry_run:
+            rec.update(status="would_post")
+            results.append(rec)
+            continue
+        body = r["body"].rstrip() + "\n\n<!-- %s -->" % mark
+        try:
+            if r["kind"] == "thread":
+                res = cli.request("POST", "/repos/%s/%s/pulls/%d/comments/%d/replies" % (
+                    owner, name, args.pr, rec["thread_id"]), {"body": body})
+            else:
+                res = cli.request("POST", "/repos/%s/%s/issues/%d/comments" % (
+                    owner, name, args.pr), {"body": body})
+            rec.update(status="posted", url=(res or {}).get("html_url"))
+        except ApiError as e:
+            rec.update(status="failed", error="GitHub API %s: %s" % (e.status, e.message))
+            failed += 1
+        results.append(rec)
+
+    counts = {k: sum(1 for x in results if x["status"] == k)
+              for k in ("posted", "already_posted", "would_post", "failed")}
+    out({"ok": failed == 0, "pr_url": info["url"], "author": info["author"], "connection": conn,
+         "posting_as_author": conn["as_user"] == info["author"], "dry_run": bool(args.dry_run),
+         "counts": counts, "results": results}, 4 if failed else 0)
+
+
+def cmd_resolve(cli, args):
+    owner, name = split_repo(args.repo)
+    payload = load_json(args.payload)
+    items = payload.get("threads") or []
+    if not items:
+        fail("resolve payload has no threads")
+    info = pr_info(cli, owner, name, args.pr)
+    if info["state"] != "open":
+        fail("PR is %s, not open" % info["state"])
+    conn = require_identity(cli)
+    if conn["as_user"] == info["author"] and not getattr(args, "allow_self_review", False):
+        fail("the posting identity '%s' is the PR author: only the reviewer side resolves threads "
+             "(test repos only: --allow-self-review)" % conn["as_user"], code=5, connection=conn)
+    comments = cli.paged("/repos/%s/%s/pulls/%d/comments" % (owner, name, args.pr))
+    by_id = {c.get("id"): c for c in comments}
+    try:
+        states = thread_states(cli, owner, name, args.pr)
+    except ApiError as e:
+        fail("GraphQL unavailable, cannot resolve threads: %s" % e.message, code=4)
+
+    results, failed = [], 0
+    for it in items:
+        rec = {"item_id": it.get("item_id")}
+        try:
+            tid = thread_root(int(it.get("thread_id")), by_id)
+        except (TypeError, ValueError):
+            rec.update(status="failed", error="numeric thread_id required")
+            failed += 1
+            results.append(rec)
+            continue
+        rec["thread_id"] = tid
+        st = states.get(tid)
+        if not st or not st.get("node_id"):
+            rec.update(status="failed", error="thread %d not found on this PR" % tid)
+            failed += 1
+        elif st["resolved"]:
+            rec.update(status="already_resolved")
+        elif args.dry_run:
+            rec.update(status="would_resolve")
+        else:
+            try:
+                gql(cli, RESOLVE_MUTATION, {"id": st["node_id"]})
+                rec.update(status="resolved")
+            except ApiError as e:
+                rec.update(status="failed", error="GitHub API %s: %s" % (e.status, e.message))
+                failed += 1
+        results.append(rec)
+    counts = {k: sum(1 for x in results if x["status"] == k)
+              for k in ("resolved", "already_resolved", "would_resolve", "failed")}
+    out({"ok": failed == 0, "pr_url": info["url"], "connection": conn, "dry_run": bool(args.dry_run),
+         "counts": counts, "results": results}, 4 if failed else 0)
 
 
 def load_json(path):
@@ -586,8 +999,9 @@ def cmd_plan(cli, args):
     with open(args.out, "w", encoding="utf-8") as f:
         json.dump(resolved, f, ensure_ascii=False, indent=2)
     counts = {k: sum(1 for a in anchors if a["anchor"] == k) for k in ("inline", "nearby", "summary")}
+    nudged = sum(1 for a in anchors if a.get("nudged_from") is not None)
     out({"ok": True, "pr_url": url, "head_sha": sha, "resolved": os.path.abspath(args.out),
-         "connection": conn_info(cli), "counts": counts, "anchors": anchors})
+         "connection": conn_info(cli), "counts": counts, "nudged": nudged, "anchors": anchors})
 
 
 def cmd_submit(cli, args):
@@ -650,10 +1064,20 @@ def main(argv=None):
                     help="auto (default): gh CLI if installed and logged in to --host, else http "
                          "with the mcp.json token; gh / http force one")
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for n in ("existing", "plan", "submit"):
+    for n in ("existing", "feedback", "plan", "submit", "reply", "resolve"):
         p = sub.add_parser(n)
         p.add_argument("--repo", required=True, help="owner/name")
         p.add_argument("--pr", required=True, type=int)
+        if n == "feedback":
+            p.add_argument("--out", help="write the full feedback json here (stdout: counts only)")
+        if n in ("reply", "resolve"):
+            p.add_argument("--payload", required=True,
+                           help="confirmed replies json (review-feedback / merge-gate)" if n == "reply"
+                           else "confirmed threads-to-resolve json (merge-gate)")
+            p.add_argument("--dry-run", action="store_true", help="validate and report, write nothing")
+        if n == "resolve":
+            p.add_argument("--allow-self-review", action="store_true",
+                           help="test repos only: allow resolving when you are the PR author")
         if n == "plan":
             p.add_argument("--payload", required=True, help="draft payload json (review-comment)")
             p.add_argument("--out", required=True, help="resolved payload json to write")
@@ -670,7 +1094,8 @@ def main(argv=None):
     cli, fallback_reason = make_client(args.transport, host, mcp_path)
     cli.fallback_reason = fallback_reason
     try:
-        {"existing": cmd_existing, "plan": cmd_plan, "submit": cmd_submit}[args.cmd](cli, args)
+        {"existing": cmd_existing, "feedback": cmd_feedback, "plan": cmd_plan,
+         "submit": cmd_submit, "reply": cmd_reply, "resolve": cmd_resolve}[args.cmd](cli, args)
     except ApiError as e:
         hint = ""
         if cli.transport == "http" and e.status == 0:

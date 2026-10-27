@@ -50,7 +50,7 @@ Required config keys missing (TBD) → stop and ask for them; don't guess the re
 - S2 Read the PR metadata via GitHub MCP (get_pull_request)
 - S3 Read the changed-file list and per-file patch via MCP (list_pull_request_files, paging through all)
 - S4 Read the commit list via MCP (list_pull_request_commits)
-- S4b Read existing review comments (for dedupe) and the CI status of the head SHA
+- S4b Read all existing review feedback in full (for dedupe and the author's replies) and the CI status of the head SHA
 - S5 Filter review-exempt files, classify by file, build the structured review context
 - S6 Report the context (handed to the code-review-rules step)
 ```
@@ -71,13 +71,13 @@ Read the commit sequence via `list_pull_request_commits`, to understand how the 
 
 ### S4b Existing comments and CI status (read-only)
 
-- **Existing inline review comments** — the GitHub MCP has no tool for PR review (line) comments, so read them with the shared script (read-only subcommand):
+- **Existing review feedback** — the GitHub MCP has no tool for PR review (line) comments or their replies, so read them with the shared script (read-only subcommand):
 
   ```bash
-  python <skills>/code-review/merge-gate/scripts/pr_review.py --host {mcp.github.host} existing --repo {owner/name} --pr {n}
+  python <skills>/code-review/merge-gate/scripts/pr_review.py --host {mcp.github.host} feedback --repo {owner/name} --pr {n} --out {tmp}/feedback_r{n}.json
   ```
 
-  It returns the head SHA, every existing inline comment (`path` / `line` / author / first line / outdated) and the reviews, including earlier AI SDLC reviews (`ai_sdlc_marker`). Save it to `inputs/`. Downstream uses it so the draft **doesn't duplicate** a point a human or bot already raised on the same line. If the script fails (no token / network), note "existing comments not checked" and continue — don't block the review.
+  It returns, **in full text (never truncated)**: the head SHA and the PR author; `threads[]` — every inline thread (root + replies, `path` / `line` / `outdated` / `resolved` / `last_by` / `awaiting`: `author` = a reviewer spoke last, `reviewer` = the PR author replied and waits on the reviewer); `reviews[]` — summaries incl. earlier AI SDLC reviews (`ai_sdlc_marker`); `conversation[]` — PR conversation comments (the author's answers to summary findings carry `ai_sdlc_reply_marker`). Save it (scanned) to `inputs/`. Downstream uses it so the draft **doesn't duplicate** a point already raised or discussed, and to list the **author's replies** awaiting the reviewer. `resolved: null` + a warning = GraphQL unavailable, note it. If the script fails (no token / network), note "existing comments not checked" and continue — don't block the review. (`existing` still works for a quick dedupe-only read; it now returns full bodies too.)
 - **CI status** — optional: `list_check_runs_for_ref` on the head SHA; summarize pass / fail / pending with the failing check names, for the review header. Unavailable → note "CI status unknown".
 
 ### S5 Filter and classify
@@ -90,7 +90,7 @@ Read the commit sequence via `list_pull_request_commits`, to understand how the 
 
 | Rule | Description |
 |------|------|
-| Read via MCP | PR info, files, and commits are all read via GitHub MCP; don't guess the diff content. Only the existing inline review comments go through the read-only `pr_review.py existing` (the MCP has no tool for them) |
+| Read via MCP | PR info, files, and commits are all read via GitHub MCP; don't guess the diff content. Only the existing review feedback (inline threads / replies) goes through the read-only `pr_review.py feedback` (the MCP has no tool for them) |
 | Page through all | `list_pull_request_files` must traverse all pages; a missed page misses files to review |
 | Fetch only, don't rule | This step only fetches and organizes; it doesn't rule issues or write comments |
 | Exempt files traceable | Filtered files must be listable (which were filtered, by which rule), not silently hidden |

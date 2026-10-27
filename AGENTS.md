@@ -50,8 +50,8 @@ ai-sdlc/
 | `eval-agent` | PO | 需求澄清 → 写 PRD 与其中的 User Story → PO 确认 → 发布 Confluence |
 | `userstory-agent` | PO | 把 PRD 中的 User Story 同步到 Jira（同步计划 → 确认 → 建单 / 更新） |
 | `tech-solution-agent` | TL / Dev | 技术方案（PRD 级 / Spike 调研 / Story 级详细方案）→ 确认 → 发布 → 回写 |
-| `dev-agent` | TL / Dev | Story → 检出基线 → 唯一 AI Feature 分支 → 实现代码与单测 → 验证 → 提 PR |
-| `code-review-agent` | TL / Dev | 拉 PR diff → 按规范与安全基线逐条审核（🔴 阻断 / 🟡 建议 / 🟢 提示）→ 本地草稿先给审核人看、挑选要发的 → 合并门禁：一条 PR review（总结 + 代码行内评论）（不自动 approve / 合并，人工拍板） |
+| `dev-agent` | TL / Dev | Story → 检出基线 → 唯一 AI Feature 分支 → 实现代码与单测 → 验证 → 提 PR → Code Review 后读取全部评论（含行内）、开发逐条决定改 / 解释不改、修复、确认后回复评论（可选重新请求 review） |
+| `code-review-agent` | TL / Dev | 拉 PR diff → 按规范与安全基线逐条审核（🔴 阻断 / 🟡 建议 / 🟢 提示）→ 本地草稿先给审核人看、挑选要发的 → 合并门禁：一条 PR review（总结 + 代码行内评论）；再次运行时复审作者回复（AI 建议接受 / 坚持，审核人确认后回复，接受的 resolve）（不自动 approve / 合并，人工拍板） |
 | `cicd-agent` | TL / Dev / QA | 选定并触发现有 Harness 流水线，**仅限低环境（dev / test）**；触发前必须展示运行入参并等人确认；高环境（Staging / Prod）不在工具链范围，由人在 Harness UI 操作。唯一例外：profile `build_backend_exceptions` 登记的「只构建不部署」测试包（当前 APP `Android_Adhoc_Build` · `flavor=Stg`、`iOS_Dragon_App_Testflight_Dev` · `API_BASE_URL=interceptor-stg`，QA 日常 STG 包） |
 | `test-agent` | QA | 需求 / Jira 用例 → 伪代码 → pytest + pytest-bdd + Appium 可执行脚本 → 运行报告 / 提 Bug |
 
@@ -65,7 +65,7 @@ Skill 按分组文件夹存放，Cursor 会递归识别 `SKILL.md`；安装包�
 | 公共（所有角色）`common/` | `sensitive-data-guard`、`profile-select`、`confluence-publish`、`md-to-pdf`、`ai-sdlc-info`、`kb-query` |
 | 需求（PO）`requirement/` | `requirement-clarify`、`prd-authoring`、`prd-publish`、`user-story-authoring`、`user-story-publish` |
 | 技术方案 `tech-solution/` | `tech-solution-prd`（仅 TL）、`tech-solution-spike`、`tech-solution-detail`、`tech-solution-publish` |
-| 开发与验证 `dev/` | `baseline-checkout`、`feature-branch`、`unit-test-authoring`、`build-verify`、`unit-test-runner`、`contract-diff`、`acceptance-check`、`create-pr` |
+| 开发与验证 `dev/` | `baseline-checkout`、`feature-branch`、`unit-test-authoring`、`build-verify`、`unit-test-runner`、`contract-diff`、`acceptance-check`、`create-pr`、`review-feedback` |
 | Code Review `code-review/` | `diff-fetch`、`code-review-rules`、`review-comment`、`merge-gate` |
 | CI/CD `cicd/` | `harness-invoke` |
 | 测试（仅 QA）`test/` | `jira-to-test-case`、`test-case-authoring`、`test-case-to-script`、`test-debug-script`、`test-page-elements`、`test-run-report-bug` |
@@ -116,7 +116,7 @@ python init/check.py                    # 仓库一致性检查（每次提交�
 python init/build.py --no-zip --yes     # 确认能正常组装（只出目录不打 zip）
 python .cursor/skills/common/sensitive-data-guard/tests/run_tests.py   # 改安全规则时
 python .cursor/skills/common/kb-query/tests/run_tests.py               # 改 kb-query 脚本时
-python .cursor/skills/code-review/merge-gate/tests/run_tests.py       # 改 pr_review.py（行内评论提交）时
+python .cursor/skills/code-review/merge-gate/tests/run_tests.py       # 改 pr_review.py（行内评论提交 / 读取 / 回复 / resolve）时
 ```
 
 完整构建参数（指定角色 / 版本、运行时包）见 [`init/README.md`「构建」](init/README.md#构建) 或 `python init/build.py --help`；发版构建见 [`doc/maintenance/release.md`](doc/maintenance/release.md)。

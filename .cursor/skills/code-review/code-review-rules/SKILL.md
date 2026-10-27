@@ -87,7 +87,7 @@ Tag each issue:
 | Field | Content |
 |------|------|
 | Level | 🔴 Blocking / 🟡 Suggestion / 🟢 Hint — criteria in the level table below |
-| Location | File path + line number (the new line number in the diff); for a multi-line issue also the start line |
+| Location | File path + **new-file line of the statement being discussed** (RIGHT side). Do **not** use the `//` / KDoc / blank above it — GitHub hangs the comment on that line, so it lands one row above the code. For a multi-line issue also the start line |
 | Matched rule | Which rule item it relies on (cite the rule item/number or standard name + section, from rules_source; when standards aren't configured, note "general dimension") |
 | Root cause | A one-line explanation of why it's violated |
 | Fix suggestion | An actionable suggestion for the author |
