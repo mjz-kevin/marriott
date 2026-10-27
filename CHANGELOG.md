@@ -13,8 +13,10 @@
 ## [Unreleased]
 
 ### 变更
+- **`jira-to-test-case` / `test-agent`：本地中间态用例稿**：对齐 `tech-solution-agent` 在 `.ai-sdlc/jira-to-test-case/{case_id}/` 下维护 `state.md`、`docs/`（版本化 Markdown）、`inputs/`、`sessions/`；对话澄清后先落本地稿（表格样式参考 PRD 的 `Item | Content` + 用例 traceability，见 skill `references/local-case-draft-template.md`），用户确认后再 `confluence-publish` 上传至 `{epic}-TestCase`；恢复发布前确认门；`references/cms-case-template.md` §0 与 app 模板同步（本地稿 + PRD 式元数据）。
 - **行内 review 评论不再挂在语句上一行注释上**：`pr_review.py plan` 若请求行是 `//` / KDoc / 空行，且下一句语句在 diff 里，则锚到那句（`nudged_from` 记下原稿行号）；正文反引号只引用了注释本身则不挪，避免误伤「这条注释写错了」。`code-review-rules` / `review-comment` / `code-review-agent` 写明 `line` 必须是被讨论的语句。离线单测 36 → 42。已发到 PR 的旧评论不会改位置。
 - **`test-run-report-bug`：Jira Bug 写入格式硬约束**：补齐与 `user-story-publish` 一致的 MCP 提交规则——`createJiraIssue` / `editJiraIssue` / `addCommentToJiraIssue` 必须带 `contentFormat: "markdown"`，Description 与 Replication Steps 仅用 Markdown，禁止把 Confluence storage HTML / 原始 HTML / Wiki 标记写入字段，避免工单正文出现可见的 HTML 标签或未渲染的 `**`；`references/app-bug-template.md` 增加 §5 对照表。
+- **`test-run-report-bug` / `test-agent`：手动提 APP Bug（Entry B）**：对话中说 **提个 bug / 创建 bug 单** 时走 Entry B（不跑批、不发运行报告）；按 `app-bug-template.md` 建单，Summary `[Domain][Page/Feature] - …`（Domain ∈ Commerce/Loyalty/Trips/Platform）；仅预填用户已说明的字段，`AskQuestion` 确认必填项与 Labels 后才创建（手动入口不可跳过卡片、不臆填）；写 Jira/Confluence 前过 `sensitive-data-guard`，测试数据保持合成。`test-agent` 命令路由与意图关键词同步 Entry A/B 分流。
 
 ### 新增
 - **Code Review 意见闭环：开发能读到全部评论（含代码行内评论），逐条决定「改」还是「解释不改」，确认后回复；审核人可人工复审，也可用 agent 复审**：

@@ -6,7 +6,9 @@ The CMS under test is **Marriott China CMS** (万豪中国内容管理平台), a
 
 **Language (hard):** all case content the skill authors itself is written in **English** (titles, section headings, Function Point / Preconditions / Test Steps / Expected Result / Notes). The only exception is **in-admin UI labels quoted verbatim** (menu / tab / button / field names such as "内容管理 > 活动内容页", "保存草稿") — these stay in Chinese and are quoted, because the tester must see the exact on-screen text. Do not author a whole page in Chinese.
 
-This page only governs **"what a single case looks like"**. Everything else — page naming, the whole-page section structure, module-fact retrieval, the generate-and-publish flow, and the confirmation gate — is maintained in the `jira-to-test-case` skill's CMS section, not here. To change the field / step rules, edit only this page; it takes effect on the next generation.
+This page only governs **"what a single case looks like"**. Everything else — **page naming, the whole-page section structure, module-fact retrieval, local draft path (`.ai-sdlc/jira-to-test-case/{case_id}/docs/`), the generate-and-publish flow, the pre-publish confirmation gate, and handoff** — is maintained in the `jira-to-test-case` skill's CMS section, not here.
+
+To change the field / step rules, **edit only this file**; it takes effect on the next generation.
 
 **Table-header source of truth:** the case-list table **must strictly use the 10 fixed columns below, in this exact order**, aligned with the team UAT reference and the Zephyr case format. Do not add, remove, rename or reorder columns.
 
@@ -14,9 +16,11 @@ The whole case page is a **slim structure: a traceability header + 5 sections** 
 
 > ⛔ **AI-assistance declaration (first line of the published body — hard):** the AI-generated local Markdown body's **very first line** must be the verbatim quote block `> This document was created with AI assistance.`, placed at the absolute top — **above** the traceability header and all 5 sections. Use exactly that English text (no translation, no rewording, no emoji). Keep it as the first line (and keep exactly one copy) on every re-publish / in-place update — never drop or duplicate it. ⚠️ This belongs at the **top of the page body only** — do **not** put it inside the 10-column case-list table or any field cell. (The whole-page layout and this declaration's placement are owned by the skill; this note only mirrors it for context.)
 
-## 0. Top traceability table (render at the top of every page, right after the AI-assistance line)
+## 0. Document metadata & traceability (top of every page, right after the AI-assistance line)
 
-Immediately after the AI-assistance declaration line, output the page's traceability info as a **tidy 2-column `Field | Value` table** (not a run-on quote block), so it renders aligned and scannable on Confluence. Keep the row order stable; omit a row only when its value is genuinely absent (or write `—`). Copy this shape:
+**Local draft** (under `.ai-sdlc/jira-to-test-case/{case_id}/docs/`, file prefix `TC-CMS_…`): after the AI-assistance line, you may add PRD-style blocks per [`local-case-draft-template.md`](local-case-draft-template.md) — **Document Information** and **Version Change Log** using two-column **`Item | Content`** tables (same layout as team PRD documents; set **Test target** to `cms` and **Page title (planned)** to `CMS Test Case - <JIRA_KEY> <short requirement name>`). Omit the version log on a first `v1.0` draft if the user does not need it.
+
+**Every publishable body** (local draft and Confluence): output traceability as a **tidy 2-column `Field | Value` table** (not a run-on quote block), so it renders aligned and scannable on Confluence. Keep the row order stable; omit a row only when its value is genuinely absent (or write `—`). Copy this shape (CMS uses **Module-fact source**, not app `page_doc` / Figma rows unless a design link is genuinely in scope):
 
 | Field | Value |
 | --- | --- |

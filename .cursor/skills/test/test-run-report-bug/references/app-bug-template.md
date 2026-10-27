@@ -74,10 +74,14 @@ The only difference between the two modes is **where the pre-filled values come 
 - Evidence (exception type, traceback, failing step, case key) is quoted verbatim from the run artifacts.
 - When there are multiple failed cases, one card may batch-confirm them (one question per pending bug, or `allow_multiple` to tick which to create); only create the ones the user confirms.
 
-### 4.2 User-provided ticket (manual, in conversation)
+### 4.2 User-provided ticket (manual, Entry B — in conversation)
 
-- Same confirmation card as above — the AI **must confirm the required fields and labels with the user via an `AskQuestion` dialog before creating**, with the pre-filled values coming from the user's report (and template defaults for the Device Info / Scope / Occurrence / Workaround / Affected Users block).
-- Only after the user confirms do you `createJiraIssue`; still apply the standard `Blocks` link to the regression-defect Story.
+Triggered when Test says **提个 bug / 创建 bug 单 / 手动建 bug** (or equivalent) **without** running the automation batch or publishing a run report (`test-run-report-bug` Entry B).
+
+- Same confirmation card as above — **must** use `AskQuestion` to confirm required fields + Labels before `createJiraIssue`. **Pre-fill only what the user explicitly said**; do **not** guess Domain, labels, Severity, device/build, or repro. Show missing template fields as `TBD` on the card and collect them from the user.
+- Run `sensitive-data-guard` on the draft payload before create; keep member/account/hotel data **synthetic** (see the skill's "(6) Security before external write").
+- The confirmation card **cannot be skipped** for manual entry (even if the user says "just create").
+- Only after the user confirms on the card do you `createJiraIssue`; still apply the standard `Blocks` link to the regression-defect Story.
 
 ## 5. Jira MCP submission format (hard)
 

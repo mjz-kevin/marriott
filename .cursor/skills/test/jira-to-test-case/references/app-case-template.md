@@ -12,9 +12,11 @@ The whole case page is now a **slim structure: a traceability header + 5 section
 
 To change the test-point / field / step rules for a case, **edit only this file**; it takes effect automatically on the next generation.
 
-## 0. Top traceability table (render at the top of every page, right after the AI-assistance line)
+## 0. Document metadata & traceability (top of every page, right after the AI-assistance line)
 
-Immediately after the AI-assistance declaration line, output the page's traceability info as a **tidy 2-column `Field | Value` table** (not a run-on quote block), so it renders aligned and scannable on Confluence. Keep the row order stable; omit a row only when its value is genuinely absent (or write `—`). Copy this shape:
+**Local draft** (under `.ai-sdlc/jira-to-test-case/{case_id}/docs/`): after the AI-assistance line, you may add PRD-style blocks per [`local-case-draft-template.md`](local-case-draft-template.md) — **Document Information** and **Version Change Log** using two-column **`Item | Content`** tables (same layout as team PRD documents). Omit the version log on a first `v1.0` draft if the user does not need it.
+
+**Every publishable body** (local draft and Confluence): output traceability as a **tidy 2-column `Field | Value` table** (not a run-on quote block), so it renders aligned and scannable on Confluence. Keep the row order stable; omit a row only when its value is genuinely absent (or write `—`). Copy this shape:
 
 | Field | Value |
 | --- | --- |

@@ -42,7 +42,7 @@ A development Agent for mobile (iOS-first) UI automation testing. Built around t
 | `test-case-to-script` | Main line 2: pseudocode → `steps/` / `pages/` / `plan/debug.py`. |
 | `test-debug-script` | Main line 3: debug/run on real device → fix → distill rules into memory. |
 | `test-page-elements` | Auxiliary: real-device page → Page Object + Confluence `page_doc`. |
-| `test-run-report-bug` | Batch run (iOS/Android/all/custom) + app version → Confluence Automation Report / `<platform> <version>` folder → Jira Bugs for failures. |
+| `test-run-report-bug` | **(A)** Batch run + app version → Automation Report / `<platform> <version>` → Jira Bugs for failures (after report). **(B)** Manual APP Bug when Test says **提个 bug / 创建 bug 单** — `app-bug-template.md`, Summary `[Domain][Page/Feature] - …`, confirm fields + Labels via `AskQuestion`, `sensitive-data-guard`, synthetic data (no pytest). |
 
 ## Startup behavior (executed on invocation, highest priority)
 
@@ -84,6 +84,7 @@ A development Agent for mobile (iOS-first) UI automation testing. Built around t
 > **Intent-keyword routing (distinguishing "case design" from "landing scripts")**: on top of document-type identification, this Agent also uses **intent keywords** to help distinguish the two upstream entries -
 > - Keywords like "**design test cases / analyze requirements / produce a case outline / convert requirement into cases / functional test cases / summarize and analyze scope from a requirement**" (intent is **to produce test cases from a requirement**) -> route to **`jira-to-test-case`** (upstream case-design stage; stop after producing and publishing the Confluence case page; **do not generate** feature/pseudocode/scripts).
 > - Keywords like "**generate pseudocode / generate feature / implement a feature / generate scripts / write scripts from Jira**" (intent is **to land cases into executable scripts**) -> route to the three main lines starting at **`test-case-authoring`**.
+> - Keywords like "**提个 bug / 创建 bug 单 / 手动建 bug / create an APP bug / file a bug ticket**" (intent is **manual APP Jira Bug**, not a batch run report) -> route to **`test-run-report-bug`** Entry **B** (read that skill's Entry routing — no platform/version gate, no pytest, no Confluence run report unless the user also asks for Entry A in the same turn).
 > - **When only a Jira Key / document is given and the intent or document type is unclear** (could be case design or writing scripts), **first fetch the content and decide per the "Document-type identification gate" above**; if still unclear after deciding, ask "do you want to **design test cases** first (publish to Confluence), or directly **generate feature/scripts**?" before routing - do not assume.
 
 | Trigger form (any works) | Routed-to Skill (read and execute its SKILL.md) | Purpose |
@@ -93,7 +94,7 @@ A development Agent for mobile (iOS-first) UI automation testing. Built around t
 | `/test-case-to-script`, `./test-case-to-script`, `test-case-to-script` | `.cursor/skills/test/test-case-to-script/SKILL.md` | Main line 2: pseudocode -> executable pytest+Appium code |
 | `/test-debug-script`, `./test-debug-script`, `test-debug-script` | `.cursor/skills/test/test-debug-script/SKILL.md` | Main line 3: debug/run feature -> locate/fix + distill experience |
 | `/test-page-elements`, `./test-page-elements`, `test-page-elements` | `.cursor/skills/test/test-page-elements/SKILL.md` | Auxiliary: current real-device page -> Page Object elements |
-| `/test-run-report-bug`, `./test-run-report-bug`, `test-run-report-bug` | `.cursor/skills/test/test-run-report-bug/SKILL.md` | Execution: ask run iOS/Android/all/custom + app version -> run all features for that platform -> publish run report into the Automation Report / `<platform> <version>` folder (error cause on top) -> file Jira Bugs for failed cases (**both bug entries — automation-filed and user-provided — must first confirm the template's required fields + Labels with the user via an `AskQuestion` card before creating**) |
+| `/test-run-report-bug`, `./test-run-report-bug`, `test-run-report-bug`; or **提个 bug / 创建 bug 单 / 手动建 bug / create an APP bug / file a bug ticket** | `.cursor/skills/test/test-run-report-bug/SKILL.md` | **Entry A**: ask run iOS/Android/all/custom + app version -> run -> Automation Report / `<platform> <version>` -> Jira Bugs for failures (confirm required fields + Labels via `AskQuestion` before create). **Entry B (manual APP Bug)**: `app-bug-template.md`, Summary `[Domain][Page/Feature] - …` (Domain ∈ Commerce/Loyalty/Trips/Platform); pre-fill only user-stated facts, confirm all required fields + Labels on card (card mandatory), `sensitive-data-guard`, synthetic test data — no pytest |
 
 > **Behavior after routing**: after entering the target Skill, still follow the "usage principles" in this file - read the **test-script-memory** Confluence page (read-only via `getConfluencePage`, pageId from profile `mcp.confluence.test.memory_pages.test_script`) before generating, stop at each step's artifact for user confirmation, write back to the memory page (via the `upload_confluence_v2.py` script) after `test-debug-script` passes. Command routing only handles "which Skill to enter quickly" and does not change each Skill's internal constraints and confirmation gates.
 >
@@ -144,18 +145,39 @@ Skill entries: all **six** Skills under `.cursor/skills/test/` — `jira-to-test
 
 Each Agent's state is **independent and never read or written by another**. `.ai-sdlc/` is already in `.gitignore`. This Agent reads upstream cases / requirements only via **the Jira / Confluence MCP, a URL, or a local path the user provides**, and never touches another Agent's state file.
 
-> ⛔ **Deliverables live outside `.ai-sdlc/` (do not confuse them with this Agent's state)**: the real test artifacts are **not** under `.ai-sdlc/`. Executable code (`pre_code/` / `features/` / `steps/` / `pages/` / `plan/debug.py`) is written into the **automation repo working tree** under `tests/mobile/ios/` (see "Current project artifact locations"); functional test cases, page element docs, and run reports are published to **Confluence**; Bugs go to **Jira**. `.ai-sdlc/test/` holds only **this Agent's own orchestration state** — the per-gate decisions, snapshots of what it read, Q&A, and debug/run scratch — so a multi-turn, gate-driven flow can resume after an interruption.
+> ⛔ **Deliverables vs state (do not confuse them)**:
+> - **Automation main line**: executable code lives under `tests/mobile/ios/` in the automation repo; `.ai-sdlc/test/` is orchestration state only.
+> - **`jira-to-test-case` upstream**: the **reviewable case body** is a versioned Markdown file under **`.ai-sdlc/jira-to-test-case/{case_id}/docs/`** (intermediate draft until the user confirms publish); the **official** case page is on **Confluence** `{epic}-TestCase` after `confluence-publish`. Page element docs and run reports are also on Confluence; Bugs go to **Jira**.
 
 ```
 .ai-sdlc/
+├── jira-to-test-case/            # upstream case-design workspace (`jira-to-test-case` only; mirrors tech-solution-agent layout)
+│   └── {case_id}/                # case_id = {team}-{jira key}, e.g. app-GCD-104 or app-CNAPP-611
+│       ├── state.md              # workflow state + version list; the only source of truth for resuming case design
+│       ├── docs/                 # each case-page draft version (publish input), e.g. TC-IOS_app-GCD-104_v1.0_20261027-180000.md
+│       ├── inputs/               # requirement / PRD snapshots, e.g. 20261027-095000_requirement-snapshot.md
+│       ├── sessions/             # clarification Q&A, pre-publish review, gate choices, e.g. 20261027-100500_clarify-r1.md
+│       └── tmp/                  # scratch (e.g. republish pull from Confluence); not a source of truth
 └── test/
-    └── {test_id}/                # {team}-{jira key}, e.g. app-CNAPP-611 (slug form; for the directory name only)
+    └── {test_id}/                # {team}-{jira key}, e.g. app-CNAPP-611 (main-line orchestration only)
         ├── state.md              # orchestration state: current main-line stage + per-gate decisions + missing-element gap list + debug attempt log; the only source of truth for resuming
         ├── docs/                 # per-attempt notes / change summaries, e.g. DEBUG-NOTE_app-CNAPP-611_a2_20260925-103000.md
         ├── inputs/               # read-only snapshots of the case / requirement / Confluence case page read, e.g. 20260925-095500_case-snapshot.md
         ├── sessions/             # Q&A, user gate choices (AskQuestion outcomes), run/debug verdicts per attempt, e.g. 20260925-110000_gate-authoring-confirm.md
         └── tmp/                  # temporary files (pytest/junitxml output, page source dumps copied for triage; never persist png/xml here as a deliverable)
 ```
+
+### `jira-to-test-case` local workspace (mandatory when routing to that Skill)
+
+When this Agent routes to **`jira-to-test-case`**, create or resume **`.ai-sdlc/jira-to-test-case/{case_id}/`** (do not store case-design drafts only under `.ai-sdlc/test/`). Read the skill reference **[`references/local-case-draft-template.md`](.cursor/skills/test/jira-to-test-case/references/local-case-draft-template.md)** for the intermediate Markdown shape (PRD-style **`Item | Content`** metadata tables + traceability + five sections).
+
+| Step | Behavior |
+|------|----------|
+| Clarification | Persist Q&A under `sessions/`; update `state.md` (`node`, `status`). |
+| Draft | Write the full case page to `docs/{TC-IOS\|TC-CMS}_{case_id}_v{version}_{timestamp}.md` (append-only versions; bump per tech-solution §3.1). **Stop** and use `AskQuestion`: confirm publish / needs changes / pause. |
+| Publish | Only after the user confirms: run `upload_confluence_v2.py` with `--md` pointing at the **current** `docs/` file; backfill `state.md` `published` and `versions[].status`. |
+
+**Sub-agent proxy**: if `jira-to-test-case` runs without `AskQuestion`, the main Agent (this file) must pop the clarification and **pre-publish** dialogs on its behalf and persist answers to `sessions/` before publish.
 
 ### Local storage rules (mandatory)
 
@@ -167,7 +189,7 @@ Each Agent's state is **independent and never read or written by another**. `.ai
 3. **`state.md` has a fixed name**, records the current main-line stage (authoring / to-script / debug), each gate's decision, the page/element gap list and its "collect now / leave to debug" choice, the debug attempt counter, and run/report/bug status; it is the only entry point for resuming — do not infer state from the directory listing.
 4. `tmp/` holds temporary files only (pytest output, copied page source for triage); not a source of truth, and **never** the place to persist png/xml as a deliverable (that rule still holds).
 5. Run `sensitive-data-guard` before any write, including before publishing a report to Confluence or filing a Jira Bug (scan the body first). Test data stays synthetic / mock.
-6. **Never** read or write another Agent's state directory (`.ai-sdlc/dev/`, `.ai-sdlc/review/`, etc.).
+6. **Never** read or write another Agent's state directory (`.ai-sdlc/dev/`, `.ai-sdlc/review/`, `.ai-sdlc/tech-solution/`, etc.). Case-design state lives under `.ai-sdlc/jira-to-test-case/` only; main-line state under `.ai-sdlc/test/` only.
 
 ### state.md
 
@@ -212,7 +234,7 @@ the debug attempt log, and the next action awaiting a user gate.)
 
 - **When to route to it**: when the user's intent is "**analyze/design test cases from a requirement, produce a case outline, convert a requirement into cases, design functional test cases, summarize and analyze scope from a requirement**" (see intent keywords in "Command routing"). **When only a Jira Key is given and the intent is unclear**, first ask "design cases first, or generate feature/scripts directly?" before deciding.
 - **Its own gates (not managed by this Agent; driven inside that Skill)**: (1) **Requirement-clarification gate** - after analyzing the requirement, first list the "target pages involved this time" and ask the user whether any affected page is missing, then progressively question the ambiguous points, and stop questioning once things are clarified before generating cases; (2) **Confirmation gate** - after the cases are organized, stop before publishing to Confluence and wait for the user to review/supplement.
-- **Artifacts and location**: published as a Confluence page in the **`{epic}-TestCase` folder** (folder mode, sibling to `{epic}-Tech Solution`; title `iOS Test Case - <JIRA_KEY> <short requirement name>`, English per `jira-to-test-case`), **not persisted locally**, and no code under `tests/mobile/ios/` is produced.
+- **Artifacts and location**: (1) **local draft** — versioned Markdown under **`.ai-sdlc/jira-to-test-case/{case_id}/docs/`** (user reviews here first; tables use PRD-style `Item | Content` / `Field | Value` per `references/local-case-draft-template.md`); (2) **official** — after user confirmation, published to Confluence **`{epic}-TestCase`** (folder mode, sibling to `{epic}-Tech Solution`; title `iOS Test Case - <JIRA_KEY> <short requirement name>` or `CMS Test Case - ...`, English per `jira-to-test-case`). No code under `tests/mobile/ios/` is produced.
 - **Handoff to the downstream main line (upstream stops, does not auto-chain)**: after the case page is published it **stops**; later, if the user wants to land the cases into executable scripts, the user **names** entering `test-case-authoring` (generate feature/pseudocode from Jira based on that Confluence page's case list + involved pages) -> `to-script` -> `debug`. **This Agent does not auto-enter authoring after the case page is published.**
 
 ```
