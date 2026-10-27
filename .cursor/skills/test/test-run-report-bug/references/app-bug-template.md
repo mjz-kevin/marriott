@@ -78,3 +78,17 @@ The only difference between the two modes is **where the pre-filled values come 
 
 - Same confirmation card as above — the AI **must confirm the required fields and labels with the user via an `AskQuestion` dialog before creating**, with the pre-filled values coming from the user's report (and template defaults for the Device Info / Scope / Occurrence / Workaround / Affected Users block).
 - Only after the user confirms do you `createJiraIssue`; still apply the standard `Blocks` link to the regression-defect Story.
+
+## 5. Jira MCP submission format (hard)
+
+Jira is **not** Confluence: do not paste HTML, Confluence storage markup, or upload-script HTML into Bug fields.
+
+| Item | Rule |
+| --- | --- |
+| `createJiraIssue` / `editJiraIssue` / `addCommentToJiraIssue` | Always `contentFormat: "markdown"` |
+| `getJiraIssue` (verify body) | `responseContentFormat: "markdown"` |
+| Description | Markdown bullets and headings per §2; links as `[text](url)` |
+| Replication Steps custom field | Markdown string in `additional_fields`; same content as Steps to Reproduce when automation-filled |
+| Forbidden | `<p>`, `<br>`, `<ul>`, `<custom …>`, `<ac:…>`, Wiki `h2.` / `{{code}}`, or copying Confluence page HTML |
+
+If the ticket body shows literal tags or unrendered `**bold**`, fix with `editJiraIssue` and `contentFormat: "markdown"` — do not add more HTML.

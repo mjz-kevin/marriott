@@ -14,6 +14,7 @@
 
 ### 变更
 - **行内 review 评论不再挂在语句上一行注释上**：`pr_review.py plan` 若请求行是 `//` / KDoc / 空行，且下一句语句在 diff 里，则锚到那句（`nudged_from` 记下原稿行号）；正文反引号只引用了注释本身则不挪，避免误伤「这条注释写错了」。`code-review-rules` / `review-comment` / `code-review-agent` 写明 `line` 必须是被讨论的语句。离线单测 36 → 42。已发到 PR 的旧评论不会改位置。
+- **`test-run-report-bug`：Jira Bug 写入格式硬约束**：补齐与 `user-story-publish` 一致的 MCP 提交规则——`createJiraIssue` / `editJiraIssue` / `addCommentToJiraIssue` 必须带 `contentFormat: "markdown"`，Description 与 Replication Steps 仅用 Markdown，禁止把 Confluence storage HTML / 原始 HTML / Wiki 标记写入字段，避免工单正文出现可见的 HTML 标签或未渲染的 `**`；`references/app-bug-template.md` 增加 §5 对照表。
 
 ### 新增
 - **Code Review 意见闭环：开发能读到全部评论（含代码行内评论），逐条决定「改」还是「解释不改」，确认后回复；审核人可人工复审，也可用 agent 复审**：
@@ -25,7 +26,7 @@
   - 文档：`AGENTS.md` §2 / §3、设计文档 §2.2 / §4 / §5 / §6.1（新增脚注 ⁵）、`init/README.md`、`doc/maintenance/testing.md`。profile 未改（复用 `mcp.github.*`）。
 
 ### 升级方式
-- **直接覆盖**：只新增 skill（`review-feedback`）与脚本子命令，没有删除或改名，安装行为不变。需重装 TL / Dev 角色包。resolve 需要发评论账号对该仓库有写权限（`gh` 登录账号或 `mcp.json` 的 PAT）。
+- **直接覆盖**：只新增 skill（`review-feedback`）与脚本子命令，没有删除或改名，安装行为不变。需重装 TL / Dev 角色包（review 闭环）以及 QA 角色包（`test-run-report-bug`）。resolve 需要发评论账号对该仓库有写权限（`gh` 登录账号或 `mcp.json` 的 PAT）。
 
 ---
 
