@@ -16,7 +16,11 @@ Windows 下把 `~` 换成 `%USERPROFILE%`。
 | Cursor 报 `Invalid skill frontmatter`，Skill 不出现 | `description` 写成未加引号的单行值，内容含 `: `，YAML 解析失败（历史上 `requirement-clarify`、`jira-to-test-case` 等 3 个 skill 都踩过） | 改为 `description: >-` 折叠块；`check.py` 会报 ERROR |
 | 新 Skill / Agent 在用户机器上没有 | 未登记到 `init/roles.json`，或登记到了错误的角色 | `check.py` 的 `[roles]` WARN 会提示；修 `roles.json` 后重新构建 |
 | 构建汇总里 `缺失 N` / `占位 N` | `roles.json` 引用的 skill 目录不存在 / agent 文件不存在 | 改名后漏改 `roles.json`，按 `check.py` 输出修复 |
-| `--runtime` 构建出的包异常小，或解压失败 | 克隆时没装 Git LFS，`init/res/*.zip` 只是 LFS 指针文件 | `git lfs install && git lfs pull`，再确认 `ls -la init/res` 文件是正常大小（百 MB 级） |
+| `--runtime` 构建报「以下载荷是 Git LFS 指针文件」，或 `check.py` 报 `[lfs]` WARN（旧版本 `build.py` 则是构建出的包异常小 / 解压失败） | 克隆时没装 Git LFS，`init/res/*.zip` 只是 ~130 字节的 LFS 指针文件 | `python init/lfs_setup.py [--platform <平台>]`（免 brew / sudo：自动下载 git-lfs 到 `~/.local/bin`，再 `git lfs install` + `git lfs pull`）；内网下载不了用 `--from <官方 git-lfs 压缩包>`。详见 [`init/README.md`「Git LFS 初始化」](../../init/README.md#git-lfs-初始化新克隆后构建运行时包前必做) |
+| 装完 git-lfs 后 `git checkout` / `pull` / `push` 报 `git-lfs: command not found` | `lfs_setup.py` 装到的 `~/.local/bin` 不在 PATH（git 的 LFS filter / hook 靠 PATH 找它） | 按脚本打印的命令把该目录加进 PATH（mac 可重跑加 `--add-to-path`），重开终端和 Cursor |
+| `git clone` 报 `git-lfs filter-process: git-lfs: command not found` / `Clone succeeded, but checkout failed` | `~/.gitconfig` 里有 LFS filter 配置（以前装过），但当前 PATH 找不到 `git-lfs` | 进入克隆目录，先 `GIT_LFS_SKIP_SMUDGE=1 git restore --source=HEAD :/` 检出代码（zip 暂为指针），再 `python3 init/lfs_setup.py`（会补装 git-lfs 并拉取载荷），按提示把安装目录加进 PATH |
+| `lfs_setup.py` 下载失败 | 内网拦截 github.com / 代理 | 从能联网的机器拿 `git-lfs-<os>-<arch>-v<ver>.zip`，`python init/lfs_setup.py --from <路径>` |
+| `git lfs pull` 失败 | 没有 git 远端访问权限（SSH key / HTTPS 凭证），或 LFS 对象没推到远端 | 先确认 `git fetch` 正常；维护者推载荷时须装好 git-lfs，否则远端只有指针没有对象 |
 | 运行时包构建告警「res/tools 无 …」「res/mcp-offline 不存在」 | 对应载荷没准备 | 按 `init/README.md`「离线载荷准备」补齐；告警不阻断构建，但用户侧会回退联网 npx / 系统 Chrome |
 | 在本仓库里调到的 Skill 行为和刚改的不一样 / 仓库里跑 `upload_confluence_v2.py` 报 `mcp.json 缺少 confluenceRest` | 仓库级与用户级 Skill 同时加载；仓库内脚本按自身位置找 `.cursor/mcp.json` | 见 [testing.md §3](testing.md#3-在-cursor-里实测-agent--skill) |
 | `sensitive-data-guard` 测试报 `fixture does not exist` 或部分用例失败 | `tests/fixtures/` 被 git 忽略，新克隆的仓库里没有或不全 | 见 [testing.md §2](testing.md#2-脚本测试) |

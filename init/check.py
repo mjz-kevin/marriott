@@ -29,6 +29,8 @@ AI SDLC 仓库一致性检查（维护用，不随包分发）。
                 → 否则 ERROR。条目的流水线未在 harness-invoke / cicd-agent / AGENTS.md 中提及 → WARN。
   runtime       setup.json / mcp.example.*.json / init/README.md 中写死的 node、python 版本一致 → 否则 ERROR。
   templates     init/templates 下 .sh 与 .ps1 成对 → 否则 ERROR。
+  lfs           init/res/ 下的 zip 仍是 Git LFS 指针文件（新克隆没装 git-lfs）→ WARN
+                （只影响 build.py --runtime，角色包不受影响；修复：python init/lfs_setup.py）。
   version       pyproject.toml 的 version：HEAD 在 tag 上时必须等于该 tag（ERROR）；
                 低于最新 tag → WARN。
 
@@ -581,6 +583,18 @@ def check_templates(r: Report) -> None:
         r.error("templates", f"init/templates/{n}.ps1 缺少对应的 .sh")
 
 
+# ---------------------------------------------------------------- lfs
+def check_lfs(r: Report) -> None:
+    if str(INIT_DIR) not in sys.path:
+        sys.path.insert(0, str(INIT_DIR))
+    from lfs_setup import find_lfs_pointers
+
+    pointers = find_lfs_pointers()
+    if pointers:
+        r.warn("lfs", f"init/res/ 有 {len(pointers)} 个 zip 仍是 Git LFS 指针文件（未拉取），"
+                      "build.py --runtime 会失败；角色包不受影响。修复：python init/lfs_setup.py")
+
+
 # ---------------------------------------------------------------- version
 def _git(*args: str) -> str:
     try:
@@ -629,6 +643,7 @@ def main() -> int:
     check_backend_exceptions(r)
     check_runtime_versions(r)
     check_templates(r)
+    check_lfs(r)
     check_version(r)
 
     for e in r.errors:

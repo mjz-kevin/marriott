@@ -45,7 +45,7 @@ git push origin main develop --tags
 git checkout 0.3.1
 python init/check.py --strict         # 此时还会校验 pyproject version == tag
 python init/build.py --yes            # 全部角色包，版本号自动取 tag
-# 运行时有变化时才需要（每次一个平台）：
+# 运行时有变化时才需要（每次一个平台；新克隆先 python init/lfs_setup.py 拉 LFS 载荷）：
 python init/build.py --runtime mac-silicon --yes
 python init/build.py --runtime mac-intel --yes
 python init/build.py --runtime win --yes

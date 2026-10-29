@@ -37,8 +37,9 @@ ai-sdlc/
 ├── init/                     # 按角色打包分发（完整结构见 init/README.md「目录结构」）
 │   ├── roles.json            # 角色 → agents / skills / 公共资产映射（唯一数据源）
 │   ├── build.py / check.py   # 构建脚本 / 仓库一致性检查（纯标准库）
+│   ├── lfs_setup.py          # 免 brew / sudo 安装 git-lfs 并拉取 res/ 载荷
 │   ├── templates/            # install / uninstall（.sh / .ps1 成对）
-│   ├── res/                  # 离线运行时 / MCP / 工具载荷（zip 走 Git LFS）
+│   ├── res/                  # 离线运行时 / MCP / 工具载荷（zip 走 Git LFS；新克隆先 python init/lfs_setup.py）
 │   └── dist/                 # 构建产物（git 忽略）
 └── .ai-sdlc/                 # Agent 运行时状态（会话、草稿、计划、扫描日志等，git 忽略，勿提交）
 ```
@@ -145,4 +146,4 @@ python .cursor/skills/code-review/merge-gate/tests/run_tests.py       # 改 pr_r
 
 - 采用 git flow（`develop` 日常 → `release/<ver>` → `main` + tag，tag 无 `v` 前缀）；发版时 `pyproject.toml` 的 `version`、tag、角色包版本号三者一致，并把 `CHANGELOG.md` 的 `Unreleased` 定稿（含「升级方式」）。完整步骤、hotfix 与回滚见 [`doc/maintenance/release.md`](doc/maintenance/release.md)。
 - 日常改动在 `CHANGELOG.md` 的 `Unreleased` 下随手记一条。
-- `*.zip` 走 Git LFS（见 `.gitattributes`）；`init/dist/`、`__pycache__/`、`.idea`、`.DS_Store` 不提交。
+- `*.zip` 走 Git LFS（见 `.gitattributes`）；新克隆没装 git-lfs 时 `init/res/` 只有指针文件，`build.py --runtime` 会报错，用 `python init/lfs_setup.py` 修复（免 brew / sudo，见 [`init/README.md`「Git LFS 初始化」](init/README.md#git-lfs-初始化新克隆后构建运行时包前必做)）。`init/dist/`、`__pycache__/`、`.idea`、`.DS_Store` 不提交。

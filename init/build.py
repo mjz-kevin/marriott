@@ -504,6 +504,41 @@ def zip_role(role: str, version: str) -> Path:
     return zip_path
 
 
+def _check_lfs_payloads(platform: str, runtime_zip: Path) -> None:
+    """运行时包要打入的 init/res 载荷不能是 Git LFS 指针 / 坏 zip，否则直接失败（不产出坏包）。
+
+    新克隆时没装 git-lfs，init/res/*.zip 只是 ~130 字节的指针文件；以前会被原样打进运行时包，
+    用户安装时才解压失败。这里在拷贝前统一拦截。
+    """
+    if str(INIT_DIR) not in sys.path:
+        sys.path.insert(0, str(INIT_DIR))
+    from lfs_setup import is_lfs_pointer, lfs_fix_hint  # 同目录的维护脚本（纯标准库）
+
+    candidates = [runtime_zip]
+    candidates += sorted((RES_DIR / "mcp-offline").glob("*.zip"))
+    tools = RES_DIR / "tools"
+    candidates += sorted(tools.glob("mermaid-cli-*.zip"))[-1:]
+    candidates += sorted(tools.glob("md-to-pdf-*.zip"))[-1:]
+    chrome = tools / {"win": "chromium-win64.zip", "mac-intel": "chromium-mac-intel.zip",
+                      "mac-silicon": "chromium-mac-silicon.zip"}[platform]
+    if chrome.is_file():
+        candidates.append(chrome)
+
+    pointers = [p for p in candidates if is_lfs_pointer(p)]
+    broken = [p for p in candidates if p not in pointers and not zipfile.is_zipfile(p)]
+    if pointers:
+        names = "\n".join(f"    {p.relative_to(REPO_ROOT).as_posix()}" for p in pointers)
+        raise PayloadError(f"以下载荷是 Git LFS 指针文件，不是真实 zip：\n{names}\n  {lfs_fix_hint(platform)}")
+    if broken:
+        names = "\n".join(f"    {p.relative_to(REPO_ROOT).as_posix()}" for p in broken)
+        raise PayloadError(f"以下载荷不是有效 zip（下载中断 / 文件损坏）：\n{names}\n"
+                           "  删除后重新拉取：git lfs pull --include=<路径>，或重跑 python init/lfs_setup.py")
+
+
+class PayloadError(RuntimeError):
+    """运行时包载荷不可用（LFS 指针 / 坏 zip）。"""
+
+
 def build_runtime_pkg(platform: str, version: str) -> Path:
     """构建一个「运行时初始化包」：只含 res 下对应平台的运行时 zip + 精简安装脚本。
 
@@ -520,6 +555,7 @@ def build_runtime_pkg(platform: str, version: str) -> Path:
         raise FileNotFoundError(
             f"res/{zip_name} 不存在，无法构建 {platform} 运行时初始化包"
         )
+    _check_lfs_payloads(platform, src_zip)
 
     pkg_name = f"AI-SDLC-Runtime-{platform}"
     pkg_dir = DIST_DIR / pkg_name
@@ -679,8 +715,8 @@ def main() -> int:
         log(f"构建运行时初始化包（平台 {args.runtime}）...")
         try:
             zp = build_runtime_pkg(args.runtime, version)
-        except FileNotFoundError as e:
-            log(f"  ⚠️ {e}")
+        except (FileNotFoundError, PayloadError) as e:
+            log(f"  ❌ {e}")
             return 1
         log(f"  → {zp.relative_to(REPO_ROOT)} ({zp.stat().st_size // (1024*1024)} MB)")
         log("完成。")

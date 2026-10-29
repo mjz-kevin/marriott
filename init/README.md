@@ -22,6 +22,7 @@ init/
 ├── roles.json            # 角色 → agents/skills 映射（唯一数据源，改这里）
 ├── build.py              # 构建脚本：读 roles.json，产出角色包 / 运行时包（纯标准库）
 ├── check.py              # 仓库一致性检查（维护者用，不随包分发；见 doc/maintenance/）
+├── lfs_setup.py          # 免 brew / sudo 安装 git-lfs 并拉取 res/ 载荷（维护者用，不随包分发）
 ├── templates/
 │   ├── install.sh / install.ps1                     # 角色包安装器：落资产 + 复用运行时生成 mcp.json
 │   ├── uninstall.sh / uninstall.ps1                 # 角色包卸载器（删所有角色资产，清单由 build.py 注入）
@@ -30,7 +31,7 @@ init/
 ├── placeholders/         # （可选）尚未落地的 Agent 占位；当前所有 Agent 均已落地，目录可不存在
 ├── allowlist_command.txt # 内部命令白名单参考（不随包分发）
 ├── allowlist_mcp.txt     # 内部 MCP 工具白名单参考（不随包分发）
-├── res/                  # 离线载荷（体积大，zip 走 Git LFS，克隆后需 git lfs pull），仅运行时包使用
+├── res/                  # 离线载荷（体积大，zip 走 Git LFS，克隆后需 python init/lfs_setup.py），仅运行时包使用
 │   ├── AI-SDLC-windows.zip             # Windows 运行时 → 解压到 C:\
 │   ├── AI-SDLC-macOS-Silicon.zip       # macOS Apple Silicon(M 系列) 运行时
 │   ├── AI-SDLC-macOS-Intel.zip         # macOS Intel 运行时
@@ -79,10 +80,43 @@ python init/build.py --yes
 python init/build.py --no-zip
 
 # 构建运行时初始化包（每次只构建一个平台，不构建角色包）
+# ⚠️ 需要 init/res/ 的 LFS 载荷已拉取，新克隆先看下面「Git LFS 初始化」
 python init/build.py --runtime win
 python init/build.py --runtime mac-silicon
 python init/build.py --runtime mac-intel
 ```
+
+### Git LFS 初始化（新克隆后构建运行时包前必做）
+
+`init/res/` 下的 zip 走 Git LFS。没装 git-lfs 就 `git clone`，工作区里的 zip 只是 ~130 字节的**指针文件**
+（`ls -la init/res` 能看到），`build.py --runtime` 会直接报错退出（不再产出坏包），`check.py` 也会给出 `[lfs]` WARN。
+**只构建角色包（不带 `--runtime`）不需要 LFS**，可以跳过本节。
+
+用仓库自带的脚本一键修复，**不需要 brew / sudo / 管理员权限**：
+
+```bash
+python init/lfs_setup.py --check                  # 只检查：git-lfs 是否可用、哪些载荷还是指针
+python init/lfs_setup.py --platform mac-silicon   # 只拉 mac-silicon 运行时包需要的载荷（省流量）
+python init/lfs_setup.py                          # 拉全部载荷（三个平台）
+python init/lfs_setup.py --add-to-path            # 同上，并把 git-lfs 安装目录写进 ~/.zshrc / ~/.bash_profile
+```
+
+脚本做的事（每步已就绪即跳过，可重复执行）：
+
+1. PATH 里没有 `git-lfs` 时，从官方 GitHub Release 下载对应平台的预编译二进制（校验 `sha256sums.asc`），
+   放到**用户目录** `~/.local/bin/`（Windows 为 `%USERPROFILE%\.local\bin\`，可用 `--install-dir` 改）；
+2. `git lfs install`：只写当前用户的 `~/.gitconfig` 和本仓库的 hooks；
+3. `git lfs pull`（`--platform` 时只拉该平台的运行时 zip、Chromium 与通用的 MCP / 工具包）；
+4. 校验 `init/res/` 下不再有指针文件。
+
+注意：
+
+- **安装目录要加进 PATH**：git 的 LFS filter 和 pre-push hook 靠 PATH 找 `git-lfs`，不加的话以后 `git checkout` / `git pull` / `git push` 会报 `git-lfs: command not found`。脚本检测到不在 PATH 时会打印要执行的命令；macOS / Linux 可加 `--add-to-path` 自动写入 shell 启动文件，Windows 按提示用 `[Environment]::SetEnvironmentVariable(..., 'User')` 改用户级 PATH（无需管理员）。改完重开终端和 Cursor。
+- **内网拦截 github.com 下载不了**：从能联网的机器 / 同事处拿官方包（如 `git-lfs-darwin-arm64-v3.8.0.zip`、`git-lfs-windows-amd64-v3.8.0.zip`），执行 `python init/lfs_setup.py --from <文件路径>`，不联网安装。
+- **macOS 提示「无法验证开发者」**：浏览器下载的包会带隔离属性，执行 `xattr -d com.apple.quarantine ~/.local/bin/git-lfs` 后重试（脚本经 curl 下载的不会有此问题）。
+- **Windows 装了 Git for Windows** 时一般已自带 git-lfs，直接 `git lfs install && git lfs pull` 即可；`lfs_setup.py` 检测到会跳过下载。
+- 以后克隆其他 LFS 仓库：`git lfs install` 已写入用户级配置，只要 PATH 里有 `git-lfs`，`git clone` 会自动拉取 LFS 文件。
+- 已有 git-lfs 的手动等价操作：`git lfs install && git lfs pull`（或 `git lfs pull --include "init/res/AI-SDLC-macOS-Silicon.zip"` 只拉部分）。
 
 **版本号如何确定**（未用 `--version` 时）：
 
@@ -95,7 +129,7 @@ python init/build.py --runtime mac-intel
 产物在 `init/dist/`：
 
 - 角色包：**每角色一个 zip**，内置安装 / 卸载脚本、角色 README、`manifest.json`；**不含运行时、离线 MCP 包、离线工具包**。
-- 运行时包：对应平台的运行时 zip + `res/mcp-offline/` 全部 MCP 包 + `res/tools/` 下的 mermaid-cli、md-to-pdf 和该平台的 Chromium。`res/` 下缺什么，`build.py` 会告警但不阻断。
+- 运行时包：对应平台的运行时 zip + `res/mcp-offline/` 全部 MCP 包 + `res/tools/` 下的 mermaid-cli、md-to-pdf 和该平台的 Chromium。`res/` 下缺什么，`build.py` 会告警但不阻断；但要打入的载荷是 **LFS 指针文件或坏 zip 时直接报错退出**（见上文「Git LFS 初始化」）。
 
 ## 分发与安装（发给最终用户）
 
@@ -241,7 +275,7 @@ python init/build.py --runtime mac-intel
 
 ## 离线载荷准备（放入 `res/`）
 
-二进制体积大，通过 **Git LFS** 入库（`.gitattributes`：`*.zip filter=lfs`），克隆后需 `git lfs install && git lfs pull`；升级载荷时替换 `init/res/` 下对应文件，`build.py --runtime <平台>` 构建时打入运行时包：
+二进制体积大，通过 **Git LFS** 入库（`.gitattributes`：`*.zip filter=lfs`），克隆后需拉取 LFS 对象（`python init/lfs_setup.py`，免 brew / sudo，见[「Git LFS 初始化」](#git-lfs-初始化新克隆后构建运行时包前必做)）；升级载荷时替换 `init/res/` 下对应文件，`build.py --runtime <平台>` 构建时打入运行时包：
 
 | 平台 | 运行时载荷（放到 `init/res/`） | 版本要求 | 安装脚本落地位置 |
 | --- | --- | --- | --- |
