@@ -238,7 +238,7 @@ code:
 # ---------------------------------------------------------------- 代码审核（代码审核类 skill 用）
 review:
   rules_source:                       # code-review-rules 用：APP 团队编码规范来源。扫描本地仓库得到：Android 有 detekt/editorconfig；iOS 暂无 lint 规范文件。
-    kind: repo_file                   # 来源类型：confluence（团队规范页）/ repo_file（仓库内规范文件）/ github（GitHub MCP get_file_contents）；本节按来源就近标注
+    kind: repo_file                   # 来源类型：confluence（团队规范页）/ repo_file（仓库内规范文件）/ github（GitHub MCP get_file_contents）/ bundled（随 code-review-rules 分发的规则包）；本节按来源就近标注。另：正确性 / 可读性 / 架构合理性三个审核视角由 skill 内置，不依赖本配置
     common:                           # 跨语言通用规范：对所有语言子键（swift/kotlin/typescript）一并适用
       - name: Marriott Naming Conventions
         kind: confluence                # 经 Atlassian(Confluence) MCP getConfluencePage 读取
@@ -247,7 +247,11 @@ review:
           page_id: "262439119"
           url: https://marriottcloud.atlassian.net/wiki/spaces/TIP/pages/262439119/Marriott+Naming+Conventions
         dimensions: [命名, 分层/职责]
-    swift: []                         # iOS（ios-dragon-app）暂无 SwiftLint/SwiftFormat 规范文件 → 该语言仅按 common + 内置通用维度审核；有规范后追加
+    swift:                            # iOS（ios-dragon-app）仓库暂无 SwiftLint/SwiftFormat 规范文件 → 先用随 skill 分发的 iOS 规则包；仓库有规范文件后改为 repo_file 条目
+      - name: Swift / iOS review pack
+        kind: bundled                 # 随 code-review-rules 分发的规则包，path 相对该 skill 目录（来源：iOS Money 团队 pr-review 沉淀）
+        path: references/stack-rules/swift-ios.md
+        dimensions: [分层/职责, 异常处理, 性能]   # iOS 18+ API、Swift Concurrency 替代 GCD、复用 Common / CommonData / CommonUI 公共组件
     kotlin:                           # Android（android-dragon-app）仓库内规范文件
       - name: detekt ruleset
         repo: android                 # 对应 mcp.github.repos.android

@@ -20,6 +20,20 @@
 - **`test-run-report-bug` / `test-agent`：手动提 APP Bug（Entry B）**：对话中说 **提个 bug / 创建 bug 单** 时走 Entry B（不跑批、不发运行报告）；按 `app-bug-template.md` 建单，Summary `[Domain][Page/Feature] - …`（Domain ∈ Commerce/Loyalty/Trips/Platform）；仅预填用户已说明的字段，`AskQuestion` 确认必填项与 Labels 后才创建（手动入口不可跳过卡片、不臆填）；写 Jira/Confluence 前过 `sensitive-data-guard`，测试数据保持合成。`test-agent` 命令路由与意图关键词同步 Entry A/B 分流。
 
 ### 新增
+- **`dev-agent` 开发前澄清（新 Skill `dev/dev-clarify`，随 TL / Dev 分发，独立实现，不调用 `requirement-clarify`）**：
+  - **问题**：dev-agent 读完 Story / 方案后直接检出基线写代码，只在 D1 读不到输入、或 D4 写到一半撞上矛盾时才停下；AC 有歧义（「体验良好」「正常显示」）、错误态 / 边界 / 兜底没写，会被 AI 自行猜测实现，D5 验收也只能按模糊 AC 判 pass。
+  - **新节点 `D1_clarify`**（D1 与 D2 之间，不可跳过；方案完整且与 Story 一致时只做快速扫描）：先自查仓库 / Figma / Jira / 方案中能查到的事实（不拿去问人），按 15 个开发实现维度（端范围、AC 可验证性、主流程、UI 状态、数据规则、接口契约、错误兜底、边界、Feature Flag、兼容迁移、依赖、埋点、非功能与安全、与现有代码一致性、任务清单质量）逐项判定，问题标为歧义 / 缺失 / 矛盾，分 P0 / 非阻塞并给推荐默认值；每轮最多 5 个 P0（共 8 个），首轮澄清最多 3 轮、追问最多 2 轮；矛盾一律 P0。P0 未清不检出、不建分支、不写代码。
+  - **产出**：`.ai-sdlc/dev/{dev_id}/docs/CLARIFY_*_r{n}_*.md`（已确认决策、按任务细化后的验收标准、假设记录、需上游修改项），state 新增 `clarify` 段、`tasks[].clarify_refs`；HARD GATE 增加「澄清已放行」；D4 遇到输入答不了的问题改为发起澄清**追问轮**；D5 `acceptance-check` 按澄清后的验收标准核对；Story / 方案变更（stale → revise）后也走追问轮。需改 Story / 方案的点只报告给 PO / TL，dev-agent 不改上游。用 PR 链接进入（§5.1）时 `clarify.status: waived`。问题清单以机器可读 JSON 交给主对话渲染成选项卡片。
+  - `acceptance-check`：验收基线从「只认技术方案任务」改为「调用方给的任务清单（方案任务或 Story AC，经 `dev-clarify` 细化）」，与 dev-agent 已支持的无方案模式对齐。
+  - **与 `requirement-clarify` 划清边界**（不抽公共规则，两边各自保留交互规则）：按「下一步做什么」区分——写 PRD / 各级技术方案前用 `requirement-clarify`，写代码前用 `dev-clarify`；两个 description 互相写明「不归我」并调整触发词（`requirement-clarify` 加「写 PRD 前澄清 / 写方案前澄清」，`dev-clarify` 去掉泛化的「需求歧义 / 输入有矛盾」，改为「能不能直接开发 / 实现有歧义 / 方案和代码冲突」）；正文各加一张边界表。`dev-clarify` S0 新增「复用上游澄清」：方案已写明的决策视为事实不再追问，只把方案里的待确认项、`TBD` 占位、未关闭的风险 / 依赖带过来；与 Story、设计或现有代码冲突时才重问。
+  - 文档：`AGENTS.md` §2 / §3、设计文档 §2 / §4.3 / §5、`init/README.md`。profile 未改。
+- **Code Review 从「规范符合性」扩展为正确性 / 可读性 / 架构合理性三视角审核（吸收 iOS Money 团队 `pr-review` 沉淀）**：
+  - **问题**：`code-review-rules` 只按六个规范维度（命名 / 分层 / 异常 / 日志 / 性能 / 安全）逐条核对，并明确「架构不归本 skill」，导致复用已有组件、改动放错层 / 模块、per-screen workaround 而非根因修复、PR 夹带无关改动、可读性（重复判空、嵌套分支）这类问题基本发现不了；且只看 patch，不读改动上下文与调用方，设计类问题无从判断。iOS 仓库无 lint 规范文件，`rules_source.swift` 为空。
+  - **`code-review-rules`**：新增 `references/review-lenses.md`（技术栈无关）——每处改动先问 6 个问题（坏了会怎样 / 是否有可复用实现 / 能否更小改动 / 根因还是 workaround / 是否一眼读懂 / 栈相关），三视角检查清单、证据要求、按视角定级、评论写法示例；新增 S1b「读取 head 侧上下文」（改动文件上下文、调用方与测试、新 helper 的已有等价实现，只读）；每条发现增加 `lens` 与 `evidence` 字段。**定级护栏**：架构类默认 🟡，只有同时造成正确性 / 安全后果或违反明文规则（团队规范 / 规则包 must / 已接受 ADR）才 🔴；可读性默认 🟢、永不 🔴；架构类无证据（已有实现的 `path:line`、仓库既有模式、KID）则删除或降为 🟢「未验证」。**仍归人工**：业务合理性、系统级架构方向（新服务 / 选型 / 模块拆分 / STB·ARB），只在草稿「For the human reviewer」列出，默认不发 PR。
+  - **技术栈规则包**：新增 `references/stack-rules/swift-ios.md`（iOS 18+ API、Swift Concurrency 替代 GCD / blocks 及可接受例外、复用 `Common` / `CommonData` / `CommonUI`、新增 helper 前先检索、搜索命令）。`rules_source` 条目新增 `kind: bundled`（path 相对 skill 目录）；`app-test` / `app-prod` 的 `review.rules_source.swift` 由 `[]` 改为登记该规则包。CMS profile 只更新注释，行为不变。
+  - **`review-comment`**：草稿、PR 总结表与行内评论都带视角标签（`🟡 Should fix · Architecture · architecture · reuse — …`），同一灯色内按 安全 → 正确性 → 架构 → 可读性 排序；草稿新增「By lens」计数与「For the human reviewer」区。
+  - **`code-review-agent`**：描述与 R2 同步三视角与 S1b；`findings` 增加 `lens` / `evidence`；状态卡按视角计数；禁止项新增「无后果 / 无明文规则把架构类升 🔴」「无证据的口味型架构意见」。`merge-gate` / `pr_review.py` 未改（灯色与门禁口径不变，视角只是正文标签）。
+  - 文档：`AGENTS.md` §2、设计文档 §2 / §4 / §6.2 中 Code Review 描述、`doc/maintenance/profiles.md` `review` 段。
 - **Code Review 意见闭环：开发能读到全部评论（含代码行内评论），逐条决定「改」还是「解释不改」，确认后回复；审核人可人工复审，也可用 agent 复审**：
   - **问题**：GitHub MCP 没有读取 / 回复代码行内评论的工具；`pr_review.py existing` 只返回每条评论第一行的前 200 字符（原本只用于去重），开发在新对话里贴 PR 链接时读不全意见。dev-agent 也没有「处理 review 意见」的流程，读到意见后容易直接改代码。
   - **脚本 `merge-gate/scripts/pr_review.py`**（审核侧与开发侧共用一份）：`existing` 去掉截断，补 `id` / `in_reply_to_id` / 完整正文（旧字段保留）。新增 `feedback`（只读）：行内评论按 thread 分组（根评论 + 回复）、review 总结（含「diff 外的发现」）、PR 对话区评论，全部全文；resolved 状态走 GraphQL，不可用时为 `null` 并给出警告，不中断；标出 `awaiting`（等作者 / 等审核人）。新增 `reply`（写）：回复挂到 thread 根评论下，或在对话区发一条引用原文的评论；每条带隐藏标记 `ai-sdlc-reply:…`，重跑不重复发；支持 `--dry-run`；部分失败逐条报告（exit 4）。新增 `resolve`（写，仅审核侧）：GraphQL `resolveReviewThread`，发评论身份是 PR 作者时拒绝（exit 5）。离线单测从 21 条增至 36 条。
@@ -29,7 +43,7 @@
   - 文档：`AGENTS.md` §2 / §3、设计文档 §2.2 / §4 / §5 / §6.1（新增脚注 ⁵）、`init/README.md`、`doc/maintenance/testing.md`。profile 未改（复用 `mcp.github.*`）。
 
 ### 升级方式
-- **直接覆盖**：只新增 skill（`review-feedback`）与脚本子命令，没有删除或改名，安装行为不变。需重装 TL / Dev 角色包（review 闭环）以及 QA 角色包（`test-run-report-bug`）。resolve 需要发评论账号对该仓库有写权限（`gh` 登录账号或 `mcp.json` 的 PAT）。
+- **直接覆盖**：只新增 skill（`review-feedback`、`dev-clarify`）与脚本子命令，没有删除或改名，安装行为不变。需重装 TL / Dev 角色包（开发前澄清、review 闭环、Code Review 三视角与 iOS 规则包）以及 QA 角色包（`test-run-report-bug`）。resolve 需要发评论账号对该仓库有写权限（`gh` 登录账号或 `mcp.json` 的 PAT）。
 
 ---
 

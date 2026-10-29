@@ -25,7 +25,7 @@ Using the acceptance criteria of every task in the detailed tech solution's task
 
 `{profile}` is the current profile file name (without extension, e.g. `app-prod` / `cms-test`), resolved and passed in by the caller via the profile-selection step (`profile.py resolve` gives its absolute path); if it is not passed in or the file does not exist → stop, don't guess.
 
-This step's acceptance criteria come from the detailed tech solution (each task carries its own acceptance criteria) and don't depend on team-specific config; no reference to profile business-config keys is needed.
+This step's acceptance criteria come from the task checklist the caller hands in (in the Dev Agent: `state.md` `tasks`, i.e. the solution's task breakdown when a solution exists, else the Story's ACs — in both cases as refined by `dev-clarify`, with their `clarify_refs` decisions) and don't depend on team-specific config; no reference to profile business-config keys is needed.
 
 ## 1. Prerequisites
 
@@ -72,7 +72,7 @@ Run a sensitive-information scan over this deliverable (code, config, comments, 
 
 | Rule | Description |
 |------|------|
-| Solution is the baseline | Acceptance criteria come from the detailed solution's task list; don't invent criteria the solution doesn't define |
+| Solution is the baseline | Acceptance criteria come from the task checklist handed in (solution tasks, or Story ACs, as clarified by `dev-clarify`); don't invent criteria it doesn't define, and treat a `clarify_refs` decision as part of the criterion |
 | Evidence per item | Every "met" carries verifiable evidence; don't rely on subjective judgment |
 | Sensitive info is a fixed item | "Contains no sensitive information" is a constant acceptance item; a hit means the whole run fails |
 | Explain not-applicable | "Not applicable" must state a reason; don't silently skip |
@@ -112,6 +112,6 @@ Task acceptance — {Pass | Fail}
 
 ## 7. Related
 
-- Upstream: unit-test-runner (do item-by-item acceptance after unit tests pass); acceptance criteria come from the detailed tech solution's task list
+- Upstream: unit-test-runner (do item-by-item acceptance after unit tests pass); acceptance criteria come from the task checklist (the detailed tech solution's task list, or the Story's ACs), refined by dev-clarify
 - Depends: sensitive-data-guard (the S3 "contains no sensitive information" acceptance item is executed by it; this step incorporates its conclusion)
 - Downstream: all met → verification passes (proceed to the subsequent code-review / CI-CD steps); any not met → send back to the development step to fix

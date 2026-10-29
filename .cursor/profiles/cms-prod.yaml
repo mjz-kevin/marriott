@@ -187,7 +187,7 @@ code:
 # ---------------------------------------------------------------- 代码审核（代码审核类 skill 用）
 review:
   rules_source:                       # code-review-rules 用：CMS 团队编码规范来源。扫描本地仓库得到：cncms 与 monorepo 各有 ESLint + Prettier 配置。
-    kind: repo_file                   # 来源类型：confluence（团队规范页）/ repo_file（仓库内规范文件）/ github（GitHub MCP get_file_contents）；本节按来源就近标注
+    kind: repo_file                   # 来源类型：confluence（团队规范页）/ repo_file（仓库内规范文件）/ github（GitHub MCP get_file_contents）/ bundled（随 code-review-rules 分发的规则包）；本节按来源就近标注。另：正确性 / 可读性 / 架构合理性三个审核视角由 skill 内置，不依赖本配置
     common:                           # 跨语言通用规范：对所有语言子键（typescript）一并适用
       - name: Marriott Naming Conventions
         kind: confluence                # 经 Atlassian(Confluence) MCP getConfluencePage 读取

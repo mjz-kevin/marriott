@@ -51,8 +51,8 @@ ai-sdlc/
 | `eval-agent` | PO | 需求澄清 → 写 PRD 与其中的 User Story → PO 确认 → 发布 Confluence |
 | `userstory-agent` | PO | 把 PRD 中的 User Story 同步到 Jira（同步计划 → 确认 → 建单 / 更新） |
 | `tech-solution-agent` | TL / Dev | 技术方案（PRD 级 / Spike 调研 / Story 级详细方案）→ 确认 → 发布 → 回写 |
-| `dev-agent` | TL / Dev | Story → 检出基线 → 唯一 AI Feature 分支 → 实现代码与单测 → 验证 → 提 PR → Code Review 后读取全部评论（含行内）、开发逐条决定改 / 解释不改、修复、确认后回复评论（可选重新请求 review） |
-| `code-review-agent` | TL / Dev | 拉 PR diff → 按规范与安全基线逐条审核（🔴 阻断 / 🟡 建议 / 🟢 提示）→ 本地草稿先给审核人看、挑选要发的 → 合并门禁：一条 PR review（总结 + 代码行内评论）；再次运行时复审作者回复（AI 建议接受 / 坚持，审核人确认后回复，接受的 resolve）（不自动 approve / 合并，人工拍板） |
+| `dev-agent` | TL / Dev | Story → 开发前澄清（歧义 / 缺失 / 矛盾逐项核实，P0 由开发拍板，澄清结论作为实现与验收基线）→ 检出基线 → 唯一 AI Feature 分支 → 实现代码与单测 → 验证 → 提 PR → Code Review 后读取全部评论（含行内）、开发逐条决定改 / 解释不改、修复、确认后回复评论（可选重新请求 review） |
+| `code-review-agent` | TL / Dev | 拉 PR diff → 从正确性 / 可读性 / 架构合理性（diff 范围内：复用、分层、改动范围、根因）三个视角，按规范、技术栈规则包与安全基线逐条审核（🔴 阻断 / 🟡 建议 / 🟢 提示；业务合理性与系统级架构方向仍归人工）→ 本地草稿先给审核人看、挑选要发的 → 合并门禁：一条 PR review（总结 + 代码行内评论）；再次运行时复审作者回复（AI 建议接受 / 坚持，审核人确认后回复，接受的 resolve）（不自动 approve / 合并，人工拍板） |
 | `cicd-agent` | TL / Dev / QA | 选定并触发现有 Harness 流水线，**仅限低环境（dev / test）**；触发前必须展示运行入参并等人确认；高环境（Staging / Prod）不在工具链范围，由人在 Harness UI 操作。唯一例外：profile `build_backend_exceptions` 登记的「只构建不部署」测试包（当前 APP `Android_Adhoc_Build` · `flavor=Stg`、`iOS_Dragon_App_Testflight_Dev` · `API_BASE_URL=interceptor-stg`，QA 日常 STG 包） |
 | `test-agent` | QA | 需求 / Jira 用例 → 伪代码 → pytest + pytest-bdd + Appium 可执行脚本 → 运行报告 / 提 Bug |
 
@@ -66,7 +66,7 @@ Skill 按分组文件夹存放，Cursor 会递归识别 `SKILL.md`；安装包�
 | 公共（所有角色）`common/` | `sensitive-data-guard`、`profile-select`、`confluence-publish`、`md-to-pdf`、`ai-sdlc-info`、`kb-query` |
 | 需求（PO）`requirement/` | `requirement-clarify`、`prd-authoring`、`prd-publish`、`user-story-authoring`、`user-story-publish` |
 | 技术方案 `tech-solution/` | `tech-solution-prd`（仅 TL）、`tech-solution-spike`、`tech-solution-detail`、`tech-solution-publish` |
-| 开发与验证 `dev/` | `baseline-checkout`、`feature-branch`、`unit-test-authoring`、`build-verify`、`unit-test-runner`、`contract-diff`、`acceptance-check`、`create-pr`、`review-feedback` |
+| 开发与验证 `dev/` | `dev-clarify`、`baseline-checkout`、`feature-branch`、`unit-test-authoring`、`build-verify`、`unit-test-runner`、`contract-diff`、`acceptance-check`、`create-pr`、`review-feedback` |
 | Code Review `code-review/` | `diff-fetch`、`code-review-rules`、`review-comment`、`merge-gate` |
 | CI/CD `cicd/` | `harness-invoke` |
 | 测试（仅 QA）`test/` | `jira-to-test-case`、`test-case-authoring`、`test-case-to-script`、`test-debug-script`、`test-page-elements`、`test-run-report-bug` |

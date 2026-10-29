@@ -7,8 +7,10 @@ description: >-
   give a clarification conclusion in the conversation and hand it directly to the PRD-authoring or
   tech-solution-authoring step. This step produces no document.
   Use when the user pastes raw requirements, meeting notes, or a one-line idea, or needs clarification /
-  completeness checking before writing a PRD / tech solution (PRD level / Spike / Story detail);
-  triggers: clarify requirements / clarify tech solution / 需求澄清 / 方案澄清 / 技术澄清 / 需求是否完整 / 帮我提问 / 澄清一下.
+  completeness checking before writing a PRD / tech solution (PRD level / Spike / Story detail).
+  Not for clarifying a Story / solution right before writing code (implementation readiness inside the
+  Dev Agent) - that is dev-clarify;
+  triggers: clarify requirements / clarify tech solution / 需求澄清 / 方案澄清 / 技术澄清 / 需求是否完整 / 写 PRD 前澄清 / 写方案前澄清 / 帮我提问 / 澄清一下.
 metadata:
   agent: [Eval Agent, Tech Solution Agent]
 ---
@@ -44,6 +46,17 @@ The clarification step before writing a PRD or tech solution; through multi-roun
 | "Write a detailed solution / task breakdown for this Story" | Story detail | First clarify interface field contracts, dependencies, fallbacks, task boundaries |
 
 **Not applicable**: when the content is already clear enough to fill the template directly (in that case go straight to the corresponding authoring step).
+
+**Boundary with `dev-clarify`** — both clarify, but for different consumers; pick by what happens next:
+
+| What comes next | Use | Why |
+| --- | --- | --- |
+| Writing a PRD / PRD-level solution / Spike / Story-level detailed solution | this Skill | The output feeds a document author; the author can still change the requirement or the solution |
+| Writing code for a Story (Dev Agent, before checkout or mid-implementation) | `dev-clarify` | The output is an implementation and acceptance baseline (refined per-task acceptance, local record); the Story / solution are inputs that must not be edited |
+| A DEV says "澄清一下 / 这个 Story 能不能直接开发" with a Story key and intends to implement | `dev-clarify` | Implementation readiness, not document authoring |
+| A TL / DEV wants to write the Story's detailed solution first | this Skill (technical · Story detail) | Its decisions land in the solution (pending items in its "to confirm" / risks sections); `dev-clarify` later treats them as decided and carries only the open items |
+
+Don't run both on the same input in a row: when a Story-detail solution was produced after this Skill's clarification, `dev-clarify` treats that solution's confirmed decisions as facts and carries forward only its open items.
 
 ## 2. Input
 
@@ -303,5 +316,6 @@ After the user answers Q3, continue to the next round; once all P0s are closed, 
 
 ## 7. Related
 
+- Boundary: before writing code for a Story (Dev Agent) use dev-clarify, not this Skill (see "Boundary with `dev-clarify`" in §1)
 - Next step (business mode): prd-authoring
 - Next step (technical mode): tech-solution-prd / tech-solution-spike / tech-solution-detail
