@@ -12,7 +12,12 @@
 
 ## [Unreleased]
 
+---
+
+## [0.5.0] - 2026-11-04
+
 ### 变更
+- **`test-run-report-bug`：`scan.py` 引用补全所属 skill 路径**：改为 `sensitive-data-guard/scripts/scan.py`，避免被误读为本 skill 下的脚本（`check.py --strict` 的 `[script-refs]` WARN）。
 - **`jira-to-test-case`（CMS）：用例表改为 8 列**：去掉执行期列 `Pass/Fail` / `Tester` / `Test Date`，在 `Function Point` 后新增 `Priority`（P0 / P1 / P2，与 app 模板一致），新表头为 `Case ID | Module | Function Point | Priority | Preconditions | Test Steps | Expected Result | Notes`。改动：`references/cms-case-template.md`（§1 字段表、§3 模板与示例行）、`SKILL.md` 中所有镜像表头处。已发布的旧 CMS 用例页不会自动改，重新生成 / 原地更新时按新表头输出。
 - **`jira-to-test-case`（app / cms）：Preconditions 必须自包含**：前置条件不得引用其他用例（如「TC-001 已执行」「同 TC-003」「使用 TC-002 创建的数据」），需直接写出具体状态 / 数据，保证每条用例可独立执行。改动：`references/cms-case-template.md` §1、`references/app-case-template.md` 字段表、`SKILL.md`（app 要点与 CMS 逐列约束）。
 - **`jira-to-test-case`（app / cms）：测试步骤不再提供具体输入数据**：原规则「Spell out the concrete data」（要求写出具体文本 / 文件名 / 数值）改为禁止 AI 编造字面量输入，只描述输入的类型或被测约束（如「输入合法标题」「输入达到 30 字上限的标题」「超出上限 1 个字」），仍需写明触发校验的动作；需求中的限制阈值可作为被测规则提及。两份模板的规则、正反例与示例行同步去掉具体值，`SKILL.md` 镜像处同步。
