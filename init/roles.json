@@ -58,6 +58,7 @@
         "tech-solution-spike",
         "tech-solution-detail",
         "tech-solution-publish",
+        "dev-clarify",
         "baseline-checkout",
         "feature-branch",
         "unit-test-authoring",
@@ -70,6 +71,7 @@
         "review-comment",
         "merge-gate",
         "create-pr",
+        "review-feedback",
         "harness-invoke"
       ]
     },
@@ -88,6 +90,7 @@
         "tech-solution-spike",
         "tech-solution-detail",
         "tech-solution-publish",
+        "dev-clarify",
         "baseline-checkout",
         "feature-branch",
         "unit-test-authoring",
@@ -100,6 +103,7 @@
         "review-comment",
         "merge-gate",
         "create-pr",
+        "review-feedback",
         "harness-invoke"
       ]
     },

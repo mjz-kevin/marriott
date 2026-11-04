@@ -34,7 +34,7 @@ python .cursor/skills/common/profile-select/scripts/profile.py resolve   # 当�
 | `mcp.github` | GHES host / org、各交付仓库及其**基线分支** | `rg -l 'mcp\.github' .cursor` |
 | `mcp.harness` | org / project、可触发的流水线清单（单条可选 `artifact_stage`：判定「这次 build 已发布 / 可安装」的 stage，查最新 build 用）、**低环境白名单 `allowed_envs`**、可选 **`build_backend_exceptions`**（纯 CI 构建包连高环境后端的精确例外，当前 APP `Android_Adhoc_Build` · `flavor=Stg`、`iOS_Dragon_App_Testflight_Dev` · `API_BASE_URL=interceptor-stg`）、禁止触发清单 `deny_list`（CMS）、轮询口径 | `rg -l 'mcp\.harness' .cursor` |
 | `code` | 语言栈、分支命名、构建命令语义、git hooks、commit 约定、AI 溯源标识、PR labels / reviewers 映射（`code.pr`，目前仅 APP iOS）、契约比对口径 | `rg -l 'code\.' .cursor` |
-| `review` | 编码规范来源、免审文件、合并门禁策略 | `rg -l 'review\.' .cursor` |
+| `review` | 编码规范来源（`rules_source`，条目 `kind` 可为 `confluence` / `repo_file` / `bundled`——`bundled` 指随 `code-review-rules` 分发的技术栈规则包，如 APP 的 `references/stack-rules/swift-ios.md`）、免审文件、合并门禁策略 | `rg -l 'review\.' .cursor` |
 | `test` | 单测命令语义、覆盖率门槛、测试范围（含部分「预留，暂无消费方」字段） | `rg -l 'test\.' .cursor` |
 | `doc` | 产物语言、PRD Scope 分块维度 | `rg -l 'doc\.' .cursor` |
 

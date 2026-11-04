@@ -12,9 +12,11 @@ The whole case page is now a **slim structure: a traceability header + 5 section
 
 To change the test-point / field / step rules for a case, **edit only this file**; it takes effect automatically on the next generation.
 
-## 0. Top traceability table (render at the top of every page, right after the AI-assistance line)
+## 0. Document metadata & traceability (top of every page, right after the AI-assistance line)
 
-Immediately after the AI-assistance declaration line, output the page's traceability info as a **tidy 2-column `Field | Value` table** (not a run-on quote block), so it renders aligned and scannable on Confluence. Keep the row order stable; omit a row only when its value is genuinely absent (or write `—`). Copy this shape:
+**Local draft** (under `.ai-sdlc/jira-to-test-case/{case_id}/docs/`): after the AI-assistance line, you may add PRD-style blocks per [`local-case-draft-template.md`](local-case-draft-template.md) — **Document Information** and **Version Change Log** using two-column **`Item | Content`** tables (same layout as team PRD documents). Omit the version log on a first `v1.0` draft if the user does not need it.
+
+**Every publishable body** (local draft and Confluence): output traceability as a **tidy 2-column `Field | Value` table** (not a run-on quote block), so it renders aligned and scannable on Confluence. Keep the row order stable; omit a row only when its value is genuinely absent (or write `—`). Copy this shape:
 
 | Field | Value |
 | --- | --- |
@@ -49,7 +51,7 @@ The case list table **fixedly contains the following columns**; fill in every co
 | Priority | P0 (core main flow / blocking) / P1 (important) / P2 (minor / boundary) |
 | Domain | **AI judges and fills by default**: the fine-grained business module this case belongs to — one leaf value from the **detailed Domain enum in §5** (mirrors the CN Bonvoy App Test Case Repository folder tree: `Commerce / Shop / Book / iOS-Local Payment / Android-Local Payment / Payment Console / PMS-MARSHA / Content / LaunchAds / Homepage / Discover / NCP / Loyalty / Compliance / Trips / Platform / Umeng / MK / Android-Saflok`). This is a **test-case-only** column — NOT the same enum as the 4-value Jira bug `Domain` field or the `business_domain` label (see §5). Pick the single leaf closest to the case's core value from the feature nature (not the title's literal words); when it cannot be pinned to a specific leaf, take the nearest and note the reason + its owning top-level group in Notes. See §5 for the enum and the judgement rule |
 | User type | Reference only user types registered in pytest.ini (GuestUser / MemberUser / PlatinumUser…) |
-| Preconditions | State/data/page that must hold before execution |
+| Preconditions | State/data/page that must hold before execution. ⛔ **Self-contained — never reference another test case** (no "TC-001 passed", "same as TC-003", "booking created in TC-002", "see previous case"): every case must be executable on its own, so spell out the concrete state / data directly (e.g. "Logged in as a member; an upcoming stay exists in Trips") |
 | Test steps | **Numbered one by one, precise to user page actions**: which button to tap, what to type in which input, what to select in a dropdown/suggestion. Where it can be aligned to page-fact elements, write the concrete control; a vague "operate the page" is forbidden |
 | Expected result | Observable expected result per step or overall |
 | Test result | Leave blank; fill Pass / Fail / Blocked at execution time |
@@ -63,7 +65,7 @@ Column-writing example (not a fixed case, illustrative only; on-screen control t
 
 | Case ID | Test title | Test-point type | Priority | Domain | User type | Preconditions | Test steps (precise to actions) | Expected result | Test result | Pages involved | Data/Source | Regression | Automation | Notes |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| TC-001 | Search a destination and enter the hotel list | Function | P0 | Shop | Guest | Already on the home page | 1. Tap the home "目的地" input; 2. Type "上海"; 3. Tap "上海, 中国" in the suggestion list; 4. Tap the "查找酒店" button | Navigates to the hotel list page; the title shows "上海" and the list is non-empty |  | home_page → property_list_page | AC1 | true | true | Domain=Shop (search→list, under Commerce) |
+| TC-001 | Search a destination and enter the hotel list | Function | P0 | Shop | Guest | Already on the home page | 1. Tap the home "目的地" input; 2. Enter a destination city; 3. Tap the first matching city in the suggestion list; 4. Tap the "查找酒店" button | Navigates to the hotel list page; the title shows the selected city and the list is non-empty |  | home_page → property_list_page | AC1 | true | true | Domain=Shop (search→list, under Commerce) |
 | TC-002 | Guest Info first-name required validation | Data | P1 | Book | Guest | Already on the Guest Info page | 1. Clear the "名字" input; 2. Tap the "继续" button | A required-field error appears under "名字" and no navigation occurs |  | guest_info_page | AC2 | true | true | Required rule pending dev confirmation; Domain=Book (booking flow, under Commerce) |
 | TC-003 | Empty-state copy and icon display | UI | P2 | Shop | Guest | Search a destination with no results | 1. Type a no-result keyword; 2. Tap "查找酒店" | The list area shows the empty-state illustration and "未找到酒店" copy |  | property_list_page | Figma | false | false | One-off UI check of this change's empty state, not a long-lived regression case; Domain=Shop |
 | TC-004 | Booking main-flow happy path | Function | P0 | Book | Member | Already logged in | 1. Search a destination on home…; 2. Pick a hotel…; 3. Pick a room…; 4. Fill Guest Info…; 5. Submit booking | Each page navigates normally; a booking review page is finally produced |  | home → … → review_booking_page | AC3 | true | false | Core flow worth regressing, but submitting a booking depends on third-party payment + async confirmation, so not automated; Domain=Book |
@@ -77,11 +79,11 @@ The quality of a case lives in the **Test steps** and **Expected result** column
 **Minimum detail bar (hard — every step must satisfy all of these):**
 
 - **Start from a navigation entry point.** The first step(s) must state **where in the app the tester is / how they got to the screen under test** — the tab, page, or navigation path they open (e.g. "In the bottom nav tap "账户" to enter the account page", then "Tap "个人资料" to enter user_profile_page"). Never start mid-screen assuming the reader already knows where they are. Align the entry to a `page_doc` slug where possible.
-- **One concrete user action per step**, numbered one by one, in the real order a tester taps. Each step must name the **action + the exact on-screen control (verbatim label text, quoted) + the concrete input/selection** — e.g. "In the home "目的地" input, enter "上海"", "In the suggestion list tap "上海, 中国"", "Tap the "查找酒店" button". Not a vague "operate the page" / "search a destination".
-- **Spell out the concrete data.** When a step enters/boundary-tests a value, write the *actual* value or an unambiguous description — the exact text typed, the exact option selected, the exact count. For a boundary test, state both the exact at-limit value and the over-limit value, and the **action that triggers validation** (clear the field + tap "继续" / tap "保存").
+- **One concrete user action per step**, numbered one by one, in the real order a tester taps. Each step must name the **action + the exact on-screen control (verbatim label text, quoted)** — e.g. "In the home "目的地" input, enter a destination city", "Tap the first matching city in the suggestion list", "Tap the "查找酒店" button". Not a vague "operate the page" / "search a destination".
+- ⛔ **Do not provide specific input data in the steps.** AI-made sample values (literal strings, city names, numbers) add no value — the tester picks the actual data at execution time. Describe the input only by its **kind / constraint that the case verifies** (e.g. "enter a valid destination", "enter a keyword with no results", "enter a name at the maximum length allowed by the requirement"), never a literal value like "上海". A limit / threshold from the requirement may be named as the rule under test; the literal test string may not. Still state the **action that triggers validation** (clear the field + tap "继续" / tap "保存").
 - **Use the exact on-screen control text, kept verbatim and quoted** (Chinese app copy stays Chinese) — button / tab / field label / cell title / toggle. Prefer a concrete control aligned to the `page_doc` element facts; where a doc fact is missing, use a semantic description (e.g. "Tap the "查找酒店" button") and note "element to be captured on device" in the **Notes** column — do not invent a locator.
 - **A functional/flow case needs ≥ 3 steps** covering entry → operation → the action that commits/verifies (enter the page → perform the operation → submit / confirm / observe). A pure single-field data/boundary case may be shorter but must still include the entry step + the trigger action. If you find yourself writing only 1–2 ultra-short steps, you are under-specifying — expand them.
-- **Expected result is observable and maps to the steps** — number it per point for multi-step cases; each line is something the tester can see (navigates to X page / the title shows "上海" / a required-field error appears under "名字" / the button is disabled / empty-state copy "未找到酒店" shows). Avoid a bare "normal/success" with no observable detail.
+- **Expected result is observable and maps to the steps** — number it per point for multi-step cases; each line is something the tester can see (navigates to X page / the title shows the selected city / a required-field error appears under "名字" / the button is disabled / empty-state copy "未找到酒店" shows). Avoid a bare "normal/success" with no observable detail.
 - Do **not** invent elements/rules you are unsure of; note the reason in the "Notes" column.
 
 **Bad vs. good (same required-field check):**
@@ -94,8 +96,8 @@ Step-style example (user-action style, control text kept verbatim in Chinese):
 
 - `1. In the bottom nav tap "账户" to enter the account page (account_page)`
 - `2. Tap the home "目的地" input`
-- `3. Type "上海"`
-- `4. In the suggestion list tap "上海, 中国"`
+- `3. Enter a destination city`
+- `4. In the suggestion list tap the first matching city`
 - `5. Tap the "查找酒店" button`
 
 ## 4. `Regression` and `Automation` judgement rules (AI marks true / false per case)

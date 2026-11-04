@@ -282,6 +282,10 @@ if (Test-Path $mcpTemplate) {
                 if ($old.confluenceRest.email)     { $tpl.confluenceRest.email = $old.confluenceRest.email }
                 if ($old.confluenceRest.api_token) { $tpl.confluenceRest.api_token = $old.confluenceRest.api_token }
             }
+            if ($old.zephyrSquad -and $tpl.zephyrSquad) {
+                if ($old.zephyrSquad.access_key) { $tpl.zephyrSquad.access_key = $old.zephyrSquad.access_key }
+                if ($old.zephyrSquad.secret_key) { $tpl.zephyrSquad.secret_key = $old.zephyrSquad.secret_key }
+            }
             if ($old.mcpServers.figma.env.FIGMA_API_KEY) { $tpl.mcpServers.figma.env.FIGMA_API_KEY = $old.mcpServers.figma.env.FIGMA_API_KEY }
             if ($old.mcpServers.'marriott-github'.env.GITHUB_TOKEN) { $tpl.mcpServers.'marriott-github'.env.GITHUB_TOKEN = $old.mcpServers.'marriott-github'.env.GITHUB_TOKEN }
             if ($old.mcpServers.harness.env.HARNESS_ACCOUNT_ID) { $tpl.mcpServers.harness.env.HARNESS_ACCOUNT_ID = $old.mcpServers.harness.env.HARNESS_ACCOUNT_ID }

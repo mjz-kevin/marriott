@@ -5,6 +5,12 @@
         "email": "",
         "api_token": ""
     },
+    "zephyrSquad": {
+        "_comment": "仅 QA 写 Zephyr Test Details 步骤时需要（jira-to-test-case/scripts/zephyr_steps.py）。Key 在 Jira -> Apps -> Zephyr Squad -> API Keys 生成。",
+        "base_url": "https://prod-api.zephyr4jiracloud.com/connect",
+        "access_key": "",
+        "secret_key": ""
+    },
     "mcpServers": {
         "Atlassian-MCP-Server": {
             "url": "https://mcp.atlassian.com/v1/mcp/authv2"

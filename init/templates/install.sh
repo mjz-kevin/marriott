@@ -338,6 +338,10 @@ if os.path.isfile(target):
         for k in ("email", "api_token"):
             if cr_old.get(k):
                 cr_new[k] = cr_old[k]
+        zs_old, zs_new = old.get("zephyrSquad", {}), tpl.setdefault("zephyrSquad", {})
+        for k in ("access_key", "secret_key"):
+            if zs_old.get(k):
+                zs_new[k] = zs_old[k]
         srv_old = old.get("mcpServers", {})
         srv_new = tpl.setdefault("mcpServers", {})
         fk = srv_old.get("figma", {}).get("env", {}).get("FIGMA_API_KEY")

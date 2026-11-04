@@ -6,17 +6,21 @@ The CMS under test is **Marriott China CMS** (万豪中国内容管理平台), a
 
 **Language (hard):** all case content the skill authors itself is written in **English** (titles, section headings, Function Point / Preconditions / Test Steps / Expected Result / Notes). The only exception is **in-admin UI labels quoted verbatim** (menu / tab / button / field names such as "内容管理 > 活动内容页", "保存草稿") — these stay in Chinese and are quoted, because the tester must see the exact on-screen text. Do not author a whole page in Chinese.
 
-This page only governs **"what a single case looks like"**. Everything else — page naming, the whole-page section structure, module-fact retrieval, the generate-and-publish flow, and the confirmation gate — is maintained in the `jira-to-test-case` skill's CMS section, not here. To change the field / step rules, edit only this page; it takes effect on the next generation.
+This page only governs **"what a single case looks like"**. Everything else — **page naming, the whole-page section structure, module-fact retrieval, local draft path (`.ai-sdlc/jira-to-test-case/{case_id}/docs/`), the generate-and-publish flow, the pre-publish confirmation gate, and handoff** — is maintained in the `jira-to-test-case` skill's CMS section, not here.
 
-**Table-header source of truth:** the case-list table **must strictly use the 10 fixed columns below, in this exact order**, aligned with the team UAT reference and the Zephyr case format. Do not add, remove, rename or reorder columns.
+To change the field / step rules, **edit only this file**; it takes effect on the next generation.
+
+**Table-header source of truth:** the case-list table **must strictly use the 8 fixed columns below, in this exact order**, adapted from the team UAT reference and the Zephyr case format (execution-time columns Pass/Fail / Tester / Test Date are intentionally **not** part of the authored table; a Priority column is added). Do not add, remove, rename or reorder columns.
 
 The whole case page is a **slim structure: a traceability header + 5 sections** (Requirement Overview / Change Points & Scope Analysis / Dependencies & Assumptions / Historical Defects & Regression / Functional Test Case List). **One requirement = one Confluence page**. That whole-page structure is defined in the skill, not here.
 
-> ⛔ **AI-assistance declaration (first line of the published body — hard):** the AI-generated local Markdown body's **very first line** must be the verbatim quote block `> This document was created with AI assistance.`, placed at the absolute top — **above** the traceability header and all 5 sections. Use exactly that English text (no translation, no rewording, no emoji). Keep it as the first line (and keep exactly one copy) on every re-publish / in-place update — never drop or duplicate it. ⚠️ This belongs at the **top of the page body only** — do **not** put it inside the 10-column case-list table or any field cell. (The whole-page layout and this declaration's placement are owned by the skill; this note only mirrors it for context.)
+> ⛔ **AI-assistance declaration (first line of the published body — hard):** the AI-generated local Markdown body's **very first line** must be the verbatim quote block `> This document was created with AI assistance.`, placed at the absolute top — **above** the traceability header and all 5 sections. Use exactly that English text (no translation, no rewording, no emoji). Keep it as the first line (and keep exactly one copy) on every re-publish / in-place update — never drop or duplicate it. ⚠️ This belongs at the **top of the page body only** — do **not** put it inside the 8-column case-list table or any field cell. (The whole-page layout and this declaration's placement are owned by the skill; this note only mirrors it for context.)
 
-## 0. Top traceability table (render at the top of every page, right after the AI-assistance line)
+## 0. Document metadata & traceability (top of every page, right after the AI-assistance line)
 
-Immediately after the AI-assistance declaration line, output the page's traceability info as a **tidy 2-column `Field | Value` table** (not a run-on quote block), so it renders aligned and scannable on Confluence. Keep the row order stable; omit a row only when its value is genuinely absent (or write `—`). Copy this shape:
+**Local draft** (under `.ai-sdlc/jira-to-test-case/{case_id}/docs/`, file prefix `TC-CMS_…`): after the AI-assistance line, you may add PRD-style blocks per [`local-case-draft-template.md`](local-case-draft-template.md) — **Document Information** and **Version Change Log** using two-column **`Item | Content`** tables (same layout as team PRD documents; set **Test target** to `cms` and **Page title (planned)** to `CMS Test Case - <JIRA_KEY> <short requirement name>`). Omit the version log on a first `v1.0` draft if the user does not need it.
+
+**Every publishable body** (local draft and Confluence): output traceability as a **tidy 2-column `Field | Value` table** (not a run-on quote block), so it renders aligned and scannable on Confluence. Keep the row order stable; omit a row only when its value is genuinely absent (or write `—`). Copy this shape (CMS uses **Module-fact source**, not app `page_doc` / Figma rows unless a design link is genuinely in scope):
 
 | Field | Value |
 | --- | --- |
@@ -28,22 +32,20 @@ Immediately after the AI-assistance declaration line, output the page's traceabi
 
 (For a merged multi-requirement page, this is a single shared table at the very top listing all requirement links and all Jira keys; see the skill for the merged-page layout.)
 
-## 1. Case field specification (fixed 10 columns of the case list table)
+## 1. Case field specification (fixed 8 columns of the case list table)
 
-The case list table **fixedly contains exactly the following 10 columns, in this order**; fill in every column for each case. Column names are in English (mapping to the team's Chinese header on the right for reference).
+The case list table **fixedly contains exactly the following 8 columns, in this order**; fill in every column for each case. Column names are in English (mapping to the team's Chinese header on the right for reference).
 
 | # | Column (English) | Chinese header | Requirement |
 | --- | --- | --- | --- |
 | 1 | Case ID | 用例ID | `TC-001` incrementing, unique within the page |
 | 2 | Module | 模块 | The CMS module under test, aligned to an existing `cms_page` module slug (e.g. `marketing-pages`, `audiences`, `reviews`); write "to be captured" if no doc exists |
 | 3 | Function Point | 验证功能点 | One short English phrase naming the function/behaviour under verification (e.g. "Per-slug high-fidelity preview", "Submit draft for review"). Trace back to a requirement point / AC |
-| 4 | Preconditions | 前置条件 | State / data / module / login-role that must hold before execution, written in English (e.g. "Logged into CMS with any role; a page with slug none-memberday exists"). Quoted in-admin labels stay Chinese |
-| 5 | Test Steps | 操作步骤 | **Numbered one by one, written from the user-action perspective** (open / click / enter / select …), in real admin-operation order; English narrative with quoted Chinese admin labels. See § 2 |
-| 6 | Expected Result | 预期结果 | Observable expected result, **numbered per point** and corresponding to the steps, in English (e.g. "1. The high-fidelity preview shows the content built under slug none-memberday") |
-| 7 | Pass/Fail | 是否通过 | Leave blank at authoring; filled Pass / Fail / Blocked at execution time |
-| 8 | Tester | 测试实施者 | Leave blank at authoring; filled with the executor's name at execution time |
-| 9 | Test Date | 测试时间 | Leave blank at authoring; filled with the execution date at execution time |
-| 10 | Notes | 备注 | **State the reason for any uncertain item** (field / rule not confirmed in docs, required/optional undecided, workflow/permission detail unknown, dependent data not ready, etc.); **also note here any requirement point not covered by a case, and any module-fact gap** (module involved but no `cms_page` / global-search doc exists — mark "to be captured") |
+| 4 | Priority | 优先级 | One of `P0` (core main flow / blocking — e.g. save / submit-for-review / publish of the module under change) / `P1` (important function or rule) / `P2` (minor / boundary / copy / edge case). Required for every case; if the priority is genuinely debatable, pick the best fit and state why in Notes |
+| 5 | Preconditions | 前置条件 | State / data / module / login-role that must hold before execution, written in English (e.g. "Logged into CMS with any role; a page with slug none-memberday exists"). Quoted in-admin labels stay Chinese. ⛔ **Self-contained — never reference another test case** (no "TC-001 has been executed", "same as TC-003", "data created in TC-002", "see previous case"): every case must be executable on its own, so spell out the concrete state / data directly (e.g. "A marketing page with slug memberday exists in "待审核" status") |
+| 6 | Test Steps | 操作步骤 | **Numbered one by one, written from the user-action perspective** (open / click / enter / select …), in real admin-operation order; English narrative with quoted Chinese admin labels. See § 2 |
+| 7 | Expected Result | 预期结果 | Observable expected result, **numbered per point** and corresponding to the steps, in English (e.g. "1. The high-fidelity preview shows the content built under slug none-memberday") |
+| 8 | Notes | 备注 | **State the reason for any uncertain item** (field / rule not confirmed in docs, required/optional undecided, workflow/permission detail unknown, dependent data not ready, etc.); **also note here any requirement point not covered by a case, and any module-fact gap** (module involved but no `cms_page` / global-search doc exists — mark "to be captured") |
 
 ## 2. Step-writing requirements (important — follow the GCD-469 user-action style)
 
@@ -52,8 +54,8 @@ The quality of a case lives in the **Test Steps** and **Expected Result** column
 **Minimum detail bar (hard — every step must satisfy all of these):**
 
 - **Start from a navigation entry point.** The first step(s) must state **where in the admin the tester is** — the exact sidebar menu / collection / tab / page they open to reach the screen under test (e.g. "In the left nav click "内容管理 > 活动内容页" to open the list page", then "Click to open the detail page whose slug is none-memberday"). Never start mid-screen assuming the reader already knows where they are.
-- **One concrete user action per step**, numbered one by one, in the real order a tester operates. Each step must name the **action verb + the exact on-screen target + the concrete input/selection** — e.g. "In the "列表标题" input, enter 20 Chinese characters "活动音频精选推荐合集一" and click "保存草稿"". Not "configure the title".
-- **Spell out the concrete data.** When a step enters/boundary-tests a value, write the *actual* value or an unambiguous description of it — the exact text, the exact file name + format + size, the exact count — not an abstract "enter long text". For a boundary test, state both the exact at-limit value and the exact over-limit value (e.g. "enter exactly 30 characters", then "enter the 31st character"), and **what the tester clicks/does after typing** to trigger validation (blur the field / click "保存草稿" / click "提交审核").
+- **One concrete user action per step**, numbered one by one, in the real order a tester operates. Each step must name the **action verb + the exact on-screen target** — e.g. "In the "列表标题" input, enter a title and click "保存草稿"". Not "configure the title".
+- ⛔ **Do not provide specific input data in the steps.** AI-made sample values (literal strings, file names, numbers) add no value — the tester picks the actual data at execution time. Describe the input only by its **kind / constraint that the case verifies** (e.g. "enter a valid title", "upload an image in a supported format", "enter a title at the maximum length allowed by the requirement", "enter a title one character over the limit"), never a literal value like "活动音频精选推荐合集一". A limit / threshold from the requirement (e.g. "30 characters") may be named as the rule under test; the literal test string may not. Still state **what the tester clicks/does after entering** to trigger validation (blur the field / click "保存草稿" / click "提交审核").
 - **Use the exact label the user sees**, kept **verbatim** (in-admin Chinese stays Chinese) and **quoted** — button text, tab name, field label, menu item, drawer title, toggle name. Describe what the user sees and does; do **not** put XPath / locators / CSS selectors in the steps.
 - **A functional/flow case needs ≥ 3 steps** covering entry → operation → the action that commits/verifies (open the module → perform the operation → save / submit / publish / observe). A pure single-field boundary case may be shorter but must still include the entry step and the trigger action. If you find yourself writing only 2 ultra-short steps, you are under-specifying — expand them.
 - **Expected Result is numbered per point and maps 1:1 to the steps** — each line an *observable* outcome (which text/toast appears, which status becomes "已发布", which field is disabled, which count shows "共N集", the page jumps to X). Avoid "normal/success" with no observable detail; say *what* the tester sees that proves success.
@@ -63,7 +65,7 @@ The quality of a case lives in the **Test Steps** and **Expected Result** column
 
 | ❌ Too terse (reject) | ✅ Detailed enough (required) |
 | --- | --- |
-| **Test Steps:** 1. type 30 chars, save; 2. type the 31st char **Expected Result:** 1. saves; 2. blocked | **Test Steps:** 1. In the left nav click "内容管理 > 活动内容页" and open the draft page that already contains the Audio block; 2. Expand the first audio item, in the "音频标题" input enter exactly 30 Chinese characters "音频标题测试用例满三十字恰好到达上限刚好三十" and click "保存草稿"; 3. In the same "音频标题" input continue to type the 31st character "超" **Expected Result:** 1. The list page loads and the draft page opens normally; 2. The 30-char value saves successfully and is redisplayed with no error; 3. The 31st character is blocked in real time (cannot be entered, or a "max 30 characters" hint appears under the input), and the save action rejects the over-limit content |
+| **Test Steps:** 1. type 30 chars, save; 2. type the 31st char **Expected Result:** 1. saves; 2. blocked | **Test Steps:** 1. In the left nav click "内容管理 > 活动内容页" and open the draft page that already contains the Audio block; 2. Expand the first audio item, in the "音频标题" input enter a title at the 30-character limit and click "保存草稿"; 3. In the same "音频标题" input try to type one more character beyond the limit **Expected Result:** 1. The list page loads and the draft page opens normally; 2. The 30-char value saves successfully and is redisplayed with no error; 3. The 31st character is blocked in real time (cannot be entered, or a "max 30 characters" hint appears under the input), and the save action rejects the over-limit content |
 
 Reference example (user-action style, from GCD-469 — activity content page supports per-slug high-fidelity preview). In-admin labels are quoted verbatim in Chinese:
 
@@ -77,8 +79,8 @@ Reference example (user-action style, from GCD-469 — activity content page sup
 
 Every generated CMS case page uses this exact table as its "Functional Test Case List". Column order and names must not change. Note the fully-specified Test Steps / Expected Result in the example row — match that level of detail.
 
-| Case ID | Module | Function Point | Preconditions | Test Steps | Expected Result | Pass/Fail | Tester | Test Date | Notes |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| TC-001 | marketing-pages | Per-slug high-fidelity preview | Logged into CMS with any role; pages with slug none-memberday and memberday exist | 1. In the left nav click "内容管理 > 活动内容页" to open the list page; 2. Click to open the detail page whose slug is "none-memberday"; 3. Click "预览模式" at the top-right, then click "高保真预览"; 4. Return to the list and open the detail page whose slug is "memberday"; 5. Click "预览模式 > 高保真预览" | 1. The list page loads and shows the two page records; 2. The none-memberday detail page opens; 3. A new browser tab opens the high-fidelity preview showing the content built under none-memberday; 4-5. The memberday high-fidelity preview tab shows the content built under memberday |  |  |  | AC1 |
+| Case ID | Module | Function Point | Priority | Preconditions | Test Steps | Expected Result | Notes |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| TC-001 | marketing-pages | Per-slug high-fidelity preview | P0 | Logged into CMS with any role; pages with slug none-memberday and memberday exist | 1. In the left nav click "内容管理 > 活动内容页" to open the list page; 2. Click to open the detail page whose slug is "none-memberday"; 3. Click "预览模式" at the top-right, then click "高保真预览"; 4. Return to the list and open the detail page whose slug is "memberday"; 5. Click "预览模式 > 高保真预览" | 1. The list page loads and shows the two page records; 2. The none-memberday detail page opens; 3. A new browser tab opens the high-fidelity preview showing the content built under none-memberday; 4-5. The memberday high-fidelity preview tab shows the content built under memberday | AC1 |
 
-*(Pass/Fail, Tester and Test Date are left blank at authoring and filled during execution.)*
+*(Priority values: P0 / P1 / P2. Execution-time fields — pass/fail, tester, test date — are not part of the authored case table.)*

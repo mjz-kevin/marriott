@@ -6,9 +6,11 @@ description: >-
   code-review chain's sole write point: only after the reviewer explicitly confirms which findings to
   publish, submit one PR review in one shot — summary body + inline comments on the diff lines + the
   event matching the gate — via the shared pr_review.py script (validate anchors, idempotent per head
-  SHA). Never approves, never merges; the merge is a human call. Use when the review draft is ready and
-  a gate must be given and landed on the PR;
-  triggers: merge gate / merge decision / publish review / 发布 review / 发到 PR / 合并门禁 / merge 门禁 / 合并判定 / 提交审核 review.
+  SHA); on a later run, answer the PR author's replies the reviewer decided (reply) and resolve the
+  threads whose explanation / fix the reviewer accepted (resolve). Never approves, never merges; the
+  merge is a human call. The same script also serves the author side (dev/review-feedback: feedback /
+  reply). Use when the review draft is ready and a gate must be given and landed on the PR;
+  triggers: merge gate / merge decision / publish review / resolve thread / 发布 review / 发到 PR / 合并门禁 / merge 门禁 / 合并判定 / 提交审核 review / 认可作者回复.
 metadata:
   agent: Code Review Agent
 ---
@@ -28,7 +30,7 @@ Give a 🔴 / 🟡 / 🟢 gate conclusion and serve as the **sole PR write point
 
 ## ⛔ HARD GATE — no PR write before confirmation
 
-Until the reviewer has **explicitly** confirmed the selection shown from the review draft (e.g. "publish all pre-selected", "publish F1,F2", "drop F2: <reason>", "summary only"), do **not** run `pr_review.py submit` or any GitHub MCP write (`create_pull_request_review`, `add_comment`, …).
+Until the reviewer has **explicitly** confirmed the selection shown from the review draft (e.g. "publish all pre-selected", "publish F1,F2", "drop F2: <reason>", "summary only"), do **not** run `pr_review.py submit` / `reply` / `resolve` or any GitHub MCP write (`create_pull_request_review`, `add_comment`, …). Author replies count the same: each answered / resolved item must have the reviewer's explicit accept / insist.
 
 - Silence, "looks good", or a reply that names no selection isn't confirmation — ask again.
 - "Don't publish" is a valid answer: rule the gate locally, write nothing to the PR.
@@ -65,6 +67,7 @@ Required config keys missing (TBD) → stop and ask for them.
 - S4 Filter the payload, fallback-scan it, run `plan` (anchor validation, read-only)
 - S5 `submit` one review (idempotent per head SHA)
 - S6 Report review URL + per-line links + the gate; prompt the human
+- S7 Author replies (when present): answer the decided ones, resolve the accepted threads
 ```
 
 ### S1 Confirmation
@@ -103,9 +106,9 @@ Never `APPROVE` (the script refuses it). Don't call `merge_pull_request` (only w
      --out .ai-sdlc/review/{id}/tmp/review-resolved_r{n}.json
    ```
 
-   It fetches the head SHA and every file patch, then resolves each comment's anchor: **inline** (line is in the diff), **nearby** (not in the diff → attached to the nearest changed line of the same file, body says "Actual location `path:L111` (outside this diff)"), or **summary** (file not in the diff / no patch / removed → folded into a "Findings outside this diff" section). It injects `commit_id` and the idempotency marker `ai-sdlc-review:{review_id}:r{n}:{head}`.
+   It fetches the head SHA and every file patch, then resolves each comment's anchor: **inline** (line is in the diff; a `//` / KDoc / blank snaps onto the next statement unless the body quotes only that comment — `nudged_from` records the original), **nearby** (not in the diff → attached to the nearest changed line of the same file, body says "Actual location `path:L111` (outside this diff)"), or **summary** (file not in the diff / no patch / removed → folded into a "Findings outside this diff" section). It injects `commit_id` and the idempotency marker `ai-sdlc-review:{review_id}:r{n}:{head}`.
    - Reviewer chose "summary only" → add `--summary-only` (every finding goes into the body, no inline comments).
-4. Show the anchor counts (inline / nearby / summary), the final event, **and the posting identity** (`connection.transport` + `connection.as_user` from the plan output) to the reviewer — this is part of what they confirmed; if `nearby` / `summary` counts are surprising, or the identity is not the reviewer, let them adjust before submitting.
+4. Show the anchor counts (inline / nearby / summary), any `nudged` snaps (comment/blank → next statement, with `nudged_from`), the final event, **and the posting identity** (`connection.transport` + `connection.as_user` from the plan output) to the reviewer — this is part of what they confirmed; if `nearby` / `summary` / `nudged` counts are surprising, or the identity is not the reviewer, let them adjust before submitting.
 
 ### S5 Submit (the only write)
 
@@ -129,6 +132,27 @@ Transport: the script picks `gh` automatically when it's ready for the host, els
 ### S6 Human prompt
 
 Report: the light and ruling, the review URL, per-line `#discussion_r…` links, which findings were inline / nearby / summary-only, dismissed blockers, and that **the merge requires human execution**. Don't create the illusion that it's "already handled automatically".
+
+### S7 Author replies: answer + resolve (only when the draft had an author-replies section)
+
+The gate (S3) counts an earlier 🔴 as blocking until the reviewer **accepts** it here (or resolved it on GitHub). Items come from `tmp/review-answers_r{n}.json`; only the ones the reviewer decided at S1 are written (`accept` / `insist`; `skip` = nothing). A reply round with no new findings skips S4–S5 entirely.
+
+1. Fallback-scan the confirmed answers with `sensitive-data-guard`.
+2. Answer — build `tmp/review-answers-confirmed_r{n}.json` (`feedback_id`, `round`, `replies: [{item_id, kind, thread_id, body}]` for every accepted / insisted item) and run `reply --dry-run`, then:
+
+   ```bash
+   python <skills>/code-review/merge-gate/scripts/pr_review.py --host {mcp.github.host} \
+     reply --repo {owner/name} --pr {n} --payload .ai-sdlc/review/{id}/tmp/review-answers-confirmed_r{n}.json
+   ```
+3. Resolve — only the **accepted `kind: thread`** items (`{"threads": [{"item_id", "thread_id"}]}`), after their answer posted:
+
+   ```bash
+   python <skills>/code-review/merge-gate/scripts/pr_review.py --host {mcp.github.host} \
+     resolve --repo {owner/name} --pr {n} --payload .ai-sdlc/review/{id}/tmp/review-resolve_r{n}.json
+   ```
+
+   Exit 5 = posting as the PR author: stop (the author never closes a reviewer's point). `already_resolved` is a no-op. GraphQL unavailable (exit 4) → the answers are posted; tell the reviewer to click *Resolve conversation* on GitHub. Conversation-kind items have nothing to resolve.
+4. Report per item: answered (link) / resolved / failed, and the re-ruled gate (accepted 🔴 no longer block; insisted 🔴 still do).
 
 ## 3. Mandatory rules
 
@@ -159,7 +183,7 @@ Merge gate: {owner}/{repo} PR #{n} · r{round} — 🔴 Merge not recommended | 
 
 - **Published**: 🔴 {b} · 🟡 {s} · 🟢 {i}  (dismissed 🔴: {F2 — reason} / none)
 - **Review**: {review_url} · event={COMMENT / REQUEST_CHANGES} · status={submitted / already_submitted / not published}
-- **Inline**: {x} on the diff line · {y} on the nearest changed line · {z} in the summary only
+- **Inline**: {x} on the diff line · {y} on the nearest changed line · {z} in the summary only · {n} snapped off a comment/blank onto the next statement
 - **Links**: F1 {path:line} {discussion url} …
 - **Sensitive-info fallback scan**: passed (no hits / redacted)
 - **Merge action**: not executed; a human confirms and merges (auto_merge=false)
@@ -173,6 +197,7 @@ Merge gate: {owner}/{repo} PR #{n} · r{round} — 🔴 Merge not recommended | 
 | `--transport gh unavailable: gh not logged in` | `gh auth login --hostname {host}`, or drop `--transport gh` to use http |
 | Exit 5 four-eyes | The logged-in user authored the PR; hand publishing to another reviewer |
 | 422 `line must be part of the diff` | Re-run `plan` (the head may have moved); persistent → summary-only or stop, the reviewer chooses |
+| Inline comment sits on the `//` / KDoc above the statement | `plan` snaps that to the next statement (`nudged_from`). Re-plan and re-submit after the head moves; already-posted comments stay put |
 | Exit 3 head moved | The author pushed: new round, re-review; the old confirmation is void |
 | `already_submitted` | Idempotent no-op; report the existing review |
 | Config `auto_merge=true` | Not enabled this cycle; get a second confirmation before deciding |
@@ -182,5 +207,6 @@ Merge gate: {owner}/{repo} PR #{n} · r{round} — 🔴 Merge not recommended | 
 ## 7. Related
 
 - Upstream: review-comment (draft + payload), code-review-rules (levels)
-- Depends: sensitive-data-guard (fallback scan); `scripts/pr_review.py` (plan / submit; offline tests in `tests/run_tests.py`)
+- Depends: sensitive-data-guard (fallback scan); `scripts/pr_review.py` (plan / submit / reply / resolve; offline tests in `tests/run_tests.py`)
+- Shared with: `dev/review-feedback` (author side: `feedback` / `reply` — never `resolve`) and `diff-fetch` (`feedback`)
 - Downstream: merge after human confirmation → the CI/CD step
