@@ -202,7 +202,7 @@ python ~/.cursor/skills/common/confluence-publish/scripts/upload_confluence_v2.p
 
 ### Security before external write (`sensitive-data-guard`, synthetic test data)
 
-Before **`createJiraIssue` / `editJiraIssue` / `addCommentToJiraIssue`** and before **publishing/updating** the Confluence run report (Entry A step 8), follow `.cursor/skills/common/sensitive-data-guard/SKILL.md`: scan the outgoing text (prefer `scripts/scan.py --text "..."` or `--file` on the local Markdown draft). If the scan blocks, **do not write** — report hits, redact or ask the user to replace with synthetic data, then re-scan.
+Before **`createJiraIssue` / `editJiraIssue` / `addCommentToJiraIssue`** and before **publishing/updating** the Confluence run report (Entry A step 8), follow `.cursor/skills/common/sensitive-data-guard/SKILL.md`: scan the outgoing text (prefer `sensitive-data-guard/scripts/scan.py --text "..."` or `--file` on the local Markdown draft). If the scan blocks, **do not write** — report hits, redact or ask the user to replace with synthetic data, then re-scan.
 
 - **Synthetic test data (hard)**: Bug Description / Replication Steps / comments must not contain real member names, Bonvoy numbers, phones, emails, addresses, IDs, passwords, or production credentials. Use clearly fictional values (e.g. `test-user@example.com`, `Member #900000001`, `Test Hotel Property`). UI strings quoted for repro may stay verbatim unless they embed PII.
 - **Manual Entry B**: if the user pastes production-like data, refuse to copy it into Jira verbatim; offer redacted/synthetic wording on the confirmation card.
