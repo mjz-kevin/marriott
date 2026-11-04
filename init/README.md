@@ -293,4 +293,5 @@ python init/lfs_setup.py --add-to-path            # 同上，并把 git-lfs 安�
 ## 凭证与安全
 
 - 安装脚本 **不代填任何凭证**。Atlassian / Figma / GitHub token、Harness Account ID + API Key 由用户在 `~/.cursor/mcp.json` 手动填写。
+- QA 若要让 `jira-to-test-case` 把 CMS 用例步骤写进 Jira Test 单的 Zephyr「Test Details」，另需在 `mcp.json` 的 `zephyrSquad.access_key` / `secret_key` 填 Zephyr Squad API Key（Jira → Apps → Zephyr Squad → API Keys 生成）；不填则步骤退回写在 description 里。
 - `sensitive-data-guard` 作为强制安全护栏随所有角色分发。
