@@ -12,6 +12,9 @@
 
 ## [Unreleased]
 
+### 修复
+- **`dev-agent`：profile 字段路径更正**：正文两处（state 示例 `repo.name` 注释、输入读取步骤）引用的 `code.repos` 在 profile 中不存在，更正为实际位置 `mcp.github.repos`。**升级方式**：直接覆盖。
+
 ---
 
 ## [0.5.0] - 2026-11-04

@@ -182,7 +182,7 @@ clarify:                           # D1_clarify (dev-clarify); the implementatio
   upstream: []                     # [{id, what, owner: PO|TL, interim_choice}] — reported, never edited by this Agent
   released_at: null
 repo:
-  name: ios                        # repo id (from the profile's code.repos)
+  name: ios                        # repo id (from the profile's mcp.github.repos)
   baseline_ref: develop            # the branch / tag the baseline was checked out from
   baseline_sha: "abc123…"          # the baseline commit at checkout
   feature_branch: feat-ai/CNAPP-121-Member-Benefits   # the one AI-exclusive branch (naming owned by feature-branch Skill, per code.branch.template)
@@ -333,7 +333,7 @@ flowchart TD
    - **If a solution is found** -> adopt it as the primary spec (go to step 3 to read it, then build the task checklist from it in step 5).
    - **If (i)–(iii) all come back empty** -> this is a normal, supported case: **do NOT block**. Record `sources.tech_solution` as all-null, note in `sessions/` that no solution was found and that you are proceeding **Story-AC-driven**, and continue to step 4. (You may mention once in the status card that no tech solution was found and the DEV can optionally provide one or produce it via `/tech-solution-agent`, but you keep going without it.)
 3. **Only when a solution was found:** read it read-only via the Confluence MCP (or the local file), recording `page_id` / `page_version` / `read_at`; run it through `sensitive-data-guard` and save as `inputs/{timestamp}_solution-snapshot.md`. Read failure of an explicitly-provided solution -> `blocked` (the DEV pointed at it, so it must be readable); failure to read a merely *discovered* solution -> treat as "no solution" and proceed Story-AC-driven, noting it.
-4. Read optional inputs: PRD URL, Figma (read-only), the code repo and existing API implementations, using `kb-query` as needed; record in `sources`. Determine the target `repo` from the profile's `code.repos`. **When no solution is provided, lean more on the repo's existing conventions and any API docs here to derive the interface shape.**
+4. Read optional inputs: PRD URL, Figma (read-only), the code repo and existing API implementations, using `kb-query` as needed; record in `sources`. Determine the target `repo` from the profile's `mcp.github.repos`. **When no solution is provided, lean more on the repo's existing conventions and any API docs here to derive the interface shape.**
 5. **Build the task checklist.**
    - **With a solution**: mirror every task and its acceptance criteria from the solution's task breakdown into `tasks`, and every unit test the solution lists into each task's `unit_tests`. If the solution exists but has **no task breakdown or no field-level contract**, treat it as a *partial* solution: use what it does provide, and **fall back to the Story's acceptance criteria** for the missing parts — do not block solely because the solution is thin.
    - **Without a solution**: derive the task checklist directly from the **Story's acceptance criteria** — one `tasks` entry per AC, with that AC as the task's `acceptance`, and derive the unit tests to cover each AC (positive / negative / boundary). This Agent does not invent business scope the Story doesn't call for; it implements what the Story's ACs require, using repo conventions for the shape.
