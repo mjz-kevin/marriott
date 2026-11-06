@@ -12,6 +12,12 @@
 
 ## [Unreleased]
 
+---
+
+## [0.6.0] - 2026-11-06
+
+**升级方式**：直接覆盖（新增 `cursor-usage-report` skill 与 `dev-agent` 文档修正，无删除 / 改名）。
+
 ### 新增
 - **新公共 Skill `common/cursor-usage-report`（随全部角色分发）：本地 Cursor 会话成本报表**。输入 Cursor 后台导出的 `team-usage-events-*.csv`，只读打开本机 Cursor `state.vscdb`，把每条用户消息（含子 agent 提示、子 agent 续聊、系统模拟消息——每条对应一次计费请求）按时间匹配到 CSV 行（5 s 严格窗口 + 30 s 宽松二次匹配，同模型优先），输出一个新 CSV（**默认只统计当前会话**——优先取 Cursor 在 agent shell 里注入的 `CURSOR_CONVERSATION_ID`（子 agent 归到其顶层会话），取不到才退回本机最近有活动的顶层会话；`--conversation <id/前缀/标题>` 指定会话；只有用户明确要求全量时才用 `--all` 统计所有本地会话；匹配始终在全部会话上进行，范围不影响 CSV 行归属）：`conversation` → `turn` → `subagent` / `tool` 层级，用 `id` / `parent_id` / `conversation_id` / `depth` 关联；每行有标题、模型（汇总行列出全部模型及分模型成本）、token、成本、最早开始 / 最晚结束时间，以及 MCP 调用（server.tool）、Skill（读 `SKILL.md`、跑 skill 脚本、`/slash` 命令）、子 agent 的计数汇总；复制 / 分叉会话里重复存储的消息标 `duplicate` 不重复计费；单独统计复制会话（原会话不在统计范围内）时，复制前的历史继承原会话的计费行（`inherited`），`--exclude-copied-history` 可关闭；汇总与会话行按计费类型 `Kind`（`User API Key` / `Included`）拆分；匹配排序为「同模型 → 时间差最小」（实测约 1/3 的 CSV 行晚于消息，不再偏向「早于消息」）；已知局限：长轮次中途的额外计费行（如 AskQuestion 回答后）无法与同时在别处运行的会话区分，按「CSV 有本地无」忽略；匹配方向为「本地 → CSV」：本地请求在 CSV 中存在即算匹配并计费，CSV 中有、本地没有的行（多为其它电脑执行）默认忽略、不输出也不计入汇总，需要完整对账时加 `--all --include-unmatched` 单列 `csv_unmatched` 行（此时 `self_cost_usd` 合计 = CSV 总额）。默认不输出消息正文和完整命令行（`--preview-chars` 开启正文预览时需先过 `sensitive-data-guard`）。纯标准库，Python ≥ 3.8，mac / Windows / Linux。离线单测 `tests/run_tests.py`（合成 fixture）。文档：`AGENTS.md` §3 / §6、设计文档 §4.1、`doc/maintenance/testing.md`。**升级方式**：直接覆盖。
 
