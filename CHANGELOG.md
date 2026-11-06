@@ -12,6 +12,9 @@
 
 ## [Unreleased]
 
+### 变更
+- **`test-run-report-bug`（Entry A）：跑完脚本后先停下来问是否提 Bug**：新增「Bug-filing gate」——运行结束、归因完成、报告发布后，先列出失败用例及建议类型（产品缺陷 / 脚本或定位问题 / 环境问题 / 待复核），用 `AskQuestion` 让用户选「全部提 / 挑选提 / 暂不提」，只对选中的失败用例进入去重 → 字段确认卡 → 建单；即使用户一开始说「跑完提 bug」也不跳过（「直接建」只可跳过字段确认卡）。报告首次发布时顶部汇总表的 `Jira Bug` 列**留空**（不再写 `To be filed` 占位），只对实际建单 / 追加评论的用例回填；用户不提单则不重发报告。改动：`SKILL.md`（description、Entry 表、Workflow 9a/9b、§4、§5 回填说明、§6）、`references/app_report_template.md`、`test-agent.md`（路由表 + `state.md` 新增 `gates.bug_filing`）。**升级方式**：直接覆盖。
+
 ---
 
 ## [0.6.0] - 2026-11-06

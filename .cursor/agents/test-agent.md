@@ -42,7 +42,7 @@ A development Agent for mobile (iOS-first) UI automation testing. Built around t
 | `test-case-to-script` | Main line 2: pseudocode → `steps/` / `pages/` / `plan/debug.py`. |
 | `test-debug-script` | Main line 3: debug/run on real device → fix → distill rules into memory. |
 | `test-page-elements` | Auxiliary: real-device page → Page Object + Confluence `page_doc`. |
-| `test-run-report-bug` | **(A)** Batch run + app version → Automation Report / `<platform> <version>` → Jira Bugs for failures (after report). **(B)** Manual APP Bug when Test says **提个 bug / 创建 bug 单** — `app-bug-template.md`, Summary `[Domain][Page/Feature] - …`, confirm fields + Labels via `AskQuestion`, `sensitive-data-guard`, synthetic data (no pytest). |
+| `test-run-report-bug` | **(A)** Batch run + app version → Automation Report / `<platform> <version>` (Jira Bug column blank) → ⛔ stop and ask whether to file Bugs → only on a yes, Jira Bugs for the chosen failures + backfill. **(B)** Manual APP Bug when Test says **提个 bug / 创建 bug 单** — `app-bug-template.md`, Summary `[Domain][Page/Feature] - …`, confirm fields + Labels via `AskQuestion`, `sensitive-data-guard`, synthetic data (no pytest). |
 
 ## Startup behavior (executed on invocation, highest priority)
 
@@ -94,7 +94,7 @@ A development Agent for mobile (iOS-first) UI automation testing. Built around t
 | `/test-case-to-script`, `./test-case-to-script`, `test-case-to-script` | `.cursor/skills/test/test-case-to-script/SKILL.md` | Main line 2: pseudocode -> executable pytest+Appium code |
 | `/test-debug-script`, `./test-debug-script`, `test-debug-script` | `.cursor/skills/test/test-debug-script/SKILL.md` | Main line 3: debug/run feature -> locate/fix + distill experience |
 | `/test-page-elements`, `./test-page-elements`, `test-page-elements` | `.cursor/skills/test/test-page-elements/SKILL.md` | Auxiliary: current real-device page -> Page Object elements |
-| `/test-run-report-bug`, `./test-run-report-bug`, `test-run-report-bug`; or **提个 bug / 创建 bug 单 / 手动建 bug / create an APP bug / file a bug ticket** | `.cursor/skills/test/test-run-report-bug/SKILL.md` | **Entry A**: ask run iOS/Android/all/custom + app version -> run -> Automation Report / `<platform> <version>` -> Jira Bugs for failures (confirm required fields + Labels via `AskQuestion` before create). **Entry B (manual APP Bug)**: `app-bug-template.md`, Summary `[Domain][Page/Feature] - …` (Domain ∈ Commerce/Loyalty/Trips/Platform); pre-fill only user-stated facts, confirm all required fields + Labels on card (card mandatory), `sensitive-data-guard`, synthetic test data — no pytest |
+| `/test-run-report-bug`, `./test-run-report-bug`, `test-run-report-bug`; or **提个 bug / 创建 bug 单 / 手动建 bug / create an APP bug / file a bug ticket** | `.cursor/skills/test/test-run-report-bug/SKILL.md` | **Entry A**: ask run iOS/Android/all/custom + app version -> run -> Automation Report / `<platform> <version>` (Jira Bug column left blank) -> ⛔ stop and ask whether to file Bugs (all / pick / none) -> only then Jira Bugs for the chosen failures (confirm required fields + Labels via `AskQuestion` before create) and backfill the column. **Entry B (manual APP Bug)**: `app-bug-template.md`, Summary `[Domain][Page/Feature] - …` (Domain ∈ Commerce/Loyalty/Trips/Platform); pre-fill only user-stated facts, confirm all required fields + Labels on card (card mandatory), `sensitive-data-guard`, synthetic test data — no pytest |
 
 > **Behavior after routing**: after entering the target Skill, still follow the "usage principles" in this file - read the **test-script-memory** Confluence page (read-only via `getConfluencePage`, pageId from profile `mcp.confluence.test.memory_pages.test_script`) before generating, stop at each step's artifact for user confirmation, write back to the memory page (via the `upload_confluence_v2.py` script) after `test-debug-script` passes. Command routing only handles "which Skill to enter quickly" and does not change each Skill's internal constraints and confirmation gates.
 >
@@ -116,7 +116,7 @@ A development Agent for mobile (iOS-first) UI automation testing. Built around t
         |-- test-case-to-script/SKILL.md      # main line 2: pseudocode -> executable pytest+Appium code
         |-- test-debug-script/SKILL.md        # main line 3: debug/run feature -> locate/fix + write experience back to memory
         |-- test-page-elements/SKILL.md       # auxiliary Skill: current real-device page -> Page Object elements (tests/mobile/ios/pages/)
-        |-- test-run-report-bug/SKILL.md      # execution Skill: ask run iOS/Android/all/custom + app version -> run all features -> publish run report into Automation Report / <platform> <version> folder (error cause on top) -> file Jira Bugs
+        |-- test-run-report-bug/SKILL.md      # execution Skill: ask run iOS/Android/all/custom + app version -> run all features -> publish run report into Automation Report / <platform> <version> folder (error cause on top, Jira Bug column blank) -> ask whether to file Jira Bugs -> file on a yes
 ```
 
 Companion memory (both migrated to Confluence - DBU4 space, folder from profile `mcp.confluence.test.memory_pages.folder`; read read-only via `getConfluencePage`, written back only via the `upload_confluence_v2.py` script; each page body is a single `yaml` code block):
@@ -216,6 +216,7 @@ gates:                             # each per-step confirmation gate's outcome (
   missing_element: leave_to_debug  # collect_now | leave_to_debug (the two-choice gap gate)
   to_script_confirm: confirmed
   debug_passed: pending
+  bug_filing: pending              # pending | all | selected | none (test-run-report-bug bug-filing gate after a run)
 artifacts:                         # pointers to the real deliverables (outside .ai-sdlc/)
   pre_code: tests/mobile/ios/pre_code/CNAPP-611.md
   feature: tests/mobile/ios/features/CNAPP-611.feature
