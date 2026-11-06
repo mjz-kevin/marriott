@@ -63,7 +63,7 @@ Skill 按分组文件夹存放，Cursor 会递归识别 `SKILL.md`；安装包�
 
 | 分组（目录） | Skills |
 | --- | --- |
-| 公共（所有角色）`common/` | `sensitive-data-guard`、`profile-select`、`confluence-publish`、`md-to-pdf`、`ai-sdlc-info`、`kb-query` |
+| 公共（所有角色）`common/` | `sensitive-data-guard`、`profile-select`、`confluence-publish`、`md-to-pdf`、`ai-sdlc-info`、`kb-query`、`cursor-usage-report` |
 | 需求（PO）`requirement/` | `requirement-clarify`、`prd-authoring`、`prd-publish`、`user-story-authoring`、`user-story-publish` |
 | 技术方案 `tech-solution/` | `tech-solution-prd`（仅 TL）、`tech-solution-spike`、`tech-solution-detail`、`tech-solution-publish` |
 | 开发与验证 `dev/` | `dev-clarify`、`baseline-checkout`、`feature-branch`、`unit-test-authoring`、`build-verify`、`unit-test-runner`、`contract-diff`、`acceptance-check`、`create-pr`、`review-feedback` |
@@ -117,6 +117,7 @@ python init/check.py                    # 仓库一致性检查（每次提交�
 python init/build.py --no-zip --yes     # 确认能正常组装（只出目录不打 zip）
 python .cursor/skills/common/sensitive-data-guard/tests/run_tests.py   # 改安全规则时
 python .cursor/skills/common/kb-query/tests/run_tests.py               # 改 kb-query 脚本时
+python .cursor/skills/common/cursor-usage-report/tests/run_tests.py    # 改 usage_report.py 时
 python .cursor/skills/code-review/merge-gate/tests/run_tests.py       # 改 pr_review.py（行内评论提交 / 读取 / 回复 / resolve）时
 ```
 

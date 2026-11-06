@@ -14,7 +14,8 @@
       "confluence-publish",
       "md-to-pdf",
       "ai-sdlc-info",
-      "kb-query"
+      "kb-query",
+      "cursor-usage-report"
     ],
     "profiles": [
       "app-test.yaml",
