@@ -51,9 +51,9 @@ ai-sdlc/
 | `eval-agent` | PO | 需求澄清 → 写 PRD 与其中的 User Story → PO 确认 → 发布 Confluence |
 | `userstory-agent` | PO | 把 PRD 中的 User Story 同步到 Jira（同步计划 → 确认 → 建单 / 更新） |
 | `tech-solution-agent` | TL / Dev | 技术方案（PRD 级 / Spike 调研 / Story 级详细方案）→ 确认 → 发布 → 回写 |
-| `dev-agent` | TL / Dev | Story → 开发前澄清（歧义 / 缺失 / 矛盾逐项核实，P0 由开发拍板，澄清结论作为实现与验收基线）→ 检出基线 → 唯一 AI Feature 分支 → 实现代码与单测 → 验证 → 提 PR → Code Review 后读取全部评论（含行内）、开发逐条决定改 / 解释不改、修复、确认后回复评论（可选重新请求 review） |
+| `dev-agent` | TL / Dev | Story → 开发前澄清（歧义 / 缺失 / 矛盾逐项核实，P0 由开发拍板，澄清结论作为实现与验收基线）→ 检出基线 → 唯一 AI Feature 分支 → 实现代码与单测 → 验证 → 提 PR → Code Review 后读取全部评论（含行内）、开发逐条决定改 / 解释不改、修复、确认后回复评论（可选重新请求 review）；CI 安全扫描有发现时，出分诊表、开发逐条决定，依赖 / 基础镜像 / Dockerfile 类自动修复（推送仍需确认），再交 `cicd-agent` 重新确认入参后重跑 |
 | `code-review-agent` | TL / Dev | 拉 PR diff → 从正确性 / 可读性 / 架构合理性（diff 范围内：复用、分层、改动范围、根因）三个视角，按规范、技术栈规则包与安全基线逐条审核（🔴 阻断 / 🟡 建议 / 🟢 提示；业务合理性与系统级架构方向仍归人工）→ 本地草稿先给审核人看、挑选要发的 → 合并门禁：一条 PR review（总结 + 代码行内评论）；再次运行时复审作者回复（AI 建议接受 / 坚持，审核人确认后回复，接受的 resolve）（不自动 approve / 合并，人工拍板） |
-| `cicd-agent` | TL / Dev / QA | 选定并触发现有 Harness 流水线，**仅限低环境（dev / test）**；触发前必须展示运行入参并等人确认；高环境（Staging / Prod）不在工具链范围，由人在 Harness UI 操作。唯一例外：profile `build_backend_exceptions` 登记的「只构建不部署」测试包（当前 APP `Android_Adhoc_Build` · `flavor=Stg`、`iOS_Dragon_App_Testflight_Dev` · `API_BASE_URL=interceptor-stg`，QA 日常 STG 包） |
+| `cicd-agent` | TL / Dev / QA | 选定并触发现有 Harness 流水线，**仅限低环境（dev / test）**；触发前必须展示运行入参并等人确认；高环境（Staging / Prod）不在工具链范围，由人在 Harness UI 操作。唯一例外：profile `build_backend_exceptions` 登记的「只构建不部署」测试包（当前 APP `Android_Adhoc_Build` · `flavor=Stg`、`iOS_Dragon_App_Testflight_Dev` · `API_BASE_URL=interceptor-stg`，QA 日常 STG 包）。每次执行到终态（含成功）都用 `security-findings` 只读给出安全结论（🔴 被拦截 / 🟠 通过但有发现 / 🟢 干净）与发现报告；可修复项交 `dev-agent`，本 Agent 不修、不豁免、不自动重跑 |
 | `test-agent` | QA | 需求 / Jira 用例 → 伪代码 → pytest + pytest-bdd + Appium 可执行脚本 → 运行报告 / 提 Bug |
 
 ## 3. Skills（`.cursor/skills/<分组>/<skill>/`）
@@ -68,7 +68,7 @@ Skill 按分组文件夹存放，Cursor 会递归识别 `SKILL.md`；安装包�
 | 技术方案 `tech-solution/` | `tech-solution-prd`（仅 TL）、`tech-solution-spike`、`tech-solution-detail`、`tech-solution-publish` |
 | 开发与验证 `dev/` | `dev-clarify`、`baseline-checkout`、`feature-branch`、`unit-test-authoring`、`build-verify`、`unit-test-runner`、`contract-diff`、`acceptance-check`、`create-pr`、`review-feedback` |
 | Code Review `code-review/` | `diff-fetch`、`code-review-rules`、`review-comment`、`merge-gate` |
-| CI/CD `cicd/` | `harness-invoke` |
+| CI/CD `cicd/` | `harness-invoke`、`security-findings` |
 | 测试（仅 QA）`test/` | `jira-to-test-case`、`test-case-authoring`、`test-case-to-script`、`test-debug-script`、`test-page-elements`、`test-run-report-bug` |
 
 角色与资产的权威对应关系以 [`init/roles.json`](init/roles.json) 为准（上表只是索引）。
@@ -118,6 +118,7 @@ python init/build.py --no-zip --yes     # 确认能正常组装（只出目录�
 python .cursor/skills/common/sensitive-data-guard/tests/run_tests.py   # 改安全规则时
 python .cursor/skills/common/kb-query/tests/run_tests.py               # 改 kb-query 脚本时
 python .cursor/skills/common/cursor-usage-report/tests/run_tests.py    # 改 usage_report.py 时
+python .cursor/skills/cicd/security-findings/tests/run_tests.py       # 改 findings.py（安全结论 / 分类 / 分组 / diff）时
 python .cursor/skills/code-review/merge-gate/tests/run_tests.py       # 改 pr_review.py（行内评论提交 / 读取 / 回复 / resolve）时
 ```
 
@@ -141,6 +142,7 @@ python .cursor/skills/code-review/merge-gate/tests/run_tests.py       # 改 pr_r
 - **CI/CD 只发布低环境**：Harness 触发限于 profile 的 `mcp.harness.allowed_envs`（dev / test）。高环境（Staging / Prod）发布**不在工具链范围**，无「人工确认后放行」通道，一律由人在 Harness UI 操作。
   唯一例外是 profile `mcp.harness.build_backend_exceptions` 精确登记的「纯 CI 构建、包连高环境后端」取值（当前 APP `Android_Adhoc_Build` · `flavor=Stg`、`iOS_Dragon_App_Testflight_Dev` · `API_BASE_URL=interceptor-stg`）；它不部署任何环境，增改须团队决策，AI 不得自行增改或以人工确认替代。
 - PR 合并、Jira / Confluence 写入等其它外部副作用操作，需人工确认后执行。
+- **CI 安全扫描结果只读**：`security-findings` 不创建 / 审批 STO 豁免、不改流水线或模板的失败策略、不回显密钥值；修复只在 `dev-agent` 的 Feature 分支上、开发逐条决定后进行，密钥轮换与历史清理由人完成。
 - `.ai-sdlc/` 为运行时状态目录，可能含草稿与会话内容，**不要提交**。
 
 ## 8. Git 与版本

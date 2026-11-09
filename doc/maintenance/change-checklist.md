@@ -59,6 +59,13 @@
 - [ ] `AGENTS.md` §2 / §7、设计文档 §1 示意与 §6.1 脚注 ²、[profiles.md](profiles.md) §mcp.harness
 - [ ] 跑 `python init/check.py`：会校验流水线已登记、env 在 `allowed_envs` 内、字段非空、取值不点名生产、两份一致
 
+改 `mcp.harness.default_presets`（QA 一键默认配置，须团队决策）时额外同步：
+
+- [ ] `test` / `prod` 两份完全一致；每个 `inputs` 键与取值先用 `runtime_input_template` 只读核对（键存在、取值在当前取值域内）
+- [ ] 点名高环境的取值（如 `flavor=Stg`）必须已是 `build_backend_exceptions` 的精确条目；凭证类入参只能写空串
+- [ ] `harness-invoke/SKILL.md` §0 表格里的「currently …」与 `cicd-agent.md` §6 示例卡（如改了 Android 预设的固定值）
+- [ ] 跑 `python init/check.py`（`presets` 项）
+
 ## 6. 修改安装 / 卸载脚本（`init/templates/`）
 
 1. `.sh` 与 `.ps1` **成对修改**（`check.py` 校验文件成对，但不校验逻辑等价——需人工对照）。

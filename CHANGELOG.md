@@ -12,8 +12,38 @@
 
 ## [Unreleased]
 
+### 新增
+- **CI/CD「是否使用默认配置」一键确认（QA 打 iOS / Android STG 测试包只需给分支）**：
+  - **问题**：QA 打 `Android_Adhoc_Build`（`flavor=Stg`）/ `iOS_Dragon_App_Testflight_Dev`（`API_BASE_URL=interceptor-stg`）每次都要看一张十几行的入参确认表，而实际只改分支；开发又需要能改参数。
+  - **新增 profile 字段 `mcp.harness.default_presets`**（`app-test` / `app-prod` 一致；CMS 未加，缺省 = 无预设、行为不变）：`android-stg`（flavor=Stg、variant=release、LOCALCMS_PREVIEWSECRET 空）、`ios-stg`（API_BASE_URL=interceptor-stg、MARKETING_VERSION 空、LOCALCMS_PREVIEWSECRET 空）；只写团队要固定的值，其余入参仍在触发时读 Harness 默认值。取值依据 2026-11-09 只读核对的 `runtime_input_template`。**`variant=release` 与两个空串为 AI 按截图起草的默认值，需团队确认**；增改与 `build_backend_exceptions` 同属团队决策。
+  - **`harness-invoke` S3 新增「Default presets」**：有预设时确认环节是一张卡——「是否使用默认配置？」（使用默认 / 修改参数 / 取消），分支缺失时同卡追问（首选仓库基线分支）；使用默认 = 展示精简摘要后一键确认**本次**触发，修改参数或请求里已点名入参值（开发常见）→ 完整入参表。触发前用实时模板校验预设（入参存在、取值合法、必填项覆盖），并对合并后的取值照常跑 S2；偏离即回退完整表。预设不是例外，不放宽范围、不跳过确认。
+  - **`cicd-agent`**：C-pre 新增「默认预设快捷路径」（缺分支不在 C-pre 停，挪到 C3_confirm 同卡问，一轮完成）；C3_confirm 卡支持精简摘要 + AskQuestion；state `input_confirmation` 新增 `mode` / `preset`；§7 禁止 AI 自行增改 `default_presets`。
+  - **`init/check.py`** 新增 `presets` 检查：字段齐全、id 唯一、流水线已登记且 env 在 `allowed_envs`；点名高环境的取值须在 `build_backend_exceptions` 精确登记、不得点名生产；凭证类入参只能为空串；test / prod 一致。
+  - **补充（实测反馈）**：默认配置卡只问「是否使用默认配置」（加缺分支时的分支题），预设固定值与 Harness 默认值只在摘要里展示，**不再逐项提问**（variant、空串凭证等）；`cicd-agent` 主会话转述规则同步禁止追加逐项提问。另：请求像预设（「STG 测试包」）但已安装 profile 里没有 `default_presets` 时，卡片提示「本机 profile 可能旧于工具链、需重装角色包」，回退完整表。实测原因：本机 `~/.cursor/profiles/app-*.yaml` 未同步到含 `default_presets` 的版本，导致走了完整表。
+  - 文档：`doc/maintenance/profiles.md` §mcp.harness、`change-checklist.md` §5。设计文档 / `AGENTS.md` 未改（安全边界与角色职责不变，只是确认交互变短）。**升级方式**：直接覆盖（TL / Dev / QA 角色包，含 profile）。
+- **CI/CD 安全检查：拦截 / 放行时自动反馈 + 自动修复（新 Skill `cicd/security-findings`，随 TL / Dev / QA 分发）**：
+  - **问题**（2026-11 对 `cncms` / `cnmobile` 只读调研）：CMS `org.CICD` 模板里大部分安全扫描不阻断——Aqua 步骤组 `MarkAsSuccess`、Gitleaks 未设 `fail_on_severity`、CAP 的 `exit 1` 被注释、Base Image Check 为 `Ignore`、Sonar 分支扫描被 `"true"=="false"` 停用（PR 扫描只在 Webhook 触发时跑）；实测 `cncms-CICD-Migration` #250 Aqua 新增 3 Critical / 29 High、Gitleaks 命中疑似 API Key，仍部署到 dev。APP 交付流水线没有安全步骤。工具链此前失败只给阶段摘要、成功直接报 ✅，扫出的问题不可见，也没有交给开发修复的路径。
+  - **`security-findings`**（只读）：按执行读取 STO（`pipeline_security_step` / `pipeline_security_issue`，SCA 项用 `scs_component_vulnerability` 查修复版本）与非 STO 安全步骤（hadolint、Base Image Check、CAP）的状态和日志，给出结论：🔴 被拦截 / 🟠 通过但有发现 / 🟢 干净 / ⚪ 不可用；输出 `SECURITY-FINDINGS_*` 报告与机器可读 JSON，每条带修复类别（`sca_dependency` / `base_image` / `dockerfile_lint` 可自动修；`sast` 仅给补丁建议；`secret` 只迁移引用、轮换由人做；`compliance` / `scanner_error` / `exemption` 转人工）、修法与本地预检；与上一次触发对比 已修 / 残留 / 新增。默认值内置在 skill（High 及以上、只看新增、密钥全报），**不新增 profile 字段**（两队口径相同）。不创建 / 审批 STO 豁免、不改流水线、不回显密钥值。
+  - **`harness-invoke`**：新增 S7——每个终态（含成功、IgnoreFailed）都交给 `security-findings`，报告多一行安全结论，不改变触发结论本身。
+  - **`cicd-agent`**：新增节点 C4b「读取安全检查」与 state `security` 段；运行报告 / 状态卡 / 可选 Jira 评论带安全结论；🔴 / 🟠 有可修项时提示 `/dev-agent handle CI security findings`；新增只读入口 S（贴执行链接查安全结果，不触发）。仍不修、不豁免、不自动重跑。
+  - **`dev-agent`**：新增节点 D9「处理 CI 安全发现」与 state `ci_security` 段：分诊表 `SECURITY-TRIAGE_*` → 开发逐条决定（修 / 说明 / 转人 / 忽略）→ 可修项复用 D4–D6（D5 增加本地安全预检，推送仍需确认，只在 AI Feature 分支上修）→ 交回 `cicd-agent` 发起新触发 `t{n+1}`（重新确认入参），以重扫结果判定是否修复。
+  - 文档：`AGENTS.md` §2 / §3 / §7、设计文档 §2 / §4.5 / §5 / §6.1 脚注 ²、`init/README.md`。profile 未改。平台侧建议（Aqua / Gitleaks / CAP 是否改为阻断、Sonar 分支扫描为何停用、APP 交付线无扫描）需 DevOps / 安全团队决策，工具链不改流水线。**升级方式**：直接覆盖（TL / Dev / QA 角色包）。
+  - **设计修订（实测 #250 后）**：
+    - 确定性逻辑下沉到 `scripts/findings.py`（`analyze` / `locate` / `diff`，纯标准库）+ 离线单测 `tests/run_tests.py`（26 条，合成 fixture 按 #250 裁剪），agent 只负责用 MCP 读数并原样落盘。
+    - 实测发现并据此修正：Aqua 结果不带镜像层信息（`origins` 过滤为 0）、Gitleaks 结果不带文件 / 行号、SCS 对镜像不给修复版本（`scs_component_remediation` 只支持已登记代码仓，`cncms` 无），故 `fix_version` 一律 `unknown`、由开发本地 `pnpm audit` 确定；CI 内部步骤状态只能经 `harness_diagnose` `include_all_step_logs` 取，且 `max_all_step_logs` 需 ≥ 步骤总数（默认 25 截断，CMS 一次约 150 步）；CAP 发邮件步骤 `IgnoreFailed` 属通知失败，不再算安全发现；Base Image Check 打 `ERROR` 仍返回 0，改从日志判定。
+    - npm 类发现先用仓库 lockfile 核实（`locate`），找不到的归入「升级基础镜像」，避免给仓库没用到的包加 override；分诊按「修复动作」分组（#250 的 32 条 High+ 收敛为个位数动作）；报告注明无 baseline 的扫描器（Aqua 全算新增）与未运行的 Sonar PR 扫描。
+    - 权限：`dev-agent` 不读 Harness，D9 只接收 `cicd-agent` 产出的 JSON（贴执行链接先走 cicd-agent 的只读入口），MCP 权限行补「Harness none」。
+    - 调研得到的流水线检查项清单（哪些阻断、日志含义）只记在本条 CHANGELOG，不随 skill 分发（属 Harness 事实快照，模板改动后会过时）。`AGENTS.md` §6、`doc/maintenance/testing.md` 增加测试命令。
+
 ### 变更
 - **`test-run-report-bug`（Entry A）：跑完脚本后先停下来问是否提 Bug**：新增「Bug-filing gate」——运行结束、归因完成、报告发布后，先列出失败用例及建议类型（产品缺陷 / 脚本或定位问题 / 环境问题 / 待复核），用 `AskQuestion` 让用户选「全部提 / 挑选提 / 暂不提」，只对选中的失败用例进入去重 → 字段确认卡 → 建单；即使用户一开始说「跑完提 bug」也不跳过（「直接建」只可跳过字段确认卡）。报告首次发布时顶部汇总表的 `Jira Bug` 列**留空**（不再写 `To be filed` 占位），只对实际建单 / 追加评论的用例回填；用户不提单则不重发报告。改动：`SKILL.md`（description、Entry 表、Workflow 9a/9b、§4、§5 回填说明、§6）、`references/app_report_template.md`、`test-agent.md`（路由表 + `state.md` 新增 `gates.bug_filing`）。**升级方式**：直接覆盖。
+- **`security-findings` / `cicd-agent`：STO 扫描结果改由脚本直接拉取，原始数据按 cicd 存储规则落 `inputs/`**：
+  - **问题**：cncms #254 的问题列表（45 + 1 条）由 MCP 直接回在对话里，AI 只能把整段 JSON 原样抄一遍写文件，写入失败，`findings.py` 没跑，报告里只剩手工统计的数字；另外原始数据和分析结果都写在 `tmp/`，不符合 `cicd-agent` §3「`tmp/` 只放等待脚本产物」的规则。
+  - **`findings.py` 新增 `fetch` 子命令**：只读 GET STO 前端接口 `pipeline-security/steps` / `issues`（即 MCP `pipeline_security_step` / `pipeline_security_issue` 背后的接口），凭证复用 Harness MCP 配置，不回显；`new` / `existing` 两个分区各自翻页（翻过末页会 400，已处理），所有页原样保存为与 MCP 响应同结构的 JSON list，`analyze` 无需改动即可读取；输出文件已存在则报错退出、不覆盖；STO 401 / 403 / 404 时保存空结果并在 `warnings` 写明原因，结论落到 `unavailable`。新增 `scripts/platform_paths.py`（`harness-invoke` 同名文件的独立副本）。已对 #254 实测：3 页、45 + 1 条、无缺页告警，每页 20 条与 100 条的结果一致。
+  - **存储位置（cicd 运行目录）**：原始数据 `inputs/{ts}_t{n}_sto-steps.json` / `_sto-issues.json` / `_diagnose.json`；分析结果 `docs/SECURITY-FINDINGS_{run_id}_t{n}_{ts}.md` + 同名 `.json`（原 `tmp/raw_*_t{n}.json`、`tmp/security-findings_t{n}.json` 废弃）；`tmp/` 只放 `t{n}_result.json` / `t{n}_trigger_wait.log`。只读入口 S（`adhoc-{execution_id}/`，轮次 `s{n}`）同样如此。`state.md` 的 `security` 新增 `raw_inputs`。
+  - **SKILL / agent 规则**：F1 改为 `fetch`，MCP 降为兜底（每页 20 条、每页单独存文件，**复制工具已存的结果文件，禁止重新抄写**）；F2 的 diagnose 同样从工具已存的文件复制；任何原始数据都存不下来时，结论判为 `unavailable`，并附只读重读命令，**不得在卡片 / 报告里写手工统计的数字**。中断后重读一律使用新的 `{ts}`，旧文件保留。
+  - 改动：`security-findings/scripts/findings.py`、`scripts/platform_paths.py`（新增）、`SKILL.md`（description、Input/Output、规则 1 / 2 / 5、F1–F3 / F5、Troubleshooting、Files）、`tests/run_tests.py`（新增 `Fetch` 5 条，共 31 条，使用假 GET，不联网）；`cicd-agent.md`（§3 目录树、§3.1 第 2 / 5 条、`state.md` 模板、MCP 权限说明、C4b、入口 S、恢复规则 8）。`dev-agent` 的 D9 不变（它读的 findings JSON 路径由 cicd 卡片给出；它自己的 `tmp/` 规则允许放临时文件）。**升级方式**：直接覆盖（旧运行目录下的 `tmp/raw_*` 文件不受影响，可留可删）。
+- **APP 不再出安全结论（新增 profile 开关 `mcp.harness.security_readout`）**：APP 交付流水线没有安全扫描步骤，STO 也没有结果，每次跑完都多出一行「⚪ Unavailable … Don't read this as clean」和一份空的 `SECURITY-FINDINGS` 报告，属于噪音。`app-test` / `app-prod` 设为 `false`：`cicd-agent` 跳过读取安全扫描结果那一步（C4b），`security.verdict` 记为 `not_applicable`，不读 Harness、不写文件，卡片、运行报告和 Jira 回写都不出安全结论。`cms-test` / `cms-prod` 设为 `true`，缺省也是 `true`，CMS 行为不变。用户主动贴执行链接查扫描结果（只读入口 S）不受开关影响。改动：4 个 profile、`cicd-agent.md`（description、Skill 表、`state.md` 模板、流程图、C4b 第 0 步、C5、卡片模板、恢复规则 8、反模式）、`harness-invoke/SKILL.md`（profile 字段表、S7、规则表、输出说明）、`security-findings/SKILL.md`（Defaults、Troubleshooting）、`doc/AI-Toolchain-Design.md`、`doc/maintenance/profiles.md`。**升级方式**：直接覆盖（profile 随角色包更新）。
 
 ---
 

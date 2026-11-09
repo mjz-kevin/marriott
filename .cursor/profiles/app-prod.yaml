@@ -164,7 +164,18 @@ mcp:
                                        # values 须与 Harness 取值逐字一致（URL 写完整串）；增改须团队决策，AI 不得自行增改。
       - { pipeline: Android_Adhoc_Build, input: flavor, values: [Stg], backend: stg }
       - { pipeline: iOS_Dragon_App_Testflight_Dev, input: API_BASE_URL, values: ["https://interceptor-stg.csh.marriott.com.cn/v1/graph"], backend: stg }
+    default_presets:                   # 「默认配置」预设（QA 日常 STG 包只需给分支）：确认环节先弹「是否使用默认配置」卡，
+                                       # 选「使用默认」= 一键确认本次入参；选「修改参数」= 展开完整入参表（开发改参走这条）。
+                                       # inputs 只写团队决定要固定的值（与 Harness 默认不同的、或无默认的必填项），
+                                       # 其余入参仍在触发时从 Harness 读默认值；Harness 取值域 / 必填项变了预设即失效，回退完整表。
+                                       # 点名高环境的取值必须已在 build_backend_exceptions 精确登记；凭证类键只能为空串。
+                                       # 增改须团队决策（同 build_backend_exceptions），AI 不得自行增改。
+      - { id: android-stg, pipeline: Android_Adhoc_Build, label: "Android STG 测试包", inputs: { flavor: Stg, variant: release, LOCALCMS_PREVIEWSECRET: "" } }
+      - { id: ios-stg, pipeline: iOS_Dragon_App_Testflight_Dev, label: "iOS STG TestFlight 包", inputs: { API_BASE_URL: "https://interceptor-stg.csh.marriott.com.cn/v1/graph", MARKETING_VERSION: "", LOCALCMS_PREVIEWSECRET: "" } }
     allow_stage_execution_fallback: false  # 本项目流水线均为单环境、无晋级链，不需要 stage 子集限定
+    security_readout: false            # 执行结束后是否读安全扫描结果（security-findings）。APP 交付流水线不含安全扫描步骤、
+                                       # STO 也无结果，读了只会得到「不可用」，故关闭：cicd-agent 跳过该步，卡片 / 报告不出安全结论。
+                                       # 流水线将来加了扫描步骤再改 true（团队决策）。
     poll:                              # 触发后等待执行状态的口径
       mode: server_wait                # 优先用 MCP 的服务端阻塞等待（wait=true），而非 LLM 轮询循环
       timeout_seconds: 3600            # 等待总超时；超时回报「仍在运行」并给句柄，不判成败

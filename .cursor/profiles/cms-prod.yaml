@@ -138,6 +138,8 @@ mcp:
                                        # 没有人工确认放行通道。
     allow_stage_execution_fallback: true   # 允许 harness-invoke 在 MCP 无法限定 stage 子集时，改用其随附的
                                        # stage 子集封装触发晋级链流水线（见 skill 文档）。置 false 则一律改由人在 UI 触发。
+    security_readout: true             # 执行结束后读安全扫描结果（security-findings）：CMS 流水线含 org.CICD 扫描步骤组
+                                       # （Aqua / Gitleaks / Sonar / hadolint / Base Image Check / CAP）。缺省 = true。
     poll:                              # 触发后等待执行状态的口径
       mode: server_wait                # 优先用 MCP 的服务端阻塞等待（wait=true），而非 LLM 轮询循环
       timeout_seconds: 3600            # 等待总超时（server_wait 上限 7200）；超时回报「仍在运行」并给句柄，不判成败

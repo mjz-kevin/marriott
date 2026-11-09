@@ -27,6 +27,9 @@ AI SDLC 仓库一致性检查（维护用，不随包分发）。
   backend-exc   mcp.harness.build_backend_exceptions（安全边界）：条目字段齐全、values 非空；引用的流水线已在
                 pipelines 登记且 env 在 allowed_envs 内；取值 / backend 不得点名生产；test / prod 两份一致
                 → 否则 ERROR。条目的流水线未在 harness-invoke / cicd-agent / AGENTS.md 中提及 → WARN。
+  presets       mcp.harness.default_presets（QA 一键默认配置）：字段齐全、id 唯一、流水线已登记且 env 在 allowed_envs；
+                点名高环境的取值必须在 build_backend_exceptions 精确登记、不得点名生产；凭证类入参只能为空串；
+                test / prod 两份一致 → 否则 ERROR。
   runtime       setup.json / mcp.example.*.json / init/README.md 中写死的 node、python 版本一致 → 否则 ERROR。
   templates     init/templates 下 .sh 与 .ps1 成对 → 否则 ERROR。
   lfs           init/res/ 下的 zip 仍是 Git LFS 指针文件（新克隆没装 git-lfs）→ WARN
@@ -450,6 +453,8 @@ def _flow_value(v: str):
     v = v.strip()
     if v.startswith("[") and v.endswith("]"):
         return [_scalar(x) for x in _split_top(v[1:-1]) if x.strip()]
+    if v.startswith("{") and v.endswith("}"):
+        return _flow_map(v)
     return _scalar(v)
 
 
@@ -480,7 +485,8 @@ def _strip_comment(line: str) -> str:
 
 def harness_section(path: Path) -> dict:
     """抽取 mcp.harness 下的 pipelines / allowed_envs / build_backend_exceptions（只认单行流式写法）。"""
-    res: dict = {"pipelines": [], "allowed_envs": None, "exceptions": [], "has_exceptions": False}
+    res: dict = {"pipelines": [], "allowed_envs": None, "exceptions": [], "has_exceptions": False,
+                 "presets": [], "has_presets": False}
     lines = [_strip_comment(l) for l in read(path).split("\n")]
     h_indent, cur = None, None
     for line in lines:
@@ -502,6 +508,8 @@ def harness_section(path: Path) -> dict:
                 res["allowed_envs"] = _flow_value(rest) if rest else []
             elif key == "build_backend_exceptions":
                 res["has_exceptions"] = True
+            elif key == "default_presets":
+                res["has_presets"] = True
             continue
         if body.startswith("- "):
             item = _flow_map(body[2:])
@@ -509,6 +517,8 @@ def harness_section(path: Path) -> dict:
                 res["pipelines"].append(item)
             elif cur == "build_backend_exceptions":
                 res["exceptions"].append(item or {"_raw": body})
+            elif cur == "default_presets":
+                res["presets"].append(item or {"_raw": body})
     return res
 
 
@@ -555,6 +565,60 @@ def check_backend_exceptions(r: Report) -> None:
         a, b = by_profile.get(test.name), by_profile.get(prod)
         if a != b:
             r.error("backend-exc", f"{test.name} 与 {prod} 的 build_backend_exceptions 不一致")
+
+
+# ---------------------------------------------------------------- default_presets
+# 预设里点名高环境的取值必须已在 build_backend_exceptions 精确登记（预设本身不是例外）。
+HIGH_ENV_VALUE = re.compile(r"(?i)(?<![a-z])(stg|staging|uat\d*|perf|prf|prod|production)(?![a-z])|dsapstg|dsapprf|dsapprd")
+SECRET_KEY = re.compile(r"(?i)secret|token|password|passwd|api_?key|private")
+
+
+def check_default_presets(r: Report) -> None:
+    by_profile: dict[str, list] = {}
+    for p in sorted(PROFILES_DIR.glob("*.yaml")):
+        h = harness_section(p)
+        if not h["has_presets"]:
+            continue
+        name = p.name
+        pipes = {x.get("id"): x for x in h["pipelines"] if x.get("id")}
+        allowed = {str(e).lower() for e in (h["allowed_envs"] or [])}
+        exc = {(e.get("pipeline"), e.get("input"), v)
+               for e in h["exceptions"] if "_raw" not in e for v in (e.get("values") or [])}
+        seen, norm = set(), []
+        for i, e in enumerate(h["presets"]):
+            tag = f"{name} default_presets[{i}]"
+            if "_raw" in e:
+                r.error("presets", f"{tag} 不是单行流式映射，无法校验：{e['_raw']}")
+                continue
+            for f in ("id", "pipeline", "label"):
+                if not isinstance(e.get(f), str) or not e.get(f):
+                    r.error("presets", f"{tag} 缺少字段 {f}")
+            pid, inputs = e.get("pipeline"), e.get("inputs")
+            if e.get("id") in seen:
+                r.error("presets", f"{tag} id 重复：{e.get('id')}")
+            seen.add(e.get("id"))
+            if not isinstance(inputs, dict) or not inputs:
+                r.error("presets", f"{tag} inputs 必须是非空映射")
+                inputs = {}
+            if pid and pid not in pipes:
+                r.error("presets", f"{tag} 引用的流水线 {pid} 未在 mcp.harness.pipelines 登记")
+            elif pid and str(pipes[pid].get("env", "")).lower() not in allowed:
+                r.error("presets", f"{tag} 流水线 {pid} 的 env={pipes[pid].get('env')} 不在 allowed_envs {sorted(allowed)} 内")
+            for k, v in inputs.items():
+                v = v if isinstance(v, str) else str(v)
+                if SECRET_KEY.search(k) and v != "":
+                    r.error("presets", f"{tag} 凭证类入参 {k} 只能为空串，不得写入取值")
+                if PROD_VALUE.search(v):
+                    r.error("presets", f"{tag} 入参 {k} 取值点名生产，不得进预设：{v}")
+                elif HIGH_ENV_VALUE.search(v) and (pid, k, v) not in exc:
+                    r.error("presets", f"{tag} 入参 {k}={v} 点名高环境，但未在 build_backend_exceptions 精确登记")
+            norm.append((e.get("id"), pid, tuple(sorted((k, str(v)) for k, v in inputs.items()))))
+        by_profile[name] = sorted(norm, key=str)
+    for test in sorted(PROFILES_DIR.glob("*-test.yaml")):
+        prod = test.name.replace("-test.yaml", "-prod.yaml")
+        a, b = by_profile.get(test.name), by_profile.get(prod)
+        if a != b:
+            r.error("presets", f"{test.name} 与 {prod} 的 default_presets 不一致")
 
 
 # ---------------------------------------------------------------- runtime versions
@@ -641,6 +705,7 @@ def main() -> int:
     check_confluence_uploader(r)
     check_profiles(r)
     check_backend_exceptions(r)
+    check_default_presets(r)
     check_runtime_versions(r)
     check_templates(r)
     check_lfs(r)

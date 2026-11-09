@@ -1,0 +1,160 @@
+{
+ "execution": {
+  "pipeline": {
+   "name": "cncms-CICD-Migration",
+   "identifier": "cncms_cicd_custom_migration"
+  },
+  "execution": {
+   "id": "EXEC-250",
+   "status": "IgnoreFailed",
+   "run_sequence": 250,
+   "trigger_type": "MANUAL"
+  },
+  "stages": [
+   {
+    "identifier": "CI",
+    "status": "Success"
+   }
+  ],
+  "openInHarness": "https://harness.example/executions/EXEC-250"
+ },
+ "all_step_logs_truncated": {
+  "shown": 15,
+  "total": 15
+ },
+ "all_step_logs": {
+  "step01": {
+   "step_id": "step01",
+   "name": "Sonarqube Scan PR",
+   "identifier": "Sonarqube_Scan_PR",
+   "status": "Skipped",
+   "log": "(empty log output)"
+  },
+  "step02": {
+   "step_id": "step02",
+   "name": "Sonarqube Scan",
+   "identifier": "Sonarqube_Scan",
+   "status": "Skipped",
+   "log": "(empty log output)"
+  },
+  "step03": {
+   "step_id": "step03",
+   "name": "dockerfile_lint",
+   "identifier": "dockerfile_lint",
+   "status": "Success",
+   "log": {
+    "log_snippet": "[2026-11-06T10:55:03.015203743Z] info: Dockerfile-marriott-fat:13 DL3008 warning: Pin versions in apt get install. Instead of `apt-get install <package>` use `apt-get install <package>=<version>`\n[2026-11-06T10:55:03.015237445Z] info: Dockerfile-marriott-fat:35 DL3059 warning: Multiple consecutive `RUN` instructions. Consider consolidation.\n[2026-11-06T10:55:03.015253755Z] info: Dockerfile-marriott-fat:39 DL3059 warning: Multiple consecutive `RUN` instructions. Consider consolidation.",
+    "total_lines": 3,
+    "truncated": false
+   }
+  },
+  "step04": {
+   "step_id": "step04",
+   "name": "Base Image Check",
+   "identifier": "Base_Image_Check",
+   "status": "Success",
+   "log": {
+    "log_snippet": "[2026-11-06T10:55:03.815330720Z] info: ERROR - Dockerfile 'Dockerfile-marriott-fat' is not a multi-stage build.\n[2026-11-06T10:55:27.057644587Z] info: 2026-11-06 10:55:27,057 - INFO - Compliant base image found: artifactory.marriott.com/icd/icd-baseimages-node:22.23.4-trixie-slim",
+    "total_lines": 1,
+    "truncated": false
+   }
+  },
+  "step05": {
+   "step_id": "step05",
+   "name": "Build Image",
+   "identifier": "Build_and_Push",
+   "status": "Success",
+   "log": {
+    "log_snippet": "[2026-11-06T10:59:21.75164457Z] info:  - SecretsUsedInArgOrEnv: Do not use ARG or ENV instructions for sensitive data (ARG \"npm_token\") (line 32)",
+    "total_lines": 1,
+    "truncated": false
+   }
+  },
+  "step06": {
+   "step_id": "step06",
+   "name": "unit_test",
+   "identifier": "unit_test",
+   "status": "Success",
+   "log": "(empty log output)"
+  },
+  "step07": {
+   "step_id": "step07",
+   "name": "security_scans",
+   "identifier": "security_scans",
+   "status": "Success",
+   "log": "(empty log output)"
+  },
+  "step08": {
+   "step_id": "step08",
+   "name": "aqua_scan",
+   "identifier": "aqua_scan",
+   "status": "Success",
+   "log": "(empty log output)"
+  },
+  "step09": {
+   "step_id": "step09",
+   "name": "Scan Virtual",
+   "identifier": "Scan_Virtual",
+   "status": "Success",
+   "log": ""
+  },
+  "step10": {
+   "step_id": "step10",
+   "name": "Scan Image",
+   "identifier": "Run_1",
+   "status": "Success",
+   "log": {
+    "log_snippet": "",
+    "total_lines": 0,
+    "truncated": false
+   }
+  },
+  "step11": {
+   "step_id": "step11",
+   "name": "Scan Results",
+   "identifier": "AquaSecurity_1",
+   "status": "Success",
+   "log": {
+    "log_snippet": "[2026-11-06T11:04:24.049115658Z] info: fail_on_severity is set to none, but this threshold was not reached.",
+    "total_lines": 1,
+    "truncated": false
+   }
+  },
+  "step12": {
+   "step_id": "step12",
+   "name": "Gitleaks",
+   "identifier": "Gitleaks",
+   "status": "Success",
+   "log": {
+    "log_snippet": "[2026-11-06T11:05:37.592934647Z] info: fail_on_severity is set to none, but this threshold was not reached.",
+    "total_lines": 1,
+    "truncated": false
+   }
+  },
+  "step13": {
+   "step_id": "step13",
+   "name": "CAP Verification",
+   "identifier": "CAP_Verification",
+   "status": "Success",
+   "log": {
+    "log_snippet": "[2026-11-06T11:04:33.251022027Z] info:   Repository CAP scan status is SUCCESS\n[2026-11-06T11:04:33.251029616Z] info: Final CAP scan result is COMPLIANT\n[2026-11-06T11:04:33.251044729Z] info: CAP scan passed",
+    "total_lines": 3,
+    "truncated": false
+   }
+  },
+  "step14": {
+   "step_id": "step14",
+   "name": "cap_send_email",
+   "identifier": "cap_send_email",
+   "status": "IgnoreFailed",
+   "log": "[2026-11-06T11:10:21.17062433Z] info: Email step execution started\n[2026-11-06T11:10:21.209793123Z] info: Failed to send the email"
+  },
+  "step15": {
+   "step_id": "step15",
+   "name": "cap_send_email",
+   "identifier": "cap_send_email",
+   "status": "IgnoreFailed",
+   "log": "[2026-11-06T11:10:22.215617729Z] info: Email step execution started\n[2026-11-06T11:10:22.29140324Z] info: Failed to send the email"
+  }
+ }
+}

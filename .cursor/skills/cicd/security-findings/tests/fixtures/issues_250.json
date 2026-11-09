@@ -1,0 +1,155 @@
+{
+ "items": [
+  {
+   "id": "ISS-01",
+   "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+   "key": "generic-api-key",
+   "severityCode": "Medium",
+   "type": "SECRET",
+   "scanId": "SCAN-GL",
+   "targetVariantName": "cnexperience/cncms:feat/campaign-platform",
+   "numOccurrences": 6,
+   "numNewOccurrences": 2,
+   "_partition": "existing",
+   "openInHarness": "https://harness.example/sto/executions/EXEC-250/pipeline"
+  },
+  {
+   "id": "ISS-02",
+   "title": "postcss@8.5.6",
+   "key": "npm//postcss//8.5.6",
+   "severityCode": "Critical",
+   "type": "SCA",
+   "scanId": "SCAN-AQUA",
+   "targetVariantName": "docker-local/cncms:tag002",
+   "numOccurrences": 4,
+   "numNewOccurrences": 4,
+   "_partition": "new",
+   "openInHarness": "https://harness.example/sto/executions/EXEC-250/pipeline"
+  },
+  {
+   "id": "ISS-03",
+   "title": "stdlib@v1.23.12",
+   "key": "go//stdlib//v1.23.12",
+   "severityCode": "Critical",
+   "type": "SCA",
+   "scanId": "SCAN-AQUA",
+   "targetVariantName": "docker-local/cncms:tag002",
+   "numOccurrences": 177,
+   "numNewOccurrences": 177,
+   "_partition": "new",
+   "openInHarness": "https://harness.example/sto/executions/EXEC-250/pipeline"
+  },
+  {
+   "id": "ISS-04",
+   "title": "undici@7.29.0",
+   "key": "npm//undici//7.29.0",
+   "severityCode": "Critical",
+   "type": "SCA",
+   "scanId": "SCAN-AQUA",
+   "targetVariantName": "docker-local/cncms:tag002",
+   "numOccurrences": 18,
+   "numNewOccurrences": 18,
+   "_partition": "new",
+   "openInHarness": "https://harness.example/sto/executions/EXEC-250/pipeline"
+  },
+  {
+   "id": "ISS-05",
+   "title": "pacote@19.0.2",
+   "key": "npm//pacote//19.0.2",
+   "severityCode": "High",
+   "type": "SCA",
+   "scanId": "SCAN-AQUA",
+   "targetVariantName": "docker-local/cncms:tag002",
+   "numOccurrences": 1,
+   "numNewOccurrences": 1,
+   "_partition": "new",
+   "openInHarness": "https://harness.example/sto/executions/EXEC-250/pipeline"
+  },
+  {
+   "id": "ISS-06",
+   "title": "brace-expansion@2.0.2",
+   "key": "npm//brace-expansion//2.0.2",
+   "severityCode": "High",
+   "type": "SCA",
+   "scanId": "SCAN-AQUA",
+   "targetVariantName": "docker-local/cncms:tag002",
+   "numOccurrences": 18,
+   "numNewOccurrences": 18,
+   "_partition": "new",
+   "openInHarness": "https://harness.example/sto/executions/EXEC-250/pipeline"
+  },
+  {
+   "id": "ISS-07",
+   "title": "brace-expansion@5.0.5",
+   "key": "npm//brace-expansion//5.0.5",
+   "severityCode": "High",
+   "type": "SCA",
+   "scanId": "SCAN-AQUA",
+   "targetVariantName": "docker-local/cncms:tag002",
+   "numOccurrences": 6,
+   "numNewOccurrences": 6,
+   "_partition": "new",
+   "openInHarness": "https://harness.example/sto/executions/EXEC-250/pipeline"
+  },
+  {
+   "id": "ISS-08",
+   "title": "zlib1g@1:1.3.dfsg+really1.3.1-1+b1",
+   "key": "deb//zlib1g//1:1.3.dfsg+really1.3.1-1+b1",
+   "severityCode": "High",
+   "type": "SCA",
+   "scanId": "SCAN-AQUA",
+   "targetVariantName": "docker-local/cncms:tag002",
+   "numOccurrences": 1,
+   "numNewOccurrences": 1,
+   "_partition": "new",
+   "openInHarness": "https://harness.example/sto/executions/EXEC-250/pipeline"
+  },
+  {
+   "id": "ISS-09",
+   "title": "vitest@4.0.17",
+   "key": "npm//vitest//4.0.17",
+   "severityCode": "Medium",
+   "type": "SCA",
+   "scanId": "SCAN-AQUA",
+   "targetVariantName": "docker-local/cncms:tag002",
+   "numOccurrences": 2,
+   "numNewOccurrences": 2,
+   "_partition": "new",
+   "openInHarness": "https://harness.example/sto/executions/EXEC-250/pipeline"
+  },
+  {
+   "id": "ISS-10",
+   "title": "@babel/core@7.28.6",
+   "key": "npm//@babel/core//7.28.6",
+   "severityCode": "Low",
+   "type": "SCA",
+   "scanId": "SCAN-AQUA",
+   "targetVariantName": "docker-local/cncms:tag002",
+   "numOccurrences": 1,
+   "numNewOccurrences": 1,
+   "_partition": "new",
+   "openInHarness": "https://harness.example/sto/executions/EXEC-250/pipeline"
+  }
+ ],
+ "total": 10,
+ "existing_total": 1,
+ "new_total": 9,
+ "counts": {
+  "new": {
+   "active": 9,
+   "critical": 3,
+   "high": 4,
+   "medium": 1,
+   "low": 1,
+   "info": 0
+  },
+  "existing": {
+   "active": 1,
+   "critical": 0,
+   "high": 0,
+   "medium": 1,
+   "low": 0,
+   "info": 0
+  }
+ }
+}

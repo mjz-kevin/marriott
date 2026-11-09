@@ -32,7 +32,7 @@ python .cursor/skills/common/profile-select/scripts/profile.py resolve   # 当�
 | `mcp.jira` | 项目 key、Issue 类型、工作流、标签 / Component / 标题前缀规则、链接集、Figma 内嵌 | `rg -l 'mcp\.jira' .cursor` |
 | `mcp.confluence` | 空间、根目录 / 父页 ID、文件夹层级、标题命名 | `rg -l 'mcp\.confluence' .cursor` |
 | `mcp.github` | GHES host / org、各交付仓库及其**基线分支** | `rg -l 'mcp\.github' .cursor` |
-| `mcp.harness` | org / project、可触发的流水线清单（单条可选 `artifact_stage`：判定「这次 build 已发布 / 可安装」的 stage，查最新 build 用）、**低环境白名单 `allowed_envs`**、可选 **`build_backend_exceptions`**（纯 CI 构建包连高环境后端的精确例外，当前 APP `Android_Adhoc_Build` · `flavor=Stg`、`iOS_Dragon_App_Testflight_Dev` · `API_BASE_URL=interceptor-stg`）、禁止触发清单 `deny_list`（CMS）、轮询口径 | `rg -l 'mcp\.harness' .cursor` |
+| `mcp.harness` | org / project、可触发的流水线清单（单条可选 `artifact_stage`：判定「这次 build 已发布 / 可安装」的 stage，查最新 build 用）、**低环境白名单 `allowed_envs`**、可选 **`build_backend_exceptions`**（纯 CI 构建包连高环境后端的精确例外，当前 APP `Android_Adhoc_Build` · `flavor=Stg`、`iOS_Dragon_App_Testflight_Dev` · `API_BASE_URL=interceptor-stg`）、可选 **`default_presets`**（QA 一键「默认配置」入参预设，当前 APP `android-stg` / `ios-stg`）、禁止触发清单 `deny_list`（CMS）、**安全扫描结果读取开关 `security_readout`**（CMS `true`；APP `false`，其交付流水线没有扫描步骤，cicd-agent 不读、卡片 / 报告不出安全结论；缺省 `true`）、轮询口径 | `rg -l 'mcp\.harness' .cursor` |
 | `code` | 语言栈、分支命名、构建命令语义、git hooks、commit 约定、AI 溯源标识、PR labels / reviewers 映射（`code.pr`，目前仅 APP iOS）、契约比对口径 | `rg -l 'code\.' .cursor` |
 | `review` | 编码规范来源（`rules_source`，条目 `kind` 可为 `confluence` / `repo_file` / `bundled`——`bundled` 指随 `code-review-rules` 分发的技术栈规则包，如 APP 的 `references/stack-rules/swift-ios.md`）、免审文件、合并门禁策略 | `rg -l 'review\.' .cursor` |
 | `test` | 单测命令语义、覆盖率门槛、测试范围（含部分「预留，暂无消费方」字段） | `rg -l 'test\.' .cursor` |
@@ -51,6 +51,7 @@ python .cursor/skills/common/profile-select/scripts/profile.py resolve   # 当�
    - skill 与 `stage_run.py` 仍**保留 `deny_list` 的解析**：将来若有人重新填这个键，必须真的生效，否则一个专门用来禁止的字段被静默忽略，比不支持更危险。
 5. **CI/CD 只发布低环境**：`mcp.harness.allowed_envs` 当前为 `[dev, test]`，是 `harness-invoke` 与 `stage_run.py` 的硬约束（不在白名单即停止，无人工确认放行通道）。**往里加高环境（staging / stg / uat / prod）等于取消这条安全边界**，必须先有明确的团队决策，并同步 `cicd-agent` / `harness-invoke` / `AGENTS.md` §7 / 设计文档 §6.1 的说法。
    - 例外机制 `build_backend_exceptions`：只覆盖「纯 CI（只构建 + 分发，不部署任何 Harness 环境）的已登记流水线 + 指定入参 + 指定取值」，让该取值不再把运行判为超范围；流水线 env 标签仍须在 `allowed_envs` 内，本次其它入参仍不得点名高环境。当前仅 APP 两份 profile 登记 `Android_Adhoc_Build` · `flavor=Stg`、`iOS_Dragon_App_Testflight_Dev` · `API_BASE_URL=https://interceptor-stg.csh.marriott.com.cn/v1/graph`（QA / Dev / TL 日常 STG 测试包，团队决策 2026-10；iOS 只登记 interceptor-stg，`gatewaydsapstg1` 等其它 STG 网关仍拦截）。`values` 须与 Harness 取值逐字一致（URL 写完整串）。增改条目同样属于安全边界变更，规则同上；部署类流水线不得登记。`check.py` 校验：条目引用的流水线须已登记且 env 在 `allowed_envs` 内、字段非空、取值不得点名生产、test / prod 两份一致。
+   - 默认配置 `default_presets`：给已登记流水线定一套「团队默认入参」（当前 APP `android-stg` / `ios-stg`，QA 日常 STG 包），确认环节据此弹「是否使用默认配置」卡，QA 只填分支、一键确认；开发选「修改参数」走完整入参表。它**不是例外、不放宽范围**：点名高环境的取值必须同时是 `build_backend_exceptions` 的精确条目，每次触发仍跑范围检查与本次确认。`inputs` 只写要固定的值，其余仍读 Harness 默认；凭证类入参只能为空串。增改须团队决策；`check.py` 的 `presets` 项校验上述规则与 test / prod 一致。
 6. **不放凭证与账号标识**：token、API Key、Harness `account_id` 都从 `~/.cursor/mcp.json` 读取。
 7. **注释即文档**：新增字段必须带行内注释，说明含义、取值、消费方；「预留」字段明确标注。注释用中文。
 8. **Jira / Confluence 的显示名要逐字对齐**（如工作流状态里的本地化名称「正在进行」「已完成」、标签大小写）。

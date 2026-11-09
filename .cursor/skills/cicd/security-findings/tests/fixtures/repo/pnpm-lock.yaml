@@ -1,0 +1,12 @@
+lockfileVersion: '9.0'
+
+packages:
+
+  postcss@8.5.6:
+    resolution: {integrity: sha512-mock}
+
+  undici@7.30.0:
+    resolution: {integrity: sha512-mock}
+
+  vitest@4.0.17:
+    resolution: {integrity: sha512-mock}

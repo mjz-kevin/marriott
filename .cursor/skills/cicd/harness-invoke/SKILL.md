@@ -9,12 +9,12 @@ description: >-
   is out of scope - stop and hand it to a human in the Harness UI, with no human-confirmation
   bypass. The only exception is a build-only test package pointed at a higher backend that the
   profile registers in build_backend_exceptions (currently Android_Adhoc_Build flavor=Stg and
-  iOS_Dragon_App_Testflight_Dev API_BASE_URL=interceptor-stg, the QA daily STG packages); it never covers a deploy. A missing required input stops the trigger rather than being defaulted. Use when the CI/CD
+  iOS_Dragon_App_Testflight_Dev API_BASE_URL=interceptor-stg, the QA daily STG packages); it never covers a deploy. A missing required input stops the trigger rather than being defaulted. A pipeline with a team-registered default preset (default_presets) gets a one-click "use default configuration / modify parameters" card instead of the full input table. Use when the CI/CD
   step needs to trigger a Harness pipeline to build / deploy to a low environment, to query
   execution status, or to look up the latest build (build number) of a branch / environment on any
   registered pipeline (read-only, e.g. which TestFlight build to install);
   triggers: harness invoke / trigger pipeline / 触发流水线 / 触发 Harness / 跑流水线 / 部署到 / 查执行状态 /
-  latest build / build number / 最新 build / build 号 / 最新包.
+  latest build / build number / 最新 build / build 号 / 最新包 / 默认配置 / STG 包 / 打测试包.
 metadata:
   agent: CI/CD Agent
 ---
@@ -29,7 +29,7 @@ Locate the **unique** Harness pipeline from the team config, read the runtime in
 
 | Dimension | Description |
 |------|------|
-| Purpose | Select the unique pipeline → resolve the target environment → **enforce the low-environment scope** → read & confirm the runtime inputs → trigger → wait for a terminal state → report the result |
+| Purpose | Select the unique pipeline → resolve the target environment → **enforce the low-environment scope** → read & confirm the runtime inputs → trigger → wait for a terminal state → report the result (+ the read-only security verdict from `security-findings`) |
 | Input | End / repo + target environment (must be a low environment) + branch / tag + the caller's answers to the pipeline's required inputs |
 | Output | Trigger conclusion + execution handle (URL/ID) + terminal result (success / failure / aborted / timed out still running) + a stage-level summary on failure; or an out-of-scope conclusion naming the Harness UI as the path |
 | Scope | Only triggers an existing pipeline into a low environment and queries status; doesn't deploy a high environment, create/change the pipeline, change code, create tags, or rule on build quality |
@@ -46,6 +46,8 @@ Locate the **unique** Harness pipeline from the team config, read the runtime in
 | Deny list (optional) | `mcp.harness.deny_list` → pipelines that must never be agent-triggered **whatever environment they target**, each with a reason. A different axis from `allowed_envs`: it records what a pipeline *can do* (wipe cluster resources, execute arbitrary YAML), not where it deploys. **No profile currently uses it** — a pipeline that must not be triggered is simply left out of `pipelines` (unlisted = not triggerable), and the reason is kept as a comment there so nobody re-adds it. If a profile does define it, it still hard-blocks, and is checked before the pipeline list so an entry mistakenly added to `pipelines` is refused anyway |
 | Allowed-environment allowlist | `mcp.harness.allowed_envs` → the only environments this step may trigger (low environments; currently `dev` / `test`). Matched case-insensitively against the **resolved** target environment. Anything else → out of scope, stop (see S2) |
 | Build-backend exceptions (optional) | `mcp.harness.build_backend_exceptions` → entries `{ pipeline, input, values, backend }`: on that registered pure-CI pipeline, passing one of `values` to `input` builds a package pointed at the `backend` environment and does **not** by itself put the run out of scope (S2 "Build-backend exception"). Missing / empty → no exceptions. A security-boundary decision: never add to it, widen it, or treat a confirmation as an entry |
+| Default presets (optional) | `mcp.harness.default_presets` → entries `{ id, pipeline, label, inputs }`: a team-decided "default configuration" for a registered pipeline (currently `android-stg` on `Android_Adhoc_Build`, `ios-stg` on `iOS_Dragon_App_Testflight_Dev` — the QA daily STG packages). `inputs` holds only the values the team pins (those that differ from the Harness default, plus required inputs with no default); everything else still comes from Harness at trigger time. Lets S3 offer a one-click "use default configuration" confirmation (S3 "Default presets"). It never widens scope: a high-environment value in it must also be an exact `build_backend_exceptions` entry, and S2 still runs on every trigger. Missing / empty → no presets, S3 always shows the full table. Never add or edit one yourself |
+| Security readout | `mcp.harness.security_readout` (bool, missing = `true`): whether S7 hands the terminal execution to `security-findings`. CMS `true` (the `org.CICD` scan step group); APP `false` (its delivery pipelines run no security step, so a readout could only say "unavailable"). A team decision; never flipped per run |
 | Stage-fallback switch | `mcp.harness.allow_stage_execution_fallback` → whether this skill's stage-subset script may be used (see S4) |
 | Artifact stage (optional, per pipeline) | `mcp.harness.pipelines[].artifact_stage` → the stage whose success means "this build was actually published / is installable" (e.g. `TestFlight_Metadata` on the iOS TestFlight pipeline). Used by the latest-build query (§2.1); absent → a successful execution counts as available |
 | Wait spec | `mcp.harness.poll` → `mode` / `timeout_seconds` / `interval_seconds` |
@@ -76,6 +78,7 @@ If the connection scope is missing, if `allowed_envs` is missing or empty, or if
 - S4 Trigger the pipeline, get the execution handle
 - S5 Wait for the execution to reach a terminal state
 - S6 Report: trigger conclusion + execution handle + terminal result
+- S7 Hand the terminal execution to `security-findings` (read-only security verdict)
 ```
 
 ### S1 Locate and inspect the pipeline
@@ -134,6 +137,28 @@ When a value is ambiguous — it doesn't name an environment and you cannot tell
 - when S2's **build-backend exception** applied, a line stating it plainly — e.g. "flavor=Stg: this package connects to the **STG backend** and is distributed to testers (registered exception `Android_Adhoc_Build.flavor`; no environment is deployed)", or "API_BASE_URL=https://interceptor-stg.csh.marriott.com.cn/v1/graph: this build connects to the **STG backend** and is uploaded to TestFlight (registered exception `iOS_Dragon_App_Testflight_Dev.API_BASE_URL`; no environment is deployed)" — so the caller confirms knowing which backend the package hits.
 
 Apply only the values the caller gave; leave the rest at the defaults Harness reported. Reject a value outside the permitted set instead of passing it to a doomed trigger. This confirmation is about **input completeness** and applies at every in-scope environment — it is not a deploy authorization and never substitutes for S2's scope check (which no confirmation can unlock).
+
+#### Default presets — one-click confirmation (registered in config only)
+
+Most QA runs of the mobile test packages use the same values every time and only change the branch; walking them through a dozen-row table on every run is noise. When the matched pipeline has an entry in `mcp.harness.default_presets`, S3 has two modes, and the caller chooses between them on a single question card:
+
+| Mode | When | What the caller sees and answers |
+|------|------|------|
+| **Default** (preset) | The caller picks "use default configuration" | A **compact summary**: pipeline, branch (the only value they type), the package backend line (when a build-backend exception applies), the preset's pinned values, and "the other {n} inputs run at their Harness defaults". One click confirms **this** trigger |
+| **Custom** | The caller picks "modify parameters", or the request itself already names an input value (`flavor=Tst`, `variant=debug`, …) — typical for a DEV | The **full table** above, pre-filled with the preset values plus whatever the caller named; the caller edits / confirms as usual |
+
+Present the choice as one question card (the main conversation renders it with AskQuestion): **"Use the default configuration?"** — options `Use default: {label} ({pinned values}, rest at Harness defaults)` (first, recommended) · `Modify parameters (show the full input table)` · `Cancel`. When the branch is still missing, put a branch question on the same card (offer the repo's baseline branch from `mcp.github.repos.*.base` as the first option; free text via "Other"), so the whole confirmation is one round. Those are the card's only questions: the pinned values and Harness defaults are listed in the summary for reading, not asked one per input — the caller who wants to change one picks "Modify parameters".
+
+Before offering the default mode, **validate the preset against the template you just read from Harness** — the preset is a team decision, Harness stays authoritative for the shape:
+
+1. Every preset input exists in the template, and each value is in that input's permitted set **now**.
+2. Every required input with no default is covered by the preset, the branch, or the caller's answers.
+3. Merge the preset over the Harness defaults and run **S2 on the merged set** — the backend exception's four checks included. A preset can make a value in scope only through an exact `build_backend_exceptions` entry; it is not an exception of its own.
+4. A credential-looking preset input may only be an empty string; it is still never echoed beyond its key.
+
+Any check fails → don't offer the default mode: say which preset input drifted and present the full table (custom mode). A scope failure is still a stop per S2, not a fallback.
+
+The default mode **is** this trigger's confirmation — the compact summary is the presented set, and an explicit "use default" choice after seeing it is consent (a choice made before the summary was shown, or carried over from a previous trigger, is not). Record which mode was used, the preset id, and the merged values. A preset answer to a required input counts as the caller's answer for S3's "never default a required input" rule, because the caller chose that preset knowingly; nothing else changes — S4 onward is identical in both modes.
 
 **Always wait, even when every required input already has a value.** A branch/tag in the original request, a Harness default, an input-set fill, C-pre speculative answers, or a previous trigger's confirmation are **candidates to show, not consent to run**. Present the table and return; trigger only after the caller has confirmed **this** trigger's set (an explicit "use these defaults" after seeing the table counts). Skipping the wait because "nothing is missing" is how a pipeline fires without the caller seeing the parameters.
 
@@ -235,6 +260,12 @@ Beyond `timeout_seconds` still not terminal → stop waiting, report "still runn
 
 Report the trigger conclusion, execution handle, **build number**, and terminal result; on failure attach a **stage-level summary** (which stage/step failed, error overview), not the raw log.
 
+### S7 Security verdict (read-only)
+
+Once the execution is terminal — **success, completed-with-ignored-items, or failure alike** — hand its handle (org / project / pipeline id / execution id / URL) to the `security-findings` skill and attach its one-line verdict to the S6 report. Skip it only for `timed_out` (not terminal), for an `aborted` run that never reached a CI stage, and for a team whose profile sets `mcp.harness.security_readout: false` (APP: its delivery pipelines run no security step) — then the report has no security line at all.
+
+Why every terminal state: the pipelines' security steps mostly ignore their own failures (e.g. the CMS Aqua step group is `MarkAsSuccess`), so a green execution can carry Critical findings. Reporting "✅ Success" without the security line hides exactly that. This step only reads; it never re-runs, exempts, or changes anything, and the trigger's verdict (`terminal`) is not changed by it — the security verdict is a separate line.
+
 ## 2.1 Query the latest build (read-only)
 
 A separate, read-only path for "what's the newest build of branch X / environment Y, and where is it?" — typically asked by QA after someone else ran a build, to install it (e.g. from TestFlight). It **triggers nothing**, so S2's scope check doesn't apply; it still only covers pipelines registered in `mcp.harness.pipelines`.
@@ -266,6 +297,7 @@ Report the latest available build — build number, branch, commit, who triggere
 | Unique match, no reaching past the list | The target must match `mcp.harness.pipelines` uniquely; unlisted → stop, including pipelines left out because of what they *can do* (K8sDelete, arbitrary run-time YAML) — pointing one at a low environment does not make it safe, and no confirmation unlocks it. A `deny_list` entry, where a profile defines one, stops the run the same way |
 | Read inputs from Harness, never from memory | The input spec, defaults, and permitted values come from the pipeline's runtime-input template at trigger time — never from config or recollection |
 | Present inputs before triggering | Show required vs. optional-with-default (flagging risky defaults) and **wait for this trigger's confirmation** even when every required input already has a value; reject a value outside the permitted set. A target in the request / a default / an input set / a prior trigger is not confirmation |
+| Default presets shorten the confirmation, never skip it | When `default_presets` registers one for the pipeline, offer "use default configuration" vs "modify parameters" on one card; the default mode shows a compact summary and one click confirms **this** trigger. Validate the preset against the live template and run S2 on the merged set first; any drift → full table. A preset never widens scope and is never added or edited by the AI |
 | Never default a required input | A missing required answer stops the trigger — no defaults, no prior run's value, no input-set value |
 | Scope by where the run actually lands | Judge from the environment resolved in S2 — the pipeline's env / stage subset **and** the runtime-input values you are about to pass (a value naming prod / stg / staging / uat / perf targets that environment, whatever the tag says) — never the pipeline's name or tag; an ambiguous value or an unresolvable environment stops the trigger |
 | Build-backend exceptions come only from config | A high-backend value on a pure-CI build is in scope **only** when `build_backend_exceptions` registers that exact pipeline + input + value and all four S2 checks pass (currently `Android_Adhoc_Build` · `flavor=Stg` and `iOS_Dragon_App_Testflight_Dev` · `API_BASE_URL=https://interceptor-stg.csh.marriott.com.cn/v1/graph`). Never infer, widen, or self-register one; never apply it to a deploying pipeline; a confirmation is not an entry |
@@ -279,6 +311,7 @@ Report the latest available build — build number, branch, commit, who triggere
 | Classify a terminal state, never guess one | Use S5's vocabulary: `IgnoreFailed` is terminal and the deploy proceeded — report it as completed-with-ignored-items, naming the ignored stages, not as a failure. An unrecognized status keeps the wait going and is reported raw; never map it onto the nearest familiar one |
 | Wait to a terminal state | An in-pipeline approval is not terminal; on timeout report "still running" + handle, don't rule success or failure |
 | Stage summary on failure | Report the failed stage/step and an error overview; don't dump the raw log or guess the root cause |
+| Security verdict on every terminal state | S7 hands success, ignored-items and failed executions alike to `security-findings` (unless the profile's `security_readout` is `false`, as for APP); the security line is separate from the trigger verdict and never flips it. A green run with findings is reported as such, never as plain "success" |
 | Don't rule on build quality | Only report what Harness returned; compile/test verdicts belong to the verification step |
 | Only report, don't change code | This step doesn't change code, create branches/tags, or write Jira fields |
 
@@ -288,6 +321,7 @@ Report the latest available build — build number, branch, commit, who triggere
 - The target environment was resolved per S2 and checked against `allowed_envs`, from the resolved value rather than a tag; a non-allowlisted or unresolvable environment was reported as out of scope and nothing was triggered
 - A high-backend input value was accepted only via an exact `build_backend_exceptions` entry with all four S2 checks passed, and the package backend was shown in S3 and the report
 - The input spec came from Harness at trigger time; the presented set was confirmed by the caller for **this** trigger before anything was sent; every required input was answered and no value violates its permitted set
+- When a default preset was used: it was validated against the live template (inputs exist, values permitted, required inputs covered), S2 ran on the merged set, and the caller chose "use default" after seeing the compact summary; the mode and preset id are recorded
 - A promotion chain's stage subset was recovered from execution history and carried on the trigger; its effect was verified, and it stays within `allowed_envs`
 - The execution handle is recorded and traceable, and belongs to this trigger — no observed execution was adopted without a trigger-type and identity match
 - The terminal-state wait rode on the MCP trigger call under `server_wait`, or — on the stage-subset fallback — trigger (`--execute`) and wait (`--wait-execution`) were two separate calls; any fallback polling used `interval_seconds` and did not overshoot the expected finish
@@ -295,6 +329,7 @@ Report the latest available build — build number, branch, commit, who triggere
 - Waited to a terminal state; or on timeout reported "still running" + handle, without misjudging success/failure or mistaking a pending approval for a failure
 - The terminal state was classified from S5's vocabulary: `IgnoreFailed` reported as completed-with-ignored-items (ignored stages named), not as a failure; no unrecognized status was mapped onto a familiar one
 - On failure includes a stage-level summary
+- Every terminal execution (success / ignored items / failure) carries the S7 security line from `security-findings`, except for a team with `security_readout: false` (no line at all)
 - No pipeline was created/modified, no code changed, no credential value echoed
 
 ## 5. Output
@@ -311,6 +346,7 @@ Package backend (only when a build-backend exception applied): {backend} via `{i
 - **Result**: ✅ Success | ✅ Completed with ignored items ({stages}) | ❌ Failure | ⛔ Aborted | ⏳ Timed out, still running
 - **Pending approval** (when waiting on one): {stage/step}
 - **Failed stage** (only on failure): {stage/step} — {error overview}
+- **Security** (S7, from `security-findings`; omitted when `security_readout: false`): 🔴 Blocked by {step} | 🟠 Passed, but {n} Critical / {m} High / {s} secret not blocked | 🟢 clean | ⚪ unavailable ({reason}) — report: {path}
 - **Next step**: {success → notify / hand to testing | failure → hand to development | timeout → human watches on Harness}
 ```
 
@@ -342,6 +378,9 @@ Pipeline: {id}  ·  Resolved target environment: {target_env} (resolved from {en
 | The target is on a profile's `deny_list` | Report the recorded reason verbatim and stop; forbidden by team decision, not by capability. A low-environment target does not clear it, and neither does a confirmation |
 | A required input wasn't supplied | Stop and ask for exactly that input; don't default it or reuse a prior run's value |
 | The caller already named a branch / env, so you triggered without presenting inputs | Defect. S3 always waits. A target in the request is not this trigger's confirmation — present the table even when nothing looks missing |
+| QA finds the input table too long ("只想填个分支") | Use the pipeline's `default_presets` entry: one card, "use default configuration" vs "modify parameters", plus the branch question if it's missing. No preset registered for that pipeline → the full table; adding one is a team decision in the profile, not something to improvise per run |
+| A preset input is missing from the template, or its value is no longer permitted | The pipeline changed in Harness. Don't offer the default mode: name the drifted input, present the full table, and tell the caller the preset needs a team update |
+| The caller picks "use default" but also names a value (e.g. "默认，但 variant=debug") | Treat it as custom mode pre-filled with the preset plus that value: re-run S2 on the merged set and present the full table for one confirmation |
 | The caller gives a value outside the permitted set | Report the permitted values and ask again |
 | A promotion chain's stage subset is unknown for this environment | Recover it from execution history; if no execution ever targeted it, stop and ask — don't infer from stage names |
 | Harness MCP auth fails | Authenticate first; if it still fails, report the auth/permission issue, don't blind re-trigger |
@@ -378,4 +417,5 @@ Pipeline: {id}  ·  Resolved target environment: {target_env} (resolved from {en
 
 - Upstream: the human-confirmed merged branch/tag and target (the CI/CD step gives the end/app, a **low** environment, and the branch)
 - Downstream: pipeline success → notify the build/deploy result and proceed to the feature-testing step; failure → hand to development/DevOps to investigate
+- After the terminal state: `security-findings` (S7) reads the security checks; fixable findings go to the Dev Agent's "Handle CI security findings" node
 - Out of this step's scope: promoting to staging / prod — a human runs that in the Harness UI, outside the toolchain

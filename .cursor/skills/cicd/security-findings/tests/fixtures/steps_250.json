@@ -1,0 +1,26 @@
+{
+ "items": [
+  {
+   "scanId": "SCAN-GL",
+   "scanTool": "gitleaks",
+   "scanToolName": "Gitleaks",
+   "targetName": "cnexperience/cncms",
+   "targetType": "repository",
+   "targetVariant": "cnexperience/cncms:feat/campaign-platform",
+   "baselineVariant": "cnexperience/cncms:main",
+   "stageId": "CI",
+   "stepId": "security_scans_Gitleaks"
+  },
+  {
+   "scanId": "SCAN-AQUA",
+   "scanTool": "aqua-security",
+   "scanToolName": "Aqua Security",
+   "targetName": "docker-local/cncms",
+   "targetType": "container",
+   "targetVariant": "docker-local/cncms:tag002",
+   "stageId": "CI",
+   "stepId": "security_scans_aqua_scan_AquaSecurity_1"
+  }
+ ],
+ "total": 2
+}
