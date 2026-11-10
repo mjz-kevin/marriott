@@ -33,6 +33,7 @@ Windows 下把 `~` 换成 `%USERPROFILE%`。
 | 升级后行为异常：出现两个相似的 Skill / Agent、调到已删除的脚本、仍用旧版本 node / python、运行时升级「没生效」 | 角色包安装只覆盖不删除，运行时组件已就位即跳过（`setup.json` 只改写失效路径，仍有效的旧自定义路径会保留） | 按场景处理，见 [`init/README.md`「升级与重装」](../../init/README.md#升级与重装直接覆盖-vs-先卸载)；旧名资产不在新包卸载清单里时，按 CHANGELOG 对应版本给出的路径手动删除 |
 | MCP server（figma / marriott-github / harness）连不上 | ① 运行时未装，`mcp.json` 回退到系统 node 且入口 js 不存在；② 凭证为空；③ node 路径与实际芯片（arm64 / x64）不符 | ① 先装运行时包，再**重跑角色包 `install`** 重新生成 `mcp.json`；② 在 `~/.cursor/mcp.json` 填凭证；③ 同 ①，安装脚本会按实际运行时目录改写路径 |
 | Atlassian MCP 不可用 | 远程 MCP 需要在 Cursor 里完成 OAuth 授权 | 在 Cursor MCP 设置里对 `Atlassian-MCP-Server` 重新登录 |
+| 触发 Harness 时主界面看不到「Execute run on pipeline …?」，调用反复重试、流水线不执行 | 旧版 `cicd-agent` 在后台会话里直接调 MCP `run`，审批框只出现在该会话 | 升级角色包（主会话按交接卡发起调用）；先停掉卡住的调用，到 Harness 确认是否已产生执行，再续跑 |
 | 发布到 Confluence 失败：`mcp.json 缺少 confluenceRest` | 用户 `~/.cursor/mcp.json` 中 `confluenceRest.email` / `api_token` 未填 | 填写后重试（token 获取地址见 `mcp.json` 的 `_comment`） |
 | 每次都问选哪个 profile，或用错了团队 / 环境 | 选择是按「仓库根路径」记忆的，换了目录 / 仓库就需要重选 | `python ~/.cursor/skills/common/profile-select/scripts/profile.py show` 看当前选择，`use <name>` 切换 |
 | Windows 执行 `.ps1` 报中文乱码 / parser error | 直接运行了仓库里的模板（无 BOM），而非构建产物 | 使用 `init/dist/` 构建出的包内脚本（已写成 UTF-8 BOM + CRLF） |

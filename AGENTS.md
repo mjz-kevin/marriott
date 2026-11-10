@@ -120,6 +120,7 @@ python .cursor/skills/common/kb-query/tests/run_tests.py               # 改 kb-
 python .cursor/skills/common/cursor-usage-report/tests/run_tests.py    # 改 usage_report.py 时
 python .cursor/skills/cicd/security-findings/tests/run_tests.py       # 改 findings.py（安全结论 / 分类 / 分组 / diff）时
 python .cursor/skills/code-review/merge-gate/tests/run_tests.py       # 改 pr_review.py（行内评论提交 / 读取 / 回复 / resolve）时
+python .cursor/skills/cicd/harness-invoke/tests/run_tests.py          # 改 preset_trigger.py（默认预设快速路径）时
 ```
 
 完整构建参数（指定角色 / 版本、运行时包）见 [`init/README.md`「构建」](init/README.md#构建) 或 `python init/build.py --help`；发版构建见 [`doc/maintenance/release.md`](doc/maintenance/release.md)。

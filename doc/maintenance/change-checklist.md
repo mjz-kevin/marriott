@@ -65,6 +65,7 @@
 - [ ] 点名高环境的取值（如 `flavor=Stg`）必须已是 `build_backend_exceptions` 的精确条目；凭证类入参只能写空串
 - [ ] `harness-invoke/SKILL.md` §0 表格里的「currently …」与 `cicd-agent.md` §6 示例卡（如改了 Android 预设的固定值）
 - [ ] 跑 `python init/check.py`（`presets` 项）
+- [ ] 跑 `python .cursor/skills/cicd/harness-invoke/tests/run_tests.py`，并联网只读冒烟 `preset_trigger.py prepare --preset <id> --branch <base>`：快速路径按 profile 解析预设、按实时模板校验，改了预设后应仍返回 `READY`
 
 ## 6. 修改安装 / 卸载脚本（`init/templates/`）
 

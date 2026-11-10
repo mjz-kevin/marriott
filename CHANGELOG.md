@@ -12,6 +12,25 @@
 
 ## [Unreleased]
 
+### 优化
+- **CI/CD：QA 打 iOS / Android STG 默认包，从点「使用默认」到流水线开始，由约 4–5 分钟缩到 1 分钟以内**：
+  - **问题**（实测 iOS #3745）：用户只点了一次卡片，但从点击到触发之间，后台 `cicd-agent` 又多跑了一轮（重读整份 Agent / Skill 文档、核实分支、写参数日志、敏感信息扫描、写 state、出交接卡），耗时约 3–4 分钟；其中 GitHub TLS 失败后又改走 `git ls-remote`、Harness 历史两条路去核实 `develop`。
+  - **A · 预设快速路径**：预设确认卡同时带上触发步骤（`⚡ Fast path` 块），用户选「使用默认」后由主会话直接完成：`preset_trigger.py record` → 唯一一次 `harness_execute run` → `adopt` 回填句柄，然后才唤起后台 Agent 去等结果、出报告。人工确认点不变（仍是这张卡 + Harness 自身的审批框）；「修改参数」、预设漂移、非预设流水线仍走原流程。`cicd-agent` 的 C3_confirm / C3_handoff「Fast path」/ state `trigger_handoff.fast_path` / §5 / §6 同步修改。
+  - **B · 新脚本 `harness-invoke/scripts/preset_trigger.py`**（纯标准库），共三个子命令：
+    - `prepare`（只读，约 3 秒）：读实时 runtime-input 模板和解析后的流水线定义，校验预设，合并 Harness 默认值，对合并后的取值做范围检查（只认 `build_backend_exceptions` 精确条目，含 Deployment stage 即拒绝），输出精简摘要和完整 `run` 参数，所有入参都给具体值。
+    - `record`：重新跑一遍 `prepare` 并过 `sensitive-data-guard`，然后写参数日志、作答记录和模板快照，再以独占方式创建 `tmp/t{n}_result.json` 作为幂等锁。
+    - `adopt`：记录 run 调用的结果，分为 sent / not_sent / unknown 三种；已记录的 execution id 不会被覆盖。
+    - 离线单测 `tests/run_tests.py`（14 条），已对 `ios-stg` / `android-stg` 联网做过只读冒烟。
+  - **C · 分支核实降级**：仓库基线分支（`mcp.github.repos.*.base`）不再核实；其它分支只查一次 GitHub，查询本身失败就记 `head_sha: null` 和「未核实」后继续，不重试，也不改走其它途径（分支不存在时会在 clone 步失败，不会构建或部署任何东西）。分支确实不存在时仍要追问。改在 `cicd-agent` 的 C1 第 2 条和 C3_confirm 第 5 条。
+  - 文档：`harness-invoke/SKILL.md`（S3「Preset fast path」、S4、规则表、排障表）、设计文档 §6.1 脚注 ²、`AGENTS.md` §6、`doc/maintenance/testing.md`、`change-checklist.md` §5。profile、`roles.json` 未改（skill 名不变，新增脚本随目录打包）。**升级方式**：直接覆盖（TL / Dev / QA 角色包）。
+
+### 修复
+- **CI/CD：后台 Agent 触发 Harness 时审批框不可见，调用反复重试、流水线不执行**：
+  - **原因**：Harness MCP 的 `harness_execute` `run` 会弹出自身的审批框，Cursor 只在发起调用的会话中显示；`cicd-agent` 在后台运行（`is_background: true`），审批框到不了主界面，用户无法确认。另有一次触发只传了部分入参，被 Harness 拒绝后进一步加剧重试。
+  - **`harness-invoke` S4**：后台调用方不调 MCP `run`，在 S3 后返回「触发交接」（scope、完整入参、`wait: false`），由主会话发起唯一一次调用、用户在主界面审批；每次确认只调用一次，失败不重试；触发须带完整入参（含保留的 Harness 默认值），不得传部分入参或占位符。`stage_run.py`（API key，无审批框）不受影响。
+  - **`cicd-agent`**：新增节点 C3_handoff 与 state `trigger_handoff` 段；主会话按交接卡调用后，用返回的 execution id 续跑本 Agent，C4 用 `harness_get` 按 `poll.interval_seconds` 轮询；§7 禁止本 Agent 直接调用 MCP `run`。
+  - 文档：设计文档 §6.1 脚注 ²、`doc/maintenance/troubleshooting.md`。`AGENTS.md` 未改（职责与安全边界不变）。**升级方式**：直接覆盖（TL / Dev / QA 角色包）。
+
 ### 新增
 - **CI/CD「是否使用默认配置」一键确认（QA 打 iOS / Android STG 测试包只需给分支）**：
   - **问题**：QA 打 `Android_Adhoc_Build`（`flavor=Stg`）/ `iOS_Dragon_App_Testflight_Dev`（`API_BASE_URL=interceptor-stg`）每次都要看一张十几行的入参确认表，而实际只改分支；开发又需要能改参数。
